@@ -68,7 +68,10 @@ data class ChargedMoveProgress(
     val fastMovesNeeded: Int,
     val ready: Boolean,
     val chargesReady: Int = 0,
-    val fastMovesNeededForSecond: Int = 0,
+    /** True only when two full charges of this move can fit inside the 100-energy cap. */
+    val secondChargeStorable: Boolean = false,
+    /** -1 means two full charges cannot be stored simultaneously. */
+    val fastMovesNeededForSecond: Int = -1,
     val evidence: EvidenceLevel = EvidenceLevel.PREDICTED
 )
 
