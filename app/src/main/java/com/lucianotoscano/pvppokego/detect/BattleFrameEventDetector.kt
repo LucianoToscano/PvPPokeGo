@@ -9,8 +9,8 @@ import kotlin.math.max
  * Lightweight frame detector for enemy Fast Moves and native reserve-card visibility.
  *
  * Primary Fast signal: discrete shrink of the player's HP fill bar. Reserve visibility is
- * anchored to the small native HP bars inside the two right-side reserve cards, so PvPPokeGo
- * can hide its own type/matchup icons when Pokemon GO removes a fainted reserve card.
+ * anchored to a narrow strip of the native HP bars. The strip deliberately avoids the
+ * PvPPokeGo reserve badges themselves so our own overlay cannot keep a dead slot "alive".
  */
 class BattleFrameEventDetector {
     data class Event(
@@ -152,18 +152,22 @@ class BattleFrameEventDetector {
         } else {
             reserveMissStreak[index]++
             reserveHitStreak[index] = 0
-            // Require several consecutive misses so battle flashes/animations cannot hide a card.
-            if (reserveMissStreak[index] >= 6) reserveVisibility[index] = false
+            // ~0.4 s at the normal frame cadence: fast enough to remove a fainted card,
+            // but long enough to ignore a couple of battle flashes/animation frames.
+            if (reserveMissStreak[index] >= 4) reserveVisibility[index] = false
         }
         return reserveVisibility[index]
     }
 
-    /** Detect the thin cyan/green HP line inside the native right-side reserve card. */
+    /**
+     * Detect only the thin native HP line between our matchup badge and our type chips.
+     * The previous broad ROI overlapped our own colored circles and could self-detect forever.
+     */
     private fun hasNativeReserveHpBar(frame: Bitmap, slot: Int): Boolean {
         val left = (frame.width * .82f).toInt().coerceAtLeast(0)
-        val right = (frame.width * .985f).toInt().coerceAtMost(frame.width)
-        val topFrac = if (slot == 0) .595f else .688f
-        val bottomFrac = if (slot == 0) .632f else .725f
+        val right = (frame.width * .94f).toInt().coerceAtMost(frame.width)
+        val topFrac = if (slot == 0) .604f else .700f
+        val bottomFrac = if (slot == 0) .617f else .713f
         val top = (frame.height * topFrac).toInt().coerceAtLeast(0)
         val bottom = (frame.height * bottomFrac).toInt().coerceAtMost(frame.height)
         if (right <= left || bottom <= top) return false
@@ -185,7 +189,7 @@ class BattleFrameEventDetector {
             }
             y++
         }
-        return best >= (frame.width * .052f).toInt().coerceAtLeast(30)
+        return best >= (frame.width * .034f).toInt().coerceAtLeast(24)
     }
 
     private fun isReserveHpColor(p: Int): Boolean {
