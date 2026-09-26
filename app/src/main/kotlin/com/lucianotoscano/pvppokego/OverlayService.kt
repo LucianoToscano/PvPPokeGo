@@ -25,14 +25,16 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import pvppokego.core.battle.BattleObservationProcessor
 import pvppokego.core.battle.BattleSession
+import pvppokego.core.battle.TypeMatchupAdvisor
 import pvppokego.core.model.ChargedMoveProgress
 import pvppokego.core.model.MoveData
+import pvppokego.core.model.PokemonBattleStatus
 
 /**
  * External PvP overlay. It never injects into or modifies Pokemon GO.
  *
- * Flow:
- * MediaProjection -> OCR/motion -> local PvPoke IDs -> BattleSession -> overlay.
+ * V03 restores the compact/classic PvPPokeGo HUD while keeping the V02 energy
+ * fill, OCR charged-move learning, PvPoke rank defaults and move submenus.
  */
 class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
     private lateinit var windowManager: WindowManager
@@ -47,12 +49,15 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
     private var pendingEnemySpeciesId: String? = null
 
     private lateinit var weaknessBar: LinearLayout
+    private lateinit var myMatchupChip: TextView
+    private lateinit var reserveAdvisorBar: LinearLayout
     private lateinit var leagueChip: TextView
     private lateinit var movePanel: LinearLayout
     private lateinit var enemyLabel: TextView
     private lateinit var fastChip: FastMoveChip
     private lateinit var chargedLeft: ChargedMoveChip
     private lateinit var chargedRight: ChargedMoveChip
+    private lateinit var correctionRow: LinearLayout
     private lateinit var correctionLabel: TextView
 
     private var motionArmed = true
@@ -109,6 +114,8 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
         analyzer?.stop()
         analyzer = null
         removeOverlay(weaknessBar)
+        removeOverlay(myMatchupChip)
+        removeOverlay(reserveAdvisorBar)
         removeOverlay(leagueChip)
         removeOverlay(movePanel)
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -117,27 +124,28 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
 
     override fun onOcr(
         fullText: String,
+        myHeaderText: String,
         enemyHeaderText: String,
         chargedBannerLines: List<String>,
         timestampMs: Long
     ) {
         mainHandler.post {
             val lobbyLeague = LobbyLeagueDetector.detect(fullText)
-            if (leaguePreference.mode == LeagueSelectionMode.AUTO && currentLeague == null) {
-                lobbyLeague?.let { detected ->
-                    leaguePreference.lastDetectedLeague = detected
-                    selectLeague(detected, persistManualChoice = false)
+            if (leaguePreference.mode == LeagueSelectionMode.AUTO && lobbyLeague != null) {
+                leaguePreference.lastDetectedLeague = lobbyLeague
+                if (currentLeague != lobbyLeague || session == null) {
+                    selectLeague(lobbyLeague, persistManualChoice = false)
                 }
             }
 
-            // The lobby normally shows the player's three selected Pokemon.
             if (lobbyLeague != null) registerLobbyTeam(fullText)
 
+            data.resolveSpeciesFromText(myHeaderText)?.let(::activateMyPokemon)
             data.resolveSpeciesFromText(enemyHeaderText)?.let(::activateEnemy)
 
-            // Exact charged-move text is mapped to the local PvPoke move ID.
-            // This works for ANY legal charged move represented in the local data,
-            // not only Thunderbolt/Relampago.
+            // Any legal charged move observed in "X usou Y"/"X used Y" updates
+            // the corresponding enemy slot and learns the real moveset unless
+            // that button was manually pinned by the user.
             chargedBannerLines.forEach { banner ->
                 val result = observationProcessor?.onEnemyChargedMoveBanner(banner, timestampMs)
                 if (result?.applied == true) {
@@ -185,6 +193,19 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
             .forEachIndexed { slot, speciesId ->
                 runCatching { battle.registerMyPokemon(slot, speciesId) }
             }
+    }
+
+    private fun activateMyPokemon(speciesId: String) {
+        val battle = session ?: return
+        val snapshot = battle.snapshot()
+        val known = snapshot.myTeam.firstOrNull { it.speciesId == speciesId }
+        val slot = known?.slot ?: snapshot.myTeam.firstOrNull { it.speciesId == null }?.slot ?: return
+
+        if (known == null) {
+            runCatching { battle.registerMyPokemon(slot, speciesId) }.getOrElse { return }
+        }
+        runCatching { battle.setMyActivePokemon(slot) }
+        render()
     }
 
     private fun createBattleSession(league: BattleLeague) {
@@ -237,13 +258,13 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
             windowManager.defaultDisplay.getRealMetrics(it)
         }
 
-        // Top weakness row: directly under the game's enemy header/shield area.
-        // It is intentionally not centered over the opponent trainer model.
+        // Classic top-right type strip, positioned above/adjacent to the enemy
+        // header instead of across the middle of the fight.
         weaknessBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(dp(5), dp(3), dp(5), dp(3))
-            background = rounded(Color.argb(105, 0, 0, 0), 18f)
+            setPadding(dp(2), dp(1), dp(2), dp(1))
+            background = null
             visibility = View.GONE
         }
         windowManager.addView(
@@ -254,18 +275,56 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
                 Gravity.TOP or Gravity.END,
                 touchable = false
             ).apply {
-                x = (metrics.widthPixels * 0.025f).toInt()
-                y = (metrics.heightPixels * 0.080f).toInt()
+                x = dp(10)
+                y = dp(8)
             }
         )
 
+        // Current-player matchup indicator from the older HUD.
+        myMatchupChip = TextView(this).apply {
+            gravity = Gravity.CENTER
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setShadowLayer(2f, 0f, 1f, Color.BLACK)
+            visibility = View.GONE
+        }
+        windowManager.addView(
+            myMatchupChip,
+            overlayParams(dp(32), dp(32), Gravity.TOP or Gravity.START, touchable = false).apply {
+                x = dp(8)
+                y = dp(8)
+            }
+        )
+
+        // Small reserve recommendations beside the game's reserve cards.
+        reserveAdvisorBar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+            visibility = View.GONE
+        }
+        windowManager.addView(
+            reserveAdvisorBar,
+            overlayParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                Gravity.END or Gravity.CENTER_VERTICAL,
+                touchable = false
+            ).apply {
+                x = dp(5)
+                y = dp(70)
+            }
+        )
+
+        // Only appears when automatic lobby detection failed. Once a league is
+        // known it disappears so it does not permanently alter the battle UI.
         leagueChip = TextView(this).apply {
-            textSize = 12f
+            textSize = 11f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(dp(9), dp(5), dp(9), dp(5))
-            background = rounded(Color.argb(165, 20, 34, 52), 18f)
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+            background = rounded(Color.argb(175, 20, 34, 52), 18f)
             setOnClickListener { showLeagueMenu(this) }
+            visibility = View.GONE
         }
         windowManager.addView(
             leagueChip,
@@ -274,26 +333,34 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP or Gravity.CENTER_HORIZONTAL,
                 touchable = true
-            ).apply { y = (metrics.heightPixels * 0.118f).toInt() }
+            ).apply { y = (metrics.heightPixels * 0.105f).toInt() }
         )
 
+        // Classic transparent move HUD. No large dark rectangle over the trainer.
         movePanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(5), dp(4), dp(5), dp(5))
-            background = rounded(Color.argb(105, 0, 0, 0), 16f)
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+            background = null
+            visibility = View.GONE
         }
 
         enemyLabel = TextView(this).apply {
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = 12f
-            setPadding(dp(3), dp(2), dp(3), dp(2))
+            textSize = 10f
+            setShadowLayer(3f, 0f, 1f, Color.BLACK)
+            setPadding(dp(6), dp(2), dp(6), dp(2))
+            background = rounded(Color.argb(95, 0, 0, 0), 14f)
+            setOnLongClickListener {
+                correctionRow.visibility = if (correctionRow.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                true
+            }
         }
         movePanel.addView(
             enemyLabel,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
@@ -327,22 +394,26 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
         chargedRow.addView(chargedRight)
         movePanel.addView(chargedRow)
 
-        val correctionRow = LinearLayout(this).apply {
+        // Manual correction remains available but no longer clutters the default
+        // design. Long-press the enemy name to show/hide it.
+        correctionRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            visibility = View.GONE
+            background = rounded(Color.argb(125, 0, 0, 0), 16f)
         }
         val minus = compactButton("−") { correctFastCount(-1) }
         correctionLabel = TextView(this).apply {
-            text = "energia"
-            textSize = 10f
-            setTextColor(Color.LTGRAY)
+            text = "E 0"
+            textSize = 9f
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(dp(5), 0, dp(5), 0)
+            setPadding(dp(3), 0, dp(3), 0)
         }
         val plus = compactButton("+") { correctFastCount(1) }
-        correctionRow.addView(minus, LinearLayout.LayoutParams(dp(38), dp(34)))
-        correctionRow.addView(correctionLabel, LinearLayout.LayoutParams(dp(72), dp(34)))
-        correctionRow.addView(plus, LinearLayout.LayoutParams(dp(38), dp(34)))
+        correctionRow.addView(minus, LinearLayout.LayoutParams(dp(32), dp(30)))
+        correctionRow.addView(correctionLabel, LinearLayout.LayoutParams(dp(48), dp(30)))
+        correctionRow.addView(plus, LinearLayout.LayoutParams(dp(32), dp(30)))
         movePanel.addView(correctionRow)
 
         windowManager.addView(
@@ -350,35 +421,32 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
             overlayParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP or Gravity.START,
+                Gravity.TOP or Gravity.END,
                 touchable = true
             ).apply {
-                // Deliberately keep the move panel away from the opponent trainer.
-                // In portrait battles this places it left of the trainer with a
-                // visible gap instead of drawing icons over the human character.
-                x = (metrics.widthPixels * 0.30f).toInt()
-                y = (metrics.heightPixels * 0.185f).toInt()
+                // Leaves a visible gap before the opponent trainer model.
+                x = (metrics.widthPixels * 0.20f).toInt()
+                y = (metrics.heightPixels * 0.205f).toInt()
             }
         )
     }
 
     private fun render() {
         val league = currentLeague
-        leagueChip.text = league?.let { "${it.labelPtBr} ▼" } ?: "Liga? ▼"
-        leagueChip.setTextColor(if (league == null) Color.rgb(255, 210, 80) else Color.WHITE)
+        leagueChip.text = league?.let { "${it.labelPtBr} ▼" } ?: "Escolher liga ▼"
+        leagueChip.visibility = if (league == null && pendingEnemySpeciesId != null) View.VISIBLE else View.GONE
 
         val battle = session
         val slot = battle?.enemyTracker?.activeEnemySlot()
         if (battle == null || slot == null) {
-            enemyLabel.text = if (league == null) "Selecione a liga" else "Aguardando inimigo…"
-            fastChip.bind(null)
-            chargedLeft.bind(null)
-            chargedRight.bind(null)
-            correctionLabel.text = "energia"
+            movePanel.visibility = View.GONE
             weaknessBar.visibility = View.GONE
+            myMatchupChip.visibility = View.GONE
+            reserveAdvisorBar.visibility = View.GONE
             return
         }
 
+        movePanel.visibility = View.VISIBLE
         val state = battle.enemyTracker.state(slot)
         enemyLabel.text = data.displayName(state.speciesId)
 
@@ -387,11 +455,24 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
 
         val progressById = battle.enemyTracker.chargedMoveProgress(slot)
             .associateBy { it.move.moveId }
-        bindCharged(chargedLeft, state.selectedChargedMoveIds.getOrNull(0), progressById, state.observedChargedMoveIds, 0 in state.manualChargedMoveButtonIndexes)
-        bindCharged(chargedRight, state.selectedChargedMoveIds.getOrNull(1), progressById, state.observedChargedMoveIds, 1 in state.manualChargedMoveButtonIndexes)
+        bindCharged(
+            chargedLeft,
+            state.selectedChargedMoveIds.getOrNull(0),
+            progressById,
+            state.observedChargedMoveIds,
+            0 in state.manualChargedMoveButtonIndexes
+        )
+        bindCharged(
+            chargedRight,
+            state.selectedChargedMoveIds.getOrNull(1),
+            progressById,
+            state.observedChargedMoveIds,
+            1 in state.manualChargedMoveButtonIndexes
+        )
 
         correctionLabel.text = "E ${state.energy}"
         renderWeaknesses(state.speciesId)
+        renderTeamAdvice(state.speciesId)
     }
 
     private fun bindCharged(
@@ -419,11 +500,13 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
             weaknessBar.visibility = View.GONE
             return
         }
+
         val types = data.strongTypesAgainst(speciesId).take(6)
         if (types.isEmpty()) {
             weaknessBar.visibility = View.GONE
             return
         }
+
         types.forEach { type ->
             val icon = TypeIconView(this).apply {
                 setType(type)
@@ -431,13 +514,76 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
             }
             weaknessBar.addView(
                 icon,
-                LinearLayout.LayoutParams(dp(28), dp(28)).apply {
+                LinearLayout.LayoutParams(dp(27), dp(27)).apply {
                     marginStart = dp(2)
                     marginEnd = dp(2)
                 }
             )
         }
         weaknessBar.visibility = View.VISIBLE
+    }
+
+    private fun renderTeamAdvice(enemySpeciesId: String?) {
+        val battle = session ?: return hideTeamAdvice()
+        val enemyId = enemySpeciesId ?: return hideTeamAdvice()
+        val snapshot = battle.snapshot()
+        val ids = snapshot.myTeam.map { it.speciesId }
+        val recommendations = TypeMatchupAdvisor(data.repository).rankMyTeam(enemyId, ids)
+        if (recommendations.isEmpty()) return hideTeamAdvice()
+
+        val activeSlot = snapshot.myTeam.firstOrNull { it.status == PokemonBattleStatus.ACTIVE }?.slot
+        val activeRecommendation = activeSlot?.let { slot -> recommendations.firstOrNull { it.slot == slot } }
+        if (activeRecommendation != null) {
+            val (symbol, color) = matchupMarker(activeRecommendation.typeScore)
+            myMatchupChip.text = symbol
+            myMatchupChip.background = rounded(Color.argb(220, Color.red(color), Color.green(color), Color.blue(color)), 18f)
+            myMatchupChip.visibility = View.VISIBLE
+        } else {
+            myMatchupChip.visibility = View.GONE
+        }
+
+        reserveAdvisorBar.removeAllViews()
+        val reserves = snapshot.myTeam.filter { state ->
+            state.speciesId != null && state.slot != activeSlot && state.status != PokemonBattleStatus.FAINTED
+        }
+        reserves.forEach { state ->
+            val pokemon = state.speciesId?.let(data.repository::pokemon) ?: return@forEach
+            val recommendation = recommendations.firstOrNull { it.slot == state.slot }
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+                setPadding(dp(2), dp(2), dp(2), dp(2))
+            }
+            pokemon.types.take(2).forEach { type ->
+                row.addView(
+                    TypeIconView(this).apply { setType(type) },
+                    LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(2) }
+                )
+            }
+            val score = recommendation?.typeScore ?: 1.0
+            val (symbol, color) = matchupMarker(score)
+            row.addView(TextView(this).apply {
+                text = symbol
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setShadowLayer(2f, 0f, 1f, Color.BLACK)
+                background = rounded(Color.argb(220, Color.red(color), Color.green(color), Color.blue(color)), 14f)
+            }, LinearLayout.LayoutParams(dp(25), dp(25)))
+            reserveAdvisorBar.addView(row)
+        }
+        reserveAdvisorBar.visibility = if (reserves.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    private fun hideTeamAdvice() {
+        myMatchupChip.visibility = View.GONE
+        reserveAdvisorBar.visibility = View.GONE
+    }
+
+    private fun matchupMarker(score: Double): Pair<String, Int> = when {
+        score >= 1.15 -> "✓" to Color.rgb(25, 180, 85)
+        score <= 0.85 -> "×" to Color.rgb(215, 65, 65)
+        else -> "•" to Color.rgb(115, 125, 135)
     }
 
     /** Tap the fast icon/name to choose any legal fast move for that species. */
@@ -493,7 +639,7 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
         val battle = session ?: return
         val slot = battle.enemyTracker.activeEnemySlot() ?: return
         battle.enemyTracker.clearChargedMoveManualOverride(slot, buttonIndex)
-        Toast.makeText(this, "Golpe $buttonIndex voltou para automático.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Golpe ${buttonIndex + 1} voltou para automático.", Toast.LENGTH_SHORT).show()
         render()
     }
 
@@ -530,12 +676,12 @@ class OverlayService : Service(), ScreenCaptureAnalyzer.Callback {
     private fun compactButton(textValue: String, click: () -> Unit): Button =
         Button(this).apply {
             text = textValue
-            textSize = 15f
+            textSize = 13f
             minWidth = 0
             minimumWidth = 0
             minHeight = 0
             minimumHeight = 0
-            setPadding(dp(5), 0, dp(5), 0)
+            setPadding(dp(3), 0, dp(3), 0)
             setOnClickListener { click() }
         }
 
