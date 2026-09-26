@@ -82,7 +82,7 @@ class BattleOverlayView(
         }
 
         if (settings.showCurrentIndicator) {
-            // Keep our current-Pokemon indicator beside, never over, GO's native portrait.
+            // Keep our current-Pokemon indicator above, never over, GO's native info card.
             drawMatchupIndicator(canvas, rx(PLAYER_MATCHUP_X), ry(TOP_ICON_Y), state.playerMatchup, 17.5f*u())
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
@@ -172,7 +172,7 @@ class BattleOverlayView(
         val playerTypes = currentPlayerTypes()
         if (playerTypes.isEmpty()) return
         if (TypeChart.multiplier(move.type, playerTypes) <= 1.01) return
-        paint.color = hudColor(Color.WHITE)
+        paint.color = hudColor(Color.rgb(255, 153, 45))
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = 10.8f*u()
         paint.typeface = Typeface.DEFAULT_BOLD
@@ -355,8 +355,8 @@ class BattleOverlayView(
     }
 
     companion object {
-        // Kept comfortably inside the real full-screen overlay so circles are never clipped.
-        private const val TOP_ICON_Y=44f
+        // Type/matchup chips sit in the thin strip above Pokémon GO's white player/opponent cards.
+        private const val TOP_ICON_Y=18f
         private const val PLAYER_MATCHUP_X=30f
         const val HUD_TOGGLE_CENTER_X=432f
         const val HUD_TOGGLE_CENTER_Y=44f
