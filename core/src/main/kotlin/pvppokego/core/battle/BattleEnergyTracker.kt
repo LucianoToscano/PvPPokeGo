@@ -7,10 +7,6 @@ import pvppokego.core.model.EnemyPokemonState
 import pvppokego.core.model.MoveData
 import pvppokego.core.model.PokemonBattleStatus
 
-/**
- * Tracks the opponent team independently from the overlay UI.
- * Switching a Pokemon out never resets its energy or fast-move count.
- */
 class BattleEnergyTracker(
     private val repository: PvpokeRepository,
     private val leagueCp: Int = 1500,
@@ -27,18 +23,12 @@ class BattleEnergyTracker(
         activeSlot = null
     }
 
-    fun identifyPokemon(
-        slot: Int,
-        speciesId: String,
-        fastMoveId: String? = null
-    ): EnemyPokemonState {
+    fun identifyPokemon(slot: Int, speciesId: String, fastMoveId: String? = null): EnemyPokemonState {
         requireSlot(slot)
         val normalizedSpecies = speciesId.lowercase()
         val existing = state(slot)
         val samePokemon = existing.speciesId == normalizedSpecies
-        val recommendation = repository
-            .recommendedMovesets(normalizedSpecies, leagueCp)
-            .firstOrNull() // PvPoke rank #1 is the default moveset.
+        val recommendation = repository.recommendedMovesets(normalizedSpecies, leagueCp).firstOrNull()
 
         val next = if (samePokemon) {
             existing.copy(
@@ -85,11 +75,9 @@ class BattleEnergyTracker(
             .filter(MoveData::isChargedMove).sortedBy(MoveData::name)
     }
 
-    /** User selection from the fast-move arrow. Automatic vision must respect it. */
     fun setFastMove(slot: Int, fastMoveId: String): EnemyPokemonState =
         setFastMoveInternal(slot, fastMoveId, manual = true)
 
-    /** Automatic recognition of the fast move. It is ignored after a manual override. */
     fun observeFastMove(slot: Int, fastMoveId: String): EnemyPokemonState {
         val current = state(slot)
         if (current.fastMoveManuallyOverridden) return current
@@ -111,7 +99,6 @@ class BattleEnergyTracker(
         return next
     }
 
-    /** Replaces both charged controls and marks both as manually pinned. */
     fun setChargedMoves(slot: Int, moveIds: Collection<String>): EnemyPokemonState {
         val current = state(slot)
         val normalized = moveIds.map(String::normalizeMoveId).distinct().take(MAX_CHARGED_BUTTONS)
@@ -127,7 +114,6 @@ class BattleEnergyTracker(
         return next
     }
 
-    /** User selection from a charged-move arrow. Index 0 = left, 1 = right. */
     fun setChargedMove(slot: Int, buttonIndex: Int, moveId: String): EnemyPokemonState =
         setChargedMoveInternal(slot, buttonIndex, moveId, manual = true)
 
@@ -166,7 +152,6 @@ class BattleEnergyTracker(
         return next
     }
 
-    /** Allows the user to return a move button to automatic PvPoke/OCR control. */
     fun clearChargedMoveManualOverride(slot: Int, buttonIndex: Int): EnemyPokemonState {
         val current = state(slot)
         val next = current.copy(
@@ -207,10 +192,13 @@ class BattleEnergyTracker(
     }
 
     /**
-     * Applies ANY legal charged move observed in the game banner.
-     * If PvPoke's rank #1 default was wrong, the observed move automatically
-     * replaces a non-manual button. A button explicitly changed by the user is
-     * never overwritten by OCR.
+     * Applies any legal charged move actually seen in the Pokemon GO banner.
+     * Defaults start from PvPoke rank #1. OCR then progressively verifies the
+     * real pair:
+     * - if the observed move already occupies a default slot, that slot is locked;
+     * - if it is new, replace a non-manual, not-yet-observed slot;
+     * - a second different observed move replaces the other unverified slot;
+     * - manually selected buttons are never overwritten automatically.
      */
     fun onChargedMove(slot: Int, chargedMoveId: String): EnemyPokemonState {
         val current = state(slot)
@@ -224,14 +212,20 @@ class BattleEnergyTracker(
         }
 
         val selected = current.selectedChargedMoveIds.toMutableList()
+        val observedBefore = current.observedChargedMoveIds
+
         if (normalized !in selected) {
-            when {
-                selected.size < MAX_CHARGED_BUTTONS -> selected += normalized
-                else -> {
-                    // Prefer replacing the right/default secondary move, then left.
-                    val replaceIndex = (MAX_CHARGED_BUTTONS - 1 downTo 0)
-                        .firstOrNull { it !in current.manualChargedMoveButtonIndexes }
-                    if (replaceIndex != null) selected[replaceIndex] = normalized
+            if (selected.size < MAX_CHARGED_BUTTONS) {
+                selected += normalized
+            } else {
+                val replaceIndex = selected.indices
+                    .filter { it !in current.manualChargedMoveButtonIndexes }
+                    .filter { selected[it] !in observedBefore }
+                    .sortedDescending()
+                    .firstOrNull()
+
+                if (replaceIndex != null) {
+                    selected[replaceIndex] = normalized
                 }
             }
         }
@@ -240,7 +234,8 @@ class BattleEnergyTracker(
             energy = max(0, current.energy - move.energyCost),
             chargedMovesUsed = current.chargedMovesUsed + 1,
             lastChargedMoveId = normalized,
-            selectedChargedMoveIds = selected.take(MAX_CHARGED_BUTTONS).distinct()
+            selectedChargedMoveIds = selected.take(MAX_CHARGED_BUTTONS).distinct(),
+            observedChargedMoveIds = observedBefore + normalized
         )
         states[slot] = next
         return next
