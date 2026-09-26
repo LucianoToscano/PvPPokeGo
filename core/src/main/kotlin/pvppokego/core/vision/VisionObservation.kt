@@ -86,8 +86,8 @@ class StableObservationReducer<T>(
         val winner = grouped.entries.maxWithOrNull(
             compareBy<Map.Entry<T, List<FieldObservation<T>>>>(
                 { it.value.size },
-                { it.value.map(FieldObservation<T>::confidence).average() },
-                { it.value.maxOf(FieldObservation<T>::timestampMs) }
+                { it.value.map { obs -> obs.confidence }.average() },
+                { it.value.maxOf { obs -> obs.timestampMs } }
             )
         ) ?: return null
 
@@ -95,9 +95,9 @@ class StableObservationReducer<T>(
 
         return StableObservation(
             value = winner.key,
-            confidence = winner.value.map(FieldObservation<T>::confidence).average(),
+            confidence = winner.value.map { it.confidence }.average(),
             confirmations = winner.value.size,
-            newestTimestampMs = winner.value.maxOf(FieldObservation<T>::timestampMs)
+            newestTimestampMs = winner.value.maxOf { it.timestampMs }
         )
     }
 
@@ -109,7 +109,7 @@ class StableObservationReducer<T>(
 
     private fun trim(nowMs: Long) {
         val cutoff = nowMs - windowMs
-        while (history.isNotEmpty() && history.first.timestampMs < cutoff) {
+        while (history.isNotEmpty() && history.peekFirst().timestampMs < cutoff) {
             history.removeFirst()
         }
     }
