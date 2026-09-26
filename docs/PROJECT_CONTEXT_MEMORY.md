@@ -2,6 +2,14 @@
 
 Atualizado em: 2026-09-26
 
+## Contexto canônico consolidado
+
+As informações dos chats **“APK pronto para baixar”** e **“Funções Para Dois APKs”**, junto com o estado atual do Projeto PvPPokeGo, foram consolidadas em:
+
+- `docs/CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md`
+
+Esse documento é a referência principal de continuidade e preserva decisões de arquitetura, UX, APKs analisados, PvPoke, Battle Brain, automação/intents, módulos planejados, estado implementado, pendências e próximos passos. Este arquivo continua como memória resumida do projeto.
+
 ## Objetivo
 
 O PvPPokeGo é o projeto de assistência de batalha PvP. Ele concentra leitura visual, overlay, contagem de energia/golpes, análise de matchup, identificação de moveset, suporte a escudos e recomendações em batalha.
