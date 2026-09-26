@@ -52,11 +52,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var scanJob: Job? = null
     private var currentLeagueCp: Int = 1500
 
-    // The visual V03 HUD stays fully click-through. Only these three small transparent
-    // windows receive touches, so Pokémon GO remains touchable everywhere else.
+    // The full visual HUD remains click-through. Only tiny transparent windows over the
+    // three move selectors and the hide/restore button receive touches.
     private var fastTouch: View? = null
     private var charged1Touch: View? = null
     private var charged2Touch: View? = null
+    private var hudToggleTouch: View? = null
+    private var hudCollapsed = false
 
     override fun onCreate() {
         super.onCreate()
@@ -104,7 +106,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, projection!!).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(currentLeagueCp)} • base visual V03"))
+                startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -116,7 +118,6 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (overlayView != null) return
         windowManager = getSystemService(WindowManager::class.java)
 
-        // Exact V03 visual view: keep it non-touchable so it never blocks battle taps.
         overlayView = BattleOverlayView(this, settingsRepo, this).also { view ->
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -132,15 +133,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
 
         attachMoveTouchZones()
+        attachHudToggleTouch()
         redraw()
     }
 
-    /**
-     * V03 already draws and positions the three move selectors. Instead of making the entire
-     * full-screen HUD touchable, place three tiny transparent overlay windows over those selectors.
-     * This preserves the old design and lets taps open native submenus without stealing the rest
-     * of Pokémon GO's touch surface.
-     */
+    /** Only the three move selectors receive touch; the rest of the battle remains untouched. */
     private fun attachMoveTouchZones() {
         val wm = windowManager ?: return
         if (fastTouch != null) return
@@ -174,10 +171,45 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             return view
         }
 
-        // Matches BattleOverlayView's unchanged V03 hit geometry.
         fastTouch = zone(620f, 370f, 106f, 116f) { showNativeMoveMenu(MoveKind.FAST, it) }
         charged1Touch = zone(548f, 495f, 120f, 130f) { showNativeMoveMenu(MoveKind.CHARGED_1, it) }
         charged2Touch = zone(692f, 495f, 120f, 130f) { showNativeMoveMenu(MoveKind.CHARGED_2, it) }
+    }
+
+    /** Red X while expanded; tiny PvPPokeGo restore bubble while collapsed. */
+    private fun attachHudToggleTouch() {
+        val wm = windowManager ?: return
+        if (hudToggleTouch != null) return
+        hudToggleTouch = View(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            setOnClickListener { toggleHudCollapsed() }
+        }.also { view ->
+            wm.addView(view, hudToggleParams())
+        }
+    }
+
+    private fun hudToggleParams(): WindowManager.LayoutParams {
+        val metrics = resources.displayMetrics
+        val sx = metrics.widthPixels / 864f
+        val sy = metrics.heightPixels / 1536f
+        val unit = min(sx, sy) * (settingsRepo.scale / .8f).coerceIn(.62f, 1.5f)
+        val size = (54f * unit).toInt().coerceAtLeast(44)
+        val centerX = (if (hudCollapsed) 42f else 96f) * sx
+        val centerY = 38f * sy
+        return smallTouchableParams(size, size).apply {
+            x = (centerX - size / 2f).toInt()
+            y = (centerY - size / 2f).toInt()
+        }
+    }
+
+    private fun toggleHudCollapsed() {
+        hudCollapsed = !hudCollapsed
+        overlayView?.setCollapsed(hudCollapsed)
+        hudToggleTouch?.let { view ->
+            runCatching { windowManager?.updateViewLayout(view, hudToggleParams()) }
+        }
+        redraw()
     }
 
     private fun smallTouchableParams(width: Int, height: Int): WindowManager.LayoutParams =
@@ -192,6 +224,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         ).apply { gravity = Gravity.TOP or Gravity.START }
 
     private fun showNativeMoveMenu(kind: MoveKind, anchor: View) {
+        if (hudCollapsed) return
         val e = engine ?: return
         val options = when (kind) {
             MoveKind.FAST -> e.possibleFastMoves()
@@ -246,8 +279,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             reloadLeague(manualCp)
                         }
 
-                        // Automatic mode reads Great/Ultra/Master from the lobby. If OCR cannot
-                        // identify it, the last detected/manual selection remains available.
+                        // Automatic mode reads Great/Ultra/Master from the lobby.
                         if (
                             settingsRepo.leagueMode == BattleLeagueMode.AUTO &&
                             engine?.activeEnemyName() == null &&
@@ -270,7 +302,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             }
                         }
 
-                        // OCR remains throttled: name/CP + charged prompt/banner text.
+                        // OCR: name/CP + charged prompt/banner text.
                         if (settingsRepo.autoRecognition && now - lastOcrAt >= OCR_INTERVAL_MS) {
                             val d = detector?.detect(frame)
                             e = engine
@@ -283,16 +315,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             lastOcrAt = now
                         }
 
-                        // A larger OCR pass remembers the user's three Pokémon. Once all three are
-                        // known it stops, so it does not stay in the hot path for the whole battle.
+                        // Remember the user's three Pokémon; stop the larger pass once all are known.
                         e = engine
                         if (settingsRepo.autoRecognition && e != null && e.needsOwnTeamScan() && now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS) {
                             detector?.detectOwnTeam(frame)?.let(e::onOwnTeamDetected)
                             lastTeamOcrAt = now
                         }
 
-                        // Exact "X usou Y" text wins. This is only a fallback for charge animations
-                        // where the exact move text was unreadable; residual energy is preserved.
+                        // Exact "X usou Y" text wins; fallback only covers unreadable charge animations.
                         engine?.maybeConfirmPendingCharged(now)
 
                         consecutiveErrors = 0
@@ -313,7 +343,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         engine = BattleEngine(gameRepo)
         frameDetector?.reset()
         withContext(Dispatchers.Main) {
-            startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(cp)} • base visual V03"))
+            startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -322,16 +352,18 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val view = overlayView ?: return
         val enabled = settingsRepo.overlayEnabled
         view.visibility = if (enabled) View.VISIBLE else View.GONE
+        view.setCollapsed(hudCollapsed)
         val ui = engine?.uiState(settingsRepo.debugMode)
         ui?.let(view::render)
 
-        // Transparent touch areas are only active when their corresponding V03 icon exists.
-        fastTouch?.visibility = if (enabled && ui?.fastMove != null) View.VISIBLE else View.GONE
-        charged1Touch?.visibility = if (enabled && ui?.charged1 != null) View.VISIBLE else View.GONE
-        charged2Touch?.visibility = if (enabled && ui?.charged2 != null) View.VISIBLE else View.GONE
+        val selectorsEnabled = enabled && !hudCollapsed
+        fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
+        charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
+        charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
+        hudToggleTouch?.visibility = if (enabled) View.VISIBLE else View.GONE
     }
 
-    // Retained callbacks keep BattleOverlayView API/source compatible with the exact V03 base.
+    // Retained callbacks keep the visual view compatible with the V03 interaction API.
     override fun onFastMoveTapped() {
         val options = engine?.possibleFastMoves().orEmpty()
         overlayView?.showMoveMenu(BattleOverlayView.MoveKind.FAST, options)
@@ -381,8 +413,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         runCatching { fastTouch?.let { windowManager?.removeView(it) } }
         runCatching { charged1Touch?.let { windowManager?.removeView(it) } }
         runCatching { charged2Touch?.let { windowManager?.removeView(it) } }
+        runCatching { hudToggleTouch?.let { windowManager?.removeView(it) } }
         overlayView = null
-        fastTouch = null; charged1Touch = null; charged2Touch = null
+        fastTouch = null
+        charged1Touch = null
+        charged2Touch = null
+        hudToggleTouch = null
         detector?.close(); detector = null
         frameDetector = null
         capture?.stop(); capture = null
