@@ -8,6 +8,30 @@ A partir desta data, as decisões, ideias, progresso, builds e próximos passos 
 
 Este documento serve como âncora técnica durável. Não armazena credenciais, tokens, dados privados de conta ou material sensível.
 
+## Migração dos chats antigos
+
+O conteúdo recuperado dos tópicos **“APK pronto para baixar”** e **“Funções Para Dois APKs”** que pertence ao PvPPokeGo foi consolidado integralmente em:
+
+- `docs/CHAT_MIGRATION_APK_PRONTO_E_FUNCOES_DOIS_APKS_2026-09-26.md`
+
+Esse documento preserva:
+- análise do APK-base histórico;
+- arquitetura MediaProjection/OCR/overlay;
+- especificação visual e controles `▼`;
+- moveset PvPoke #1 + confirmação automática por OCR;
+- memória dos três inimigos;
+- energia residual/faixa/autocorreção/double-charge;
+- Confidence Engine;
+- Battle Brain, bait, shield/switch advice e timers;
+- replay/treino/PGSStats;
+- achados Poke Genie/PGSharp/iPogo/Pokemod/PGTools/Shungo;
+- material Rocket/Raid/Max separado do core PvP;
+- roadmap histórico F1–F10;
+- implementado vs pendente;
+- separação explícita do que pertence ao PGLOT.
+
+A partir de agora não é necessário consultar os dois chats antigos para continuar o desenvolvimento.
+
 ## Escopo PvPPokeGo
 
 PvPPokeGo é o assistente visual externo para batalha PvP. Foco:
