@@ -12,7 +12,13 @@ import java.text.Normalizer
 
 /**
  * Battle-domain state. It never touches Pokémon GO and never sends input.
- * V03 connects the visual Fast-Move detector, charged-prompt reset and own-team memory.
+ *
+ * V04 keeps the V03 HUD/UX intact and improves only the battle state:
+ * - rank #1 PvPoke moveset remains the initial default;
+ * - observed charged moves can correct a wrong default automatically;
+ * - the second different observed charged move confirms/corrects the other slot;
+ * - manual choices are never overwritten by OCR;
+ * - enemy energy/move memory survives switches.
  */
 class BattleEngine(private val repo: GameDataRepository) {
     data class DetectionChanges(val playerChanged: Boolean, val enemyChanged: Boolean)
@@ -96,28 +102,78 @@ class BattleEngine(private val repo: GameDataRepository) {
         val key = normalize(name)
         activeState = enemyStates.getOrCreate(key, name)
         val saved = activeState!!
+
+        // PvPoke rank #1 / primary recommended moveset is the default. Saved state wins
+        // when this same enemy returns after a switch.
         val likely = repo.likelyMoveset(name)
         fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
         charge1 = repo.move(saved.chargedMove1Id) ?: likely.second ?: repo.possibleChargedMoves(name).getOrNull(0)
         charge2 = repo.move(saved.chargedMove2Id) ?: likely.third ?: repo.possibleChargedMoves(name).getOrNull(1)
         tracker.restore(saved.estimatedEnergy, saved.fastMoveCount)
+        saveActiveState()
     }
 
     fun selectFast(move: MoveDef) {
         fast = move
-        activeState?.fastMoveId = move.moveId
+        activeState?.apply {
+            fastMoveId = move.moveId
+            fastMoveManual = true
+        }
+        saveActiveState()
+    }
+
+    fun clearFastManualOverride() {
+        val state = activeState ?: return
+        state.fastMoveManual = false
+        val recommended = enemyName?.let(repo::likelyMoveset)?.first ?: return
+        fast = recommended
+        state.fastMoveId = recommended.moveId
         saveActiveState()
     }
 
     fun selectCharged1(move: MoveDef) {
         charge1 = move
-        activeState?.chargedMove1Id = move.moveId
+        activeState?.apply {
+            chargedMove1Id = move.moveId
+            charge1Manual = true
+            charge1Confirmed = false
+        }
         saveActiveState()
     }
 
     fun selectCharged2(move: MoveDef) {
         charge2 = move
-        activeState?.chargedMove2Id = move.moveId
+        activeState?.apply {
+            chargedMove2Id = move.moveId
+            charge2Manual = true
+            charge2Confirmed = false
+        }
+        saveActiveState()
+    }
+
+    fun clearChargedManualOverride(index: Int) {
+        val state = activeState ?: return
+        val likely = enemyName?.let(repo::likelyMoveset) ?: return
+        when (index) {
+            0 -> {
+                state.charge1Manual = false
+                val recommended = likely.second ?: repo.possibleChargedMoves(state.speciesName).getOrNull(0)
+                if (recommended != null && recommended.moveId != charge2?.moveId) {
+                    charge1 = recommended
+                    state.chargedMove1Id = recommended.moveId
+                    state.charge1Confirmed = recommended.moveId in state.observedChargedMoveIds
+                }
+            }
+            1 -> {
+                state.charge2Manual = false
+                val recommended = likely.third ?: repo.possibleChargedMoves(state.speciesName).getOrNull(1)
+                if (recommended != null && recommended.moveId != charge1?.moveId) {
+                    charge2 = recommended
+                    state.chargedMove2Id = recommended.moveId
+                    state.charge2Confirmed = recommended.moveId in state.observedChargedMoveIds
+                }
+            }
+        }
         saveActiveState()
     }
 
@@ -143,24 +199,59 @@ class BattleEngine(private val repo: GameDataRepository) {
     /** Manual/known charged move. */
     fun chargedUsed(move: MoveDef): Boolean {
         val ok = tracker.onChargedMove(move)
-        if (ok) recordChargedMove(move)
+        if (ok) recordChargedMove(move, observed = false)
         return ok
     }
 
     /** Visual confirmation from battle text or charged-prompt fallback. */
-    private fun observedChargedUsed(move: MoveDef): Boolean {
+    private fun observedChargedUsed(move: MoveDef, nowMs: Long = System.currentTimeMillis()): Boolean {
         tracker.onObservedChargedMove(move)
-        recordChargedMove(move)
+        recordChargedMove(move, observed = true)
         chargedPendingSinceMs = null
-        lastChargedConfirmedAtMs = System.currentTimeMillis()
+        lastChargedConfirmedAtMs = nowMs
         return true
     }
 
-    private fun recordChargedMove(move: MoveDef) {
-        activeState?.lastChargedMoveId = move.moveId
-        if (move.moveId == charge1?.moveId) activeState?.charge1Confirmed = true
-        if (move.moveId == charge2?.moveId) activeState?.charge2Confirmed = true
+    /**
+     * Learns the real enemy charged pair from what Pokémon GO displays.
+     * A manual user choice is protected. Otherwise the first unseen charged move replaces
+     * one unconfirmed default; a second different observed move replaces/confirms the other.
+     */
+    private fun recordChargedMove(move: MoveDef, observed: Boolean) {
+        val state = activeState
+        if (state != null) {
+            state.lastChargedMoveId = move.moveId
+            if (observed) state.observedChargedMoveIds += move.moveId
+
+            when {
+                move.moveId == charge1?.moveId -> state.charge1Confirmed = observed || state.charge1Confirmed
+                move.moveId == charge2?.moveId -> state.charge2Confirmed = observed || state.charge2Confirmed
+                observed -> autoLearnObservedCharged(state, move)
+            }
+        }
         saveActiveState()
+    }
+
+    private fun autoLearnObservedCharged(state: BattlePokemonState, move: MoveDef) {
+        val replaceIndex = when {
+            !state.charge1Manual && !state.charge1Confirmed -> 0
+            !state.charge2Manual && !state.charge2Confirmed -> 1
+            !state.charge1Manual && charge1?.moveId !in state.observedChargedMoveIds -> 0
+            !state.charge2Manual && charge2?.moveId !in state.observedChargedMoveIds -> 1
+            else -> -1
+        }
+        when (replaceIndex) {
+            0 -> {
+                charge1 = move
+                state.chargedMove1Id = move.moveId
+                state.charge1Confirmed = true
+            }
+            1 -> {
+                charge2 = move
+                state.chargedMove2Id = move.moveId
+                state.charge2Confirmed = true
+            }
+        }
     }
 
     fun onBattleText(raw: String, nowMs: Long = System.currentTimeMillis()): BattleTextResult {
@@ -174,17 +265,16 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
         }
 
-        // Do not simply search move labels: the overlay itself may be part of the captured frame.
-        // Only accept a move name when OCR also sees a game action verb such as "usou"/"used".
-        val actionVerbPresent = text.contains("usou") || text.contains("used") || text.contains("utilizou")
+        // Never infer from our own overlay labels alone. The game action verb must also be present.
+        val actionVerbPresent = ACTION_VERBS.any { text.contains(it) }
         if (actionVerbPresent) {
             val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
-            val matched = candidates.firstOrNull { move ->
-                val moveName = normalizeText(repo.localizedMoveName(move))
-                moveName.length >= 4 && text.contains(moveName)
-            }
+            val matched = candidates
+                .map { it to normalizedMoveNames(it) }
+                .firstOrNull { (_, names) -> names.any { n -> n.length >= 4 && text.contains(n) } }
+                ?.first
             if (matched != null && nowMs - lastChargedConfirmedAtMs > 1_800L) {
-                observedChargedUsed(matched)
+                observedChargedUsed(matched, nowMs)
                 return BattleTextResult(newPrompt, true)
             }
         }
@@ -192,22 +282,28 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     /**
-     * If the charge prompt was visually confirmed but its exact move name was not readable,
-     * spend the most likely selected charged move after the animation window. This fixes the
-     * counter reset while retaining residual energy whenever the tracked estimate allows it.
+     * Fallback for shield/animation cases where the exact move text was not readable.
+     * Prefer a uniquely affordable selected move. If both are plausible, prefer a move already
+     * observed for this opponent; only then fall back to the cheaper selected move.
      */
     fun maybeConfirmPendingCharged(nowMs: Long = System.currentTimeMillis()): Boolean {
         val since = chargedPendingSinceMs ?: return false
         if (nowMs - since < 4_900L) return false
-        val candidates = listOfNotNull(charge1, charge2)
+        val candidates = listOfNotNull(charge1, charge2).distinctBy { it.moveId }
         if (candidates.isEmpty()) {
             chargedPendingSinceMs = null
             return false
         }
-        val selected = candidates.firstOrNull { tracker.energy >= it.chargedCost }
-            ?: candidates.minByOrNull { it.chargedCost }
-            ?: return false
-        return observedChargedUsed(selected)
+        val affordable = candidates.filter { tracker.energy >= it.chargedCost }
+        val observed = activeState?.observedChargedMoveIds.orEmpty()
+        val selected = when {
+            affordable.size == 1 -> affordable.first()
+            affordable.isNotEmpty() -> affordable.firstOrNull { it.moveId in observed }
+                ?: affordable.minByOrNull { it.chargedCost }
+            else -> candidates.firstOrNull { it.moveId in observed }
+                ?: candidates.minByOrNull { it.chargedCost }
+        } ?: return false
+        return observedChargedUsed(selected, nowMs)
     }
 
     fun possibleFastMoves(): List<MoveDef> = enemyName?.let(repo::possibleFastMoves).orEmpty()
@@ -240,12 +336,15 @@ class BattleEngine(private val repo: GameDataRepository) {
             chargedIncoming = chargedPendingSinceMs != null,
             detectorConfidence = lastDetectorConfidence,
             debugText = if (debug) buildString {
+                val s = activeState
                 appendLine("Jogador: ${playerName ?: "?"} PC ${playerCp ?: "?"} | time=${ownTeam.keys.joinToString()}")
                 appendLine("Inimigo: ${enemyName ?: "?"} PC ${enemyCp ?: "?"}")
-                appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount}")
+                appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.energy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
                 appendLine("HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"} | movimento=${"%.1f".format(lastMotion)}")
-                appendLine("C1=${charge1?.name ?: "?"} | C2=${charge2?.name ?: "?"}")
+                appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
+                appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
+                appendLine("Observados=${s?.observedChargedMoveIds?.joinToString().orEmpty()}")
                 append("Charged pendente=${chargedPendingSinceMs != null}")
             } else null
         )
@@ -272,6 +371,12 @@ class BattleEngine(private val repo: GameDataRepository) {
         state.lastSeenAtMs = System.currentTimeMillis()
     }
 
+    private fun normalizedMoveNames(move: MoveDef): Set<String> = buildSet {
+        add(normalizeText(repo.localizedMoveName(move)))
+        add(normalizeText(move.name))
+        add(normalizeText(move.moveId.replace('_', ' ')))
+    }.filterTo(linkedSetOf()) { it.isNotBlank() }
+
     private fun normalize(s: String) = s.lowercase().replace(Regex("[^a-z0-9]+"), "")
 
     private fun normalizeText(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
@@ -283,5 +388,6 @@ class BattleEngine(private val repo: GameDataRepository) {
             "ataquecarregado", "ataquechegando", "ataquecarregadoagora",
             "attackincoming", "chargemoveincoming", "usarumescudo", "useumescudo", "protectshield"
         )
+        private val ACTION_VERBS = listOf("usou", "used", "utilizou")
     }
 }
