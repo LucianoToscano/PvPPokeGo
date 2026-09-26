@@ -43,14 +43,14 @@ class MainActivity : Activity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "PvPPokeGo V02"
+            text = "PvPPokeGo V03"
             textSize = 28f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
         }, fullWidth())
 
         root.addView(TextView(this).apply {
-            text = "Overlay externo • contador de energia • OCR de carregados"
+            text = "Overlay clássico • contador de energia • OCR de carregados"
             textSize = 15f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
