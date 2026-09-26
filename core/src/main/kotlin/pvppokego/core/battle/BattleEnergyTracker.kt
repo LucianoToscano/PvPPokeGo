@@ -9,13 +9,7 @@ import pvppokego.core.model.EvidenceLevel
 import pvppokego.core.model.MoveData
 import pvppokego.core.model.PokemonBattleStatus
 
-/**
- * Tracks the opponent team independently from the overlay UI.
- *
- * Important rule:
- * switching a Pokemon out never resets its energy or fast-move count.
- * State is reset only when the Pokemon faints or the battle session is reset.
- */
+/** Tracks the opponent team independently from the overlay UI. */
 class BattleEnergyTracker(
     private val repository: PvpokeRepository,
     private val leagueCp: Int = 1500,
@@ -49,10 +43,7 @@ class BattleEnergyTracker(
         val normalizedSpecies = speciesId.lowercase()
         val existing = state(slot)
         val samePokemon = existing.speciesId == normalizedSpecies
-
-        val recommendation = repository
-            .recommendedMovesets(speciesId, leagueCp)
-            .firstOrNull()
+        val recommendation = repository.recommendedMovesets(speciesId, leagueCp).firstOrNull()
 
         val next = if (samePokemon) {
             existing.copy(
@@ -66,15 +57,14 @@ class BattleEnergyTracker(
                     recommendation?.fastMoveId != null -> EvidenceLevel.PREDICTED
                     else -> existing.fastMoveEvidence
                 },
-                selectedChargedMoveIds =
-                    if (existing.selectedChargedMoveIds.isNotEmpty()) {
-                        existing.selectedChargedMoveIds
-                    } else {
-                        recommendation?.chargedMoveIds.orEmpty()
-                            .map(String::normalizeMoveId)
-                            .distinct()
-                            .take(MAX_CHARGED_BUTTONS)
-                    }
+                selectedChargedMoveIds = if (existing.selectedChargedMoveIds.isNotEmpty()) {
+                    existing.selectedChargedMoveIds
+                } else {
+                    recommendation?.chargedMoveIds.orEmpty()
+                        .map(String::normalizeMoveId)
+                        .distinct()
+                        .take(MAX_CHARGED_BUTTONS)
+                }
             )
         } else {
             energyRanges[slot] = EnergyRangeEstimate(0, 0, EvidenceLevel.CONFIRMED)
@@ -127,19 +117,11 @@ class BattleEnergyTracker(
                 "$normalized is not a fast move for ${current.speciesId}"
             }
         }
-        val next = current.copy(
-            fastMoveId = normalized,
-            fastMoveEvidence = evidence
-        )
+        val next = current.copy(fastMoveId = normalized, fastMoveEvidence = evidence)
         states[slot] = next
         return next
     }
 
-    /**
-     * Replaces both charged-move buttons while preserving the supplied order.
-     * Any previously confirmed move that is intentionally removed here loses
-     * its confirmed marker, allowing manual correction of an OCR mistake.
-     */
     fun setChargedMoves(slot: Int, moveIds: Collection<String>): EnemyPokemonState {
         val current = state(slot)
         val normalized = moveIds
@@ -160,14 +142,6 @@ class BattleEnergyTracker(
         return next
     }
 
-    /**
-     * Updates exactly one overlay charged-move button. Index 0 is left and
-     * index 1 is right. Selecting a move already present on the other button
-     * swaps the two buttons instead of creating a duplicate.
-     *
-     * Manual replacement of a previously confirmed button is treated as a
-     * correction and clears the confirmation for the replaced move.
-     */
     fun setChargedMove(slot: Int, buttonIndex: Int, moveId: String): EnemyPokemonState {
         require(buttonIndex in 0 until MAX_CHARGED_BUTTONS) {
             "buttonIndex must be 0 or 1"
@@ -181,8 +155,7 @@ class BattleEnergyTracker(
 
         val selected = current.selectedChargedMoveIds.toMutableList()
         while (selected.size <= buttonIndex) {
-            val filler = legal.firstOrNull { it !in selected && it != normalized }
-                ?: normalized
+            val filler = legal.firstOrNull { it !in selected && it != normalized } ?: normalized
             selected.add(filler)
         }
 
@@ -205,9 +178,7 @@ class BattleEnergyTracker(
         }
 
         val next = current.copy(
-            selectedChargedMoveIds = selected
-                .take(MAX_CHARGED_BUTTONS)
-                .distinct(),
+            selectedChargedMoveIds = selected.take(MAX_CHARGED_BUTTONS).distinct(),
             confirmedChargedMoveIds = nextConfirmed
         )
         states[slot] = next
@@ -227,23 +198,19 @@ class BattleEnergyTracker(
         require(target.status != PokemonBattleStatus.FAINTED) {
             "Cannot switch to a fainted Pokemon in slot $slot"
         }
-
         val next = target.copy(status = PokemonBattleStatus.ACTIVE)
         states[slot] = next
         activeSlot = slot
         return next
     }
 
-    /** Called once for each visually detected fast attack. */
     fun onFastMove(slot: Int, count: Int = 1): EnemyPokemonState {
         require(count > 0) { "count must be > 0" }
         val current = state(slot)
         val fastMoveId = requireNotNull(current.fastMoveId) {
             "Fast move is unknown for enemy slot $slot"
         }
-        val move = requireNotNull(repository.move(fastMoveId)) {
-            "Unknown move: $fastMoveId"
-        }
+        val move = requireNotNull(repository.move(fastMoveId)) { "Unknown move: $fastMoveId" }
         require(move.energyGain > 0) { "$fastMoveId is not a fast move" }
 
         val gained = move.energyGain * count
@@ -265,11 +232,6 @@ class BattleEnergyTracker(
         return next
     }
 
-    /**
-     * Expands only the upper bound when the vision layer suspects one or more
-     * fast moves may have been missed. This avoids pretending the energy value
-     * is exact when frames were dropped or recognition confidence was low.
-     */
     fun notePossibleMissedFastMoves(slot: Int, maxAdditionalFastMoves: Int): EnergyRangeEstimate {
         require(maxAdditionalFastMoves >= 0)
         if (maxAdditionalFastMoves == 0) return energyRange(slot)
@@ -288,19 +250,14 @@ class BattleEnergyTracker(
     }
 
     /**
-     * Applies a charged move actually observed in battle.
-     *
-     * If the exact counter says the enemy had less energy than the observed
-     * move costs, the observation is treated as proof that one or more fast
-     * moves were missed. The counter self-corrects to the minimum legal energy
-     * before subtracting the charged cost and records that correction.
+     * Applies a charged move observed in battle. If the stored energy is too low
+     * for that move, the tracker treats the observation as proof that one or more
+     * fast attacks were missed and self-corrects to the minimum legal energy.
      */
     fun onChargedMove(slot: Int, chargedMoveId: String): EnemyPokemonState {
         val current = state(slot)
         val normalized = chargedMoveId.normalizeMoveId()
-        val move = requireNotNull(repository.move(normalized)) {
-            "Unknown move: $normalized"
-        }
+        val move = requireNotNull(repository.move(normalized)) { "Unknown move: $normalized" }
         require(move.energyCost > 0) { "$normalized is not a charged move" }
 
         val legal = availableChargedMoves(slot).map(MoveData::moveId).toSet()
@@ -312,7 +269,6 @@ class BattleEnergyTracker(
 
         val selected = current.selectedChargedMoveIds.toMutableList()
         var canConfirm = normalized in selected
-
         if (normalized !in selected) {
             when {
                 selected.size < MAX_CHARGED_BUTTONS -> {
@@ -320,9 +276,7 @@ class BattleEnergyTracker(
                     canConfirm = true
                 }
                 else -> {
-                    val replaceIndex = selected.indexOfFirst {
-                        it !in current.confirmedChargedMoveIds
-                    }
+                    val replaceIndex = selected.indexOfFirst { it !in current.confirmedChargedMoveIds }
                     if (replaceIndex >= 0) {
                         selected[replaceIndex] = normalized
                         canConfirm = true
@@ -345,9 +299,7 @@ class BattleEnergyTracker(
             lastEnergyCorrection = correction,
             chargedMovesUsed = current.chargedMovesUsed + 1,
             lastChargedMoveId = normalized,
-            selectedChargedMoveIds = selected
-                .take(MAX_CHARGED_BUTTONS)
-                .distinct(),
+            selectedChargedMoveIds = selected.take(MAX_CHARGED_BUTTONS).distinct(),
             confirmedChargedMoveIds = confirmed
         )
         states[slot] = next
@@ -365,13 +317,9 @@ class BattleEnergyTracker(
         return next
     }
 
-    /** Manual correction hook for missed visual detections. */
     fun setEstimatedEnergy(slot: Int, energy: Int): EnemyPokemonState {
         val corrected = energy.coerceIn(0, maxEnergy)
-        val next = state(slot).copy(
-            energy = corrected,
-            lastEnergyCorrection = 0
-        )
+        val next = state(slot).copy(energy = corrected, lastEnergyCorrection = 0)
         states[slot] = next
         energyRanges[slot] = EnergyRangeEstimate(corrected, corrected, EvidenceLevel.CONFIRMED)
         return next
@@ -412,15 +360,25 @@ class BattleEnergyTracker(
             .filter { it.energyCost > 0 }
             .map { charged ->
                 val missingEnergy = (charged.energyCost - current.energy).coerceAtLeast(0)
-                val secondTarget = (charged.energyCost * 2).coerceAtMost(maxEnergy)
-                val secondMissing = (secondTarget - current.energy).coerceAtLeast(0)
+                val secondChargeStorable = charged.energyCost * 2 <= maxEnergy
+                val secondMissing = if (secondChargeStorable) {
+                    (charged.energyCost * 2 - current.energy).coerceAtLeast(0)
+                } else {
+                    -1
+                }
                 ChargedMoveProgress(
                     move = charged,
                     currentEnergy = current.energy,
                     fastMovesNeeded = ceilDiv(missingEnergy, fastMove.energyGain),
                     ready = missingEnergy == 0,
-                    chargesReady = (current.energy / charged.energyCost).coerceAtMost(2),
-                    fastMovesNeededForSecond = ceilDiv(secondMissing, fastMove.energyGain),
+                    chargesReady = (current.energy / charged.energyCost)
+                        .coerceAtMost(if (secondChargeStorable) 2 else 1),
+                    secondChargeStorable = secondChargeStorable,
+                    fastMovesNeededForSecond = if (secondChargeStorable) {
+                        ceilDiv(secondMissing, fastMove.energyGain)
+                    } else {
+                        -1
+                    },
                     evidence = if (charged.moveId in current.confirmedChargedMoveIds) {
                         EvidenceLevel.CONFIRMED
                     } else {
@@ -435,8 +393,7 @@ class BattleEnergyTracker(
         return requireNotNull(states[slot])
     }
 
-    fun allStates(): List<EnemyPokemonState> =
-        (0 until TEAM_SIZE).map(::state)
+    fun allStates(): List<EnemyPokemonState> = (0 until TEAM_SIZE).map(::state)
 
     fun activeEnemySlot(): Int? = activeSlot
 
