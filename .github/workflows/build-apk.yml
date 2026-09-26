@@ -40,13 +40,13 @@ jobs:
           gradle-version: '8.9'
 
       - name: Generate local PvPoke data
-        run: python3 tools/update_pvpoke_data.py --output app/src/main/assets/pvpoke
+        run: python3 tools/update_pvpoke_data.py --output data/pvpoke
 
       - name: Generate complete pt-BR move aliases
-        run: python3 tools/update_move_localization.py --output app/src/main/assets/localization/moves_pt_BR.tsv
+        run: python3 tools/update_move_localization.py --output data/localization/moves_pt_BR.tsv
 
       - name: Sync type icons
-        run: python3 tools/sync_type_icons.py --assets-root app/src/main/assets
+        run: python3 tools/sync_type_icons.py --assets-root data
 
       - name: Run core tests
         run: gradle --no-daemon :core:test
