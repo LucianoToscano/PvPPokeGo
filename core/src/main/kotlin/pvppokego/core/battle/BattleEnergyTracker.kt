@@ -4,6 +4,8 @@ import kotlin.math.max
 import pvppokego.core.data.PvpokeRepository
 import pvppokego.core.model.ChargedMoveProgress
 import pvppokego.core.model.EnemyPokemonState
+import pvppokego.core.model.EnergyRangeEstimate
+import pvppokego.core.model.EvidenceLevel
 import pvppokego.core.model.MoveData
 import pvppokego.core.model.PokemonBattleStatus
 
@@ -20,6 +22,7 @@ class BattleEnergyTracker(
     private val maxEnergy: Int = 100
 ) {
     private val states = mutableMapOf<Int, EnemyPokemonState>()
+    private val energyRanges = mutableMapOf<Int, EnergyRangeEstimate>()
     private var activeSlot: Int? = null
 
     init {
@@ -28,8 +31,10 @@ class BattleEnergyTracker(
 
     fun resetBattle() {
         states.clear()
+        energyRanges.clear()
         repeat(TEAM_SIZE) { slot ->
             states[slot] = EnemyPokemonState(slot = slot)
+            energyRanges[slot] = EnergyRangeEstimate(0, 0, EvidenceLevel.CONFIRMED)
         }
         activeSlot = null
     }
@@ -37,11 +42,13 @@ class BattleEnergyTracker(
     fun identifyPokemon(
         slot: Int,
         speciesId: String,
-        fastMoveId: String? = null
+        fastMoveId: String? = null,
+        evidence: EvidenceLevel = EvidenceLevel.PROBABLE
     ): EnemyPokemonState {
         requireSlot(slot)
+        val normalizedSpecies = speciesId.lowercase()
         val existing = state(slot)
-        val samePokemon = existing.speciesId == speciesId.lowercase()
+        val samePokemon = existing.speciesId == normalizedSpecies
 
         val recommendation = repository
             .recommendedMovesets(speciesId, leagueCp)
@@ -49,9 +56,16 @@ class BattleEnergyTracker(
 
         val next = if (samePokemon) {
             existing.copy(
+                speciesEvidence = stronger(existing.speciesEvidence, evidence),
                 fastMoveId = fastMoveId?.normalizeMoveId()
                     ?: existing.fastMoveId
                     ?: recommendation?.fastMoveId,
+                fastMoveEvidence = when {
+                    fastMoveId != null -> stronger(existing.fastMoveEvidence, evidence)
+                    existing.fastMoveId != null -> existing.fastMoveEvidence
+                    recommendation?.fastMoveId != null -> EvidenceLevel.PREDICTED
+                    else -> existing.fastMoveEvidence
+                },
                 selectedChargedMoveIds =
                     if (existing.selectedChargedMoveIds.isNotEmpty()) {
                         existing.selectedChargedMoveIds
@@ -63,10 +77,13 @@ class BattleEnergyTracker(
                     }
             )
         } else {
+            energyRanges[slot] = EnergyRangeEstimate(0, 0, EvidenceLevel.CONFIRMED)
             EnemyPokemonState(
                 slot = slot,
-                speciesId = speciesId.lowercase(),
+                speciesId = normalizedSpecies,
+                speciesEvidence = evidence,
                 fastMoveId = fastMoveId?.normalizeMoveId() ?: recommendation?.fastMoveId,
+                fastMoveEvidence = if (fastMoveId != null) evidence else EvidenceLevel.PREDICTED,
                 selectedChargedMoveIds = recommendation?.chargedMoveIds.orEmpty()
                     .map(String::normalizeMoveId)
                     .distinct()
@@ -97,7 +114,11 @@ class BattleEnergyTracker(
             .sortedBy(MoveData::name)
     }
 
-    fun setFastMove(slot: Int, fastMoveId: String): EnemyPokemonState {
+    fun setFastMove(
+        slot: Int,
+        fastMoveId: String,
+        evidence: EvidenceLevel = EvidenceLevel.CONFIRMED
+    ): EnemyPokemonState {
         val normalized = fastMoveId.normalizeMoveId()
         val current = state(slot)
         val legal = availableFastMoves(slot).map(MoveData::moveId).toSet()
@@ -106,7 +127,10 @@ class BattleEnergyTracker(
                 "$normalized is not a fast move for ${current.speciesId}"
             }
         }
-        val next = current.copy(fastMoveId = normalized)
+        val next = current.copy(
+            fastMoveId = normalized,
+            fastMoveEvidence = evidence
+        )
         states[slot] = next
         return next
     }
@@ -210,10 +234,7 @@ class BattleEnergyTracker(
         return next
     }
 
-    /**
-     * Called once for each visually detected fast attack.
-     * The energy is capped at 100, matching Pokemon GO PvP.
-     */
+    /** Called once for each visually detected fast attack. */
     fun onFastMove(slot: Int, count: Int = 1): EnemyPokemonState {
         require(count > 0) { "count must be > 0" }
         val current = state(slot)
@@ -225,21 +246,54 @@ class BattleEnergyTracker(
         }
         require(move.energyGain > 0) { "$fastMoveId is not a fast move" }
 
+        val gained = move.energyGain * count
         val next = current.copy(
-            energy = (current.energy + (move.energyGain * count)).coerceAtMost(maxEnergy),
-            fastMovesObserved = current.fastMovesObserved + count
+            energy = (current.energy + gained).coerceAtMost(maxEnergy),
+            fastMovesObserved = current.fastMovesObserved + count,
+            lastEnergyCorrection = 0
         )
         states[slot] = next
+
+        val range = energyRange(slot)
+        val nextMin = (range.min + gained).coerceAtMost(maxEnergy)
+        val nextMax = (range.max + gained).coerceAtMost(maxEnergy)
+        energyRanges[slot] = EnergyRangeEstimate(
+            nextMin,
+            nextMax,
+            if (nextMin == nextMax) EvidenceLevel.CONFIRMED else EvidenceLevel.PROBABLE
+        )
         return next
+    }
+
+    /**
+     * Expands only the upper bound when the vision layer suspects one or more
+     * fast moves may have been missed. This avoids pretending the energy value
+     * is exact when frames were dropped or recognition confidence was low.
+     */
+    fun notePossibleMissedFastMoves(slot: Int, maxAdditionalFastMoves: Int): EnergyRangeEstimate {
+        require(maxAdditionalFastMoves >= 0)
+        if (maxAdditionalFastMoves == 0) return energyRange(slot)
+        val current = state(slot)
+        val move = current.fastMoveId?.let(repository::move) ?: return energyRange(slot)
+        if (move.energyGain <= 0) return energyRange(slot)
+
+        val range = energyRange(slot)
+        val widened = EnergyRangeEstimate(
+            min = range.min,
+            max = (range.max + move.energyGain * maxAdditionalFastMoves).coerceAtMost(maxEnergy),
+            confidence = EvidenceLevel.PROBABLE
+        )
+        energyRanges[slot] = widened
+        return widened
     }
 
     /**
      * Applies a charged move actually observed in battle.
      *
-     * The first observed move replaces one unconfirmed prediction and becomes
-     * confirmed. A later, different observed move replaces the other
-     * unconfirmed prediction. Repeating an already confirmed move never
-     * overwrites the other button.
+     * If the exact counter says the enemy had less energy than the observed
+     * move costs, the observation is treated as proof that one or more fast
+     * moves were missed. The counter self-corrects to the minimum legal energy
+     * before subtracting the charged cost and records that correction.
      */
     fun onChargedMove(slot: Int, chargedMoveId: String): EnemyPokemonState {
         val current = state(slot)
@@ -283,8 +337,12 @@ class BattleEnergyTracker(
             current.confirmedChargedMoveIds
         }
 
+        val correction = (move.energyCost - current.energy).coerceAtLeast(0)
+        val legalEnergyBeforeUse = (current.energy + correction).coerceAtMost(maxEnergy)
         val next = current.copy(
-            energy = max(0, current.energy - move.energyCost),
+            energy = max(0, legalEnergyBeforeUse - move.energyCost),
+            energyCorrectionCount = current.energyCorrectionCount + if (correction > 0) 1 else 0,
+            lastEnergyCorrection = correction,
             chargedMovesUsed = current.chargedMovesUsed + 1,
             lastChargedMoveId = normalized,
             selectedChargedMoveIds = selected
@@ -293,25 +351,46 @@ class BattleEnergyTracker(
             confirmedChargedMoveIds = confirmed
         )
         states[slot] = next
+
+        val range = energyRange(slot)
+        val minBefore = max(range.min, move.energyCost)
+        val maxBefore = max(range.max, move.energyCost)
+        val minAfter = (minBefore - move.energyCost).coerceIn(0, maxEnergy)
+        val maxAfter = (maxBefore - move.energyCost).coerceIn(0, maxEnergy)
+        energyRanges[slot] = EnergyRangeEstimate(
+            min = minAfter,
+            max = maxAfter,
+            confidence = if (minAfter == maxAfter) EvidenceLevel.CONFIRMED else EvidenceLevel.PROBABLE
+        )
         return next
     }
 
-    /**
-     * Manual correction hook for missed visual detections.
-     */
+    /** Manual correction hook for missed visual detections. */
     fun setEstimatedEnergy(slot: Int, energy: Int): EnemyPokemonState {
-        val next = state(slot).copy(energy = energy.coerceIn(0, maxEnergy))
+        val corrected = energy.coerceIn(0, maxEnergy)
+        val next = state(slot).copy(
+            energy = corrected,
+            lastEnergyCorrection = 0
+        )
         states[slot] = next
+        energyRanges[slot] = EnergyRangeEstimate(corrected, corrected, EvidenceLevel.CONFIRMED)
         return next
+    }
+
+    fun energyRange(slot: Int): EnergyRangeEstimate {
+        requireSlot(slot)
+        return requireNotNull(energyRanges[slot])
     }
 
     fun markFainted(slot: Int): EnemyPokemonState {
         val current = state(slot)
         val next = current.copy(
             energy = 0,
+            lastEnergyCorrection = 0,
             status = PokemonBattleStatus.FAINTED
         )
         states[slot] = next
+        energyRanges[slot] = EnergyRangeEstimate(0, 0, EvidenceLevel.CONFIRMED)
         if (activeSlot == slot) activeSlot = null
         return next
     }
@@ -333,12 +412,20 @@ class BattleEnergyTracker(
             .filter { it.energyCost > 0 }
             .map { charged ->
                 val missingEnergy = (charged.energyCost - current.energy).coerceAtLeast(0)
-                val fastNeeded = ceilDiv(missingEnergy, fastMove.energyGain)
+                val secondTarget = (charged.energyCost * 2).coerceAtMost(maxEnergy)
+                val secondMissing = (secondTarget - current.energy).coerceAtLeast(0)
                 ChargedMoveProgress(
                     move = charged,
                     currentEnergy = current.energy,
-                    fastMovesNeeded = fastNeeded,
-                    ready = missingEnergy == 0
+                    fastMovesNeeded = ceilDiv(missingEnergy, fastMove.energyGain),
+                    ready = missingEnergy == 0,
+                    chargesReady = (current.energy / charged.energyCost).coerceAtMost(2),
+                    fastMovesNeededForSecond = ceilDiv(secondMissing, fastMove.energyGain),
+                    evidence = if (charged.moveId in current.confirmedChargedMoveIds) {
+                        EvidenceLevel.CONFIRMED
+                    } else {
+                        EvidenceLevel.PREDICTED
+                    }
                 )
             }
     }
@@ -361,6 +448,9 @@ class BattleEnergyTracker(
         if (numerator <= 0) return 0
         return (numerator + denominator - 1) / denominator
     }
+
+    private fun stronger(left: EvidenceLevel, right: EvidenceLevel): EvidenceLevel =
+        if (left.ordinal >= right.ordinal) left else right
 
     companion object {
         const val TEAM_SIZE = 3
