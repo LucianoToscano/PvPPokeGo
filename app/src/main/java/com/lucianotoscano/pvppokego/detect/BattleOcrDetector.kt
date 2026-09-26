@@ -16,7 +16,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.math.abs
 
 /**
- * OCR uses small ROIs for the two top cards and a separate central text ROI for
+ * OCR uses small ROIs for the two top cards and a separate central/lower text ROI for
  * battle prompts. A larger party ROI is scanned less often to remember the user's team.
  */
 class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
@@ -137,11 +137,13 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private const val PLAYER_RIGHT_FRAC = 0.43f
         private const val OPPONENT_LEFT_FRAC = 0.57f
 
-        // Broad enough to catch "Ataque carregado chegando" / shield prompt text.
-        private const val BATTLE_LEFT_FRAC = 0.08f
+        // Includes both the upper "Pokemon usou Golpe!" banner and the lower shield prompt.
+        // The previous 0.50 bottom cutoff missed "Quer usar um escudo protetor?" on tall screens,
+        // so the engine sometimes never registered the Charged event and energy stayed full.
+        private const val BATTLE_LEFT_FRAC = 0.06f
         private const val BATTLE_TOP_FRAC = 0.12f
-        private const val BATTLE_RIGHT_FRAC = 0.92f
-        private const val BATTLE_BOTTOM_FRAC = 0.50f
+        private const val BATTLE_RIGHT_FRAC = 0.94f
+        private const val BATTLE_BOTTOM_FRAC = 0.84f
 
         // Team-selection/party area. Scanned slowly and stopped once 3 Pokémon are known.
         private const val TEAM_LEFT_FRAC = 0.04f
