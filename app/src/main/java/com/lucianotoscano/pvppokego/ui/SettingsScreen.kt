@@ -13,7 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.lucianotoscano.pvppokego.data.BattleLeagueMode
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 
 @Composable
@@ -39,6 +40,7 @@ fun SettingsScreen(
 ) {
     var overlay by remember { mutableStateOf(repository.overlayEnabled) }
     var auto by remember { mutableStateOf(repository.autoRecognition) }
+    var league by remember { mutableStateOf(repository.leagueMode) }
     var strong by remember { mutableStateOf(repository.showStrongTypes) }
     var current by remember { mutableStateOf(repository.showCurrentIndicator) }
     var reserves by remember { mutableStateOf(repository.analyzeReserves) }
@@ -76,6 +78,29 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Toggle("Overlay", overlay) { overlay = it; repository.overlayEnabled = it }
                 Toggle("Reconhecimento automático", auto) { auto = it; repository.autoRecognition = it }
+
+                Text("Liga / ranking PvP", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (league == BattleLeagueMode.AUTO) {
+                        val detected = when (repository.lastDetectedLeagueCp) {
+                            2500 -> "Liga Ultra"
+                            10000 -> "Liga Mestra"
+                            else -> "Liga Grande"
+                        }
+                        "Automático: ler o lobby. Última detectada: $detected"
+                    } else league.label
+                )
+                LeagueSelectorRow(
+                    left = BattleLeagueMode.AUTO,
+                    right = BattleLeagueMode.GREAT,
+                    selected = league
+                ) { selected -> league = selected; repository.leagueMode = selected }
+                LeagueSelectorRow(
+                    left = BattleLeagueMode.ULTRA,
+                    right = BattleLeagueMode.MASTER,
+                    selected = league
+                ) { selected -> league = selected; repository.leagueMode = selected }
+
                 Toggle("Tipos fortes contra inimigo", strong) { strong = it; repository.showStrongTypes = it }
                 Toggle("Indicador do Pokémon atual", current) { current = it; repository.showCurrentIndicator = it }
                 Toggle("Analisar reservas", reserves) { reserves = it; repository.analyzeReserves = it }
@@ -95,10 +120,37 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("V03: contador visual automático por HP/animação, reset de carregado por OCR e memória da equipe/reservas. O overlay continua externo e não envia comandos ao jogo.")
+                Text("Base visual V03 preservada. A evolução adiciona leitura da liga, memória de energia/moves e confirmação automática dos carregados reais sem redesenhar o HUD.")
                 Spacer(Modifier.height(24.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun LeagueSelectorRow(
+    left: BattleLeagueMode,
+    right: BattleLeagueMode,
+    selected: BattleLeagueMode,
+    onSelect: (BattleLeagueMode) -> Unit
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LeagueButton(left, selected == left, Modifier.weight(1f), onSelect)
+        LeagueButton(right, selected == right, Modifier.weight(1f), onSelect)
+    }
+}
+
+@Composable
+private fun LeagueButton(
+    mode: BattleLeagueMode,
+    selected: Boolean,
+    modifier: Modifier,
+    onSelect: (BattleLeagueMode) -> Unit
+) {
+    if (selected) {
+        Button(onClick = { onSelect(mode) }, modifier = modifier) { Text(mode.label) }
+    } else {
+        OutlinedButton(onClick = { onSelect(mode) }, modifier = modifier) { Text(mode.label) }
     }
 }
 
