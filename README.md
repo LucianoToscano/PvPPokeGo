@@ -76,6 +76,7 @@ core/
 
 data/pvpoke/
 data/localization/
+docs/CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md
 docs/PVPOKE_INTEGRATION.md
 docs/PVPOKE_UPSTREAM_SOURCE.md
 docs/APK_CROSS_REFERENCE_2026-09-25.md
@@ -122,5 +123,9 @@ O Pokémon GO oficial 0.429.1 recebido em APKM é usado apenas como baseline par
 ## Memória técnica do projeto
 
 O contexto consolidado dos APKs analisados, funções candidatas, prioridades e regras de compartilhamento com PGLOT está em `docs/PROJECT_CONTEXT_MEMORY.md`.
+
+O documento **canônico de continuidade**, reunindo também as decisões dos chats “APK pronto para baixar” e “Funções Para Dois APKs”, UX aprovada, Battle Brain, PvPoke, estado atual e backlog, está em:
+
+- `docs/CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md`.
 
 > O PvPPokeGo é uma ferramenta externa de assistência. O core de batalha permanece separado de root/injeção/concealment e não depende de modificar o processo do Pokémon GO.
