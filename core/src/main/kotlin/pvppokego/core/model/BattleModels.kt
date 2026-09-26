@@ -58,6 +58,12 @@ data class EnemyPokemonState(
     val fastMoveManuallyOverridden: Boolean = false,
     /** Button indexes explicitly changed by the user. Automatic OCR never replaces them. */
     val manualChargedMoveButtonIndexes: Set<Int> = emptySet(),
+    /**
+     * Charged moves actually observed in battle banners. This is distinct from
+     * the PvPoke rank #1 defaults so a first observed move can be locked and a
+     * second different observed move can replace the other, still-unverified slot.
+     */
+    val observedChargedMoveIds: Set<String> = emptySet(),
     val energy: Int = 0,
     val fastMovesObserved: Int = 0,
     val chargedMovesUsed: Int = 0,
