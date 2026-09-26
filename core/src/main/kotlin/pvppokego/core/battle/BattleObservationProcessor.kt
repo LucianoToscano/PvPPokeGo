@@ -2,6 +2,7 @@ package pvppokego.core.battle
 
 import pvppokego.core.data.PvpokeRepository
 import pvppokego.core.model.ChargedMoveProgress
+import pvppokego.core.model.EnergyRangeEstimate
 import pvppokego.core.vision.BattleTextEventParser
 
 /**
@@ -13,8 +14,11 @@ data class ChargedMoveObservationResult(
     val slot: Int? = null,
     val speciesId: String? = null,
     val moveId: String? = null,
+    val newlyConfirmed: Boolean = false,
     val energyBefore: Int? = null,
     val energyAfter: Int? = null,
+    val energyCorrectedBy: Int = 0,
+    val energyRangeAfter: EnergyRangeEstimate? = null,
     val progressAfter: List<ChargedMoveProgress> = emptyList()
 )
 
@@ -75,12 +79,15 @@ class BattleObservationProcessor(
                 slot = slot,
                 speciesId = speciesId,
                 moveId = parsed.moveId,
+                newlyConfirmed = false,
                 energyBefore = before.energy,
                 energyAfter = before.energy,
+                energyRangeAfter = session.enemyTracker.energyRange(slot),
                 progressAfter = session.enemyTracker.chargedMoveProgress(slot)
             )
         }
 
+        val wasConfirmed = parsed.moveId in before.confirmedChargedMoveIds
         val after = session.enemyTracker.onChargedMove(slot, parsed.moveId)
         lastAppliedBySlotAndMove[key] = timestampMs
 
@@ -89,8 +96,11 @@ class BattleObservationProcessor(
             slot = slot,
             speciesId = speciesId,
             moveId = parsed.moveId,
+            newlyConfirmed = !wasConfirmed && parsed.moveId in after.confirmedChargedMoveIds,
             energyBefore = before.energy,
             energyAfter = after.energy,
+            energyCorrectedBy = after.lastEnergyCorrection,
+            energyRangeAfter = session.enemyTracker.energyRange(slot),
             progressAfter = session.enemyTracker.chargedMoveProgress(slot)
         )
     }
