@@ -38,8 +38,9 @@ class InMemoryPvpokeRepository(
         /**
          * Loads the compact TSV format produced by tools/update_pvpoke_data.py.
          *
-         * The Android layer can read these files from assets and pass their
-         * text directly here, keeping JSON details isolated from battle logic.
+         * Generated files contain real tab characters. Kotlin test fixtures in
+         * this repository historically use the visible `\\t` form inside raw
+         * strings, so the parser deliberately accepts both representations.
          */
         fun fromTsv(
             pokemonTsv: String,
@@ -53,7 +54,7 @@ class InMemoryPvpokeRepository(
         }
 
         private fun parseMoves(tsv: String): Map<String, MoveData> =
-            tsv.lineSequence()
+            normalizedLines(tsv)
                 .drop(1)
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
@@ -74,7 +75,7 @@ class InMemoryPvpokeRepository(
                 .toMap()
 
         private fun parsePokemon(tsv: String): Map<String, PokemonData> =
-            tsv.lineSequence()
+            normalizedLines(tsv)
                 .drop(1)
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
@@ -92,7 +93,7 @@ class InMemoryPvpokeRepository(
                 .toMap()
 
         private fun parseRankings(tsv: String): List<RecommendedMoveset> =
-            tsv.lineSequence()
+            normalizedLines(tsv)
                 .drop(1)
                 .filter { it.isNotBlank() }
                 .mapNotNull { line ->
@@ -108,6 +109,9 @@ class InMemoryPvpokeRepository(
                     )
                 }
                 .toList()
+
+        private fun normalizedLines(tsv: String): Sequence<String> =
+            tsv.replace("\\t", "\t").lineSequence()
 
         private fun splitPipe(value: String): List<String> =
             value.split('|').filter(String::isNotBlank)
