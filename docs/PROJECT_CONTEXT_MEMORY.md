@@ -4,77 +4,91 @@ Atualizado em: 2026-09-26
 
 ## Objetivo
 
-O PvPPokeGo é o projeto de assistência de batalha PvP. Ele deve concentrar recursos de leitura visual, overlay, contagem de energia/golpes, análise de matchup, identificação de moveset, suporte a escudos e recomendações em batalha.
+O PvPPokeGo é o projeto de assistência de batalha PvP. Ele concentra leitura visual, overlay, contagem de energia/golpes, análise de matchup, identificação de moveset, suporte a escudos e recomendações em batalha.
 
 ## Fontes analisadas
 
-Foram usados como referência funcional e arquitetural os arquivos fornecidos pelo proprietário do projeto:
+Referências funcionais/arquiteturais fornecidas pelo proprietário do projeto:
 
-- `PVPPokeGo_Source_Phase1.zip`
-- `PVPPokeGo_Source_Phase1(1).zip` (duplicado idêntico)
-- `Pokemod_13.3.4.apk`
-- `ipogo-237_1790099437.apk`
-- `Poke Genie -Remote Raid IV PvP v8.15.0 B404 (Premium) ... .apk`
-- `Poke Genie ... (1).apk` (duplicado idêntico)
-- `Pokémon GO_0.429.1(1).apk`
-- `pgtools-6.0.6-079d8b42e6c6cfaae64033341f861ac6 (1).apk`
-- `shungo1.7.0.apk`
+- Pokémon GO oficial 0.429.1 APKM;
+- PGSharp 1.271 sem root e Android 8;
+- `Pokémon GO_0.429.1 LOT.apk`;
+- iPogo 237;
+- Poke Genie 8.15.0;
+- Pokemod 13.3.4;
+- PGSRoot 1.0.15;
+- PGTools 6.0.6 e PGTools TEST 6.0.6;
+- Shungo 1.7.0;
+- Data Hub 2.5.2;
+- Pokecoord 1.2.2;
+- Pokemon Coords WebAPK;
+- dados PvPoke já adotados pelo projeto.
+
+## Baseline oficial confirmado
+
+Pokémon GO 0.429.1, package `com.nianticlabs.pokemongo`, versionCode `2026091602`, ARM64, Android 9+.
+
+- APKM SHA-256: `af397f568a929d37e8c46d3cd9f6bdcf1a1a908bc18c4b85cebf17cf78251ad9`
+- `base.apk`: `5c6cc61a6752c42f6114845b45cb6d4d2568dbb9a7eab34af290706a86f8d29e`
+- split ARM64: `70364d9968ce14c4c5f450a99e76ca9f9491ba7732db7df2a5df540c58fd90c4`
+
+O split ARM64 oficial contém 25 bibliotecas nativas. Comparando com PGSharp 1.271 e iPogo 237, 24 são byte-idênticas e apenas `libmain.so` muda:
+
+- oficial: 6.696 bytes;
+- PGSharp: 38.247.680 bytes;
+- iPogo: 16.234.824 bytes.
+
+O hash `df4d00f24f4165063715eb7890fb331bc55acc04a12c090173e02c354832ac0c` pertence ao PGSharp 1.271 sem root e ao arquivo LOT atual, que são byte-idênticos; não é o hash do Pokémon GO oficial.
 
 ## Descobertas que interessam ao PvPPokeGo
 
-### Poke Genie
-Arquitetura especialmente relevante para o PvPPokeGo:
+### Poke Genie — principal referência
 
 - overlay Android;
 - captura de tela/MediaProjection;
 - OCR por regiões;
-- identificação e análise visual;
-- módulos equivalentes a `IVisionHelper` e `OcrHelper`;
-- `BattleTeamOverlayView`;
-- simulador/counter engine;
-- cálculo de PvP IV;
-- banco de movesets e efetividade de tipos;
-- fallback por screenshot.
+- Tesseract e modelos específicos de idioma/número;
+- PvP IV e candidatos;
+- banco de movesets;
+- Battle Simulator/counters;
+- fallback por screenshot;
+- layouts de `battle_team_overlay` e `ivision_overlay`.
 
-Essas ideias devem ser implementadas com código próprio no PvPPokeGo.
+Aplicação: reproduzir a arquitetura com código próprio, sem copiar código/modelos proprietários.
 
-### iPogo / Pokémon GO 0.429.1
-A comparação com o APK oficial mostrou funções concentradas em código nativo. Foram identificados nomes/símbolos associados a recursos como:
+### Data Hub / PvPoke
 
-- shiny scanner;
-- skip animations;
-- skip Team Leader;
-- skip Team Rocket;
-- fast map;
-- freeze Pokémon;
-- spin/throw helpers;
-- localização nativa;
-- Virtual GO Plus/autoconnect.
+Data Hub confirmou organização de dados em `pokemons.json`, `gym_team.json`, `raidRatings.json` e `maxBattleRatings.json`. Usar apenas como referência de schema. O projeto mantém PvPoke/fonte própria atualizável como base principal de dados de batalha.
 
-Para o PvPPokeGo, apenas conceitos relacionados a batalha/análise visual devem ser considerados. Funções de spoofing/localização, automação invasiva ou bypass não fazem parte do escopo do PvPPokeGo.
+### PGTools
 
-### Pokemod
-Foram observados componentes ligados a root/injeção, incluindo injector, busybox/sqlite e bibliotecas nativas de concealment. Isso serve apenas como referência de arquitetura externa e de funcionalidades. O PvPPokeGo não deve depender de injeção, concealment ou bypass.
+Aproveitar conceitos genéricos de filtros, stats, modelos de configuração e logs. Farm, teleporte, raid automation e Rocket automation não fazem parte do core PvP.
 
-### PGTools 6.0.6
-Confirmou uma arquitetura modular de farm e batalha:
+### PGSharp / iPogo
 
-- PaC: catch/spin e filtros;
-- PaG: Rocket/Grunt;
-- PaS: shiny hunter;
-- PaH: hatch;
-- PaR: raids;
-- filtros Hundo/Shundo/custom IV;
-- stats, logs e regras de transferência.
+A comparação com o baseline oficial separou claramente funções adicionadas como `battleAssistant`, helpers de throw, Rocket, shiny scanner, fast map e VGP. Para o PvPPokeGo, aproveitar somente conceitos de observação, estado e assistência visual.
 
-Para o PvPPokeGo, aproveitar apenas conceitos genéricos como filtros, stats, modelos de configuração, dados de batalha e logging. Farm e execução automática ficam no Recovery.
+### Pokemod / PGSRoot / Shungo
 
-### Shungo 1.7.0
-Confirmou um fluxo de hunt por alvo/coordenada com `getPokemons`, latitude/longitude e `setLocation`, dependente de root/Magisk no APK original.
+Servem como referência de separação entre app/serviço/módulos. O PvPPokeGo permanece externo ao processo do Pokémon GO, sem root, injeção, concealment ou bypass.
 
-Para o PvPPokeGo, aproveitar apenas a ideia genérica de prioridade/fila de alvos quando útil a análise. Localização, hunt e root ficam fora do core PvP.
+## Arquitetura de visão incorporada
 
-## Funções prioritárias no PvPPokeGo
+Novo componente: `core/src/main/kotlin/pvppokego/core/vision/VisionObservation.kt`.
+
+Ele introduz:
+
+- `ObservationSource`;
+- `FieldObservation<T>` com confiança independente por campo;
+- `BattleFrameObservation` para leitura bruta de um frame;
+- `StableObservation<T>`;
+- `StableObservationReducer<T>` para exigir confirmações entre frames antes de alterar o estado da batalha.
+
+Pipeline alvo:
+
+`captura -> ROI -> observações com confiança -> estabilização -> eventos de batalha -> BattleSession/BattleEnergyTracker -> decisão -> overlay`
+
+## Funções prioritárias
 
 1. OCR/visão por ROI para identificar Pokémon e elementos da batalha.
 2. Overlay modular e reposicionável.
@@ -84,31 +98,23 @@ Para o PvPPokeGo, aproveitar apenas a ideia genérica de prioridade/fila de alvo
 6. Quantidade de Fast Moves restante para cada Charged Move.
 7. Recomendação de shield baseada em ameaça, tipo, energia e HP.
 8. Recomendação do melhor Charged Move entre os dois botões.
-9. Identificação de matchup, fraquezas, resistências e tipos favoráveis.
-10. Simulador/counter engine e integração com dados PvPoke locais.
-11. Modo assist-only como padrão seguro; qualquer executor de gesto deve permanecer desacoplado da lógica central.
-12. Logs/debug de reconhecimento para melhorar precisão.
-13. Filtros e stats reutilizáveis do domínio Pokémon.
+9. Matchup, fraquezas, resistências e tipos favoráveis.
+10. Simulador/counter engine local.
+11. PvP IV rank engine e candidatos.
+12. Logs/replay/debug de reconhecimento.
+13. Correção manual rápida de detecções.
+14. Perfis de ROI/layout por resolução.
 
 ## Regra de implementação
 
 - Reimplementar comportamento e UX com código próprio.
-- Não copiar bytecode, DEX, SO nativa ou código proprietário dos APKs de terceiros.
-- Não remover licenças/premium de terceiros.
+- Não copiar bytecode, DEX, SO, JAR, modelos OCR ou bancos proprietários de terceiros para distribuição.
+- Não remover licenças/premium.
 - Não incorporar concealment, anti-detection ou bypass de anti-cheat.
 - Manter o core de batalha separado de Android/OCR/gestos para ser testável.
 
-## Relação com o projeto de recuperação
+## Relação com PGLOT
 
-O PvPPokeGo e o projeto de recuperação estilo PGSharp podem compartilhar componentes próprios de domínio, por exemplo:
+Podem ser compartilhados somente componentes próprios/genéricos: dados Pokémon/tipos/moves, PvP IV, efetividade, battle engine, filtros, OCR/vision, logs/stats, notificações e modelos de configuração.
 
-- banco de Pokémon/tipos/moves;
-- PvP IV;
-- efetividade de tipos;
-- battle energy tracker;
-- reconhecimento visual genérico;
-- logging/diagnóstico;
-- modelos de configuração;
-- filtros e stats.
-
-O código específico de localização, mapa, Virtual GO Plus, farm, hunter por coordenadas e outras funções do projeto de recuperação não deve contaminar o core do PvPPokeGo.
+Localização, mapa, Virtual GO Plus, farm, hunter por coordenadas, root e automações de gameplay permanecem isolados no PGLOT.
