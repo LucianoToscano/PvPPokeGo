@@ -26,7 +26,19 @@ A batalha não depende de acesso ao site PvPoke. Os dados são convertidos antes
 - troca não zera a contagem;
 - energia residual é preservada depois de um carregado;
 - ao voltar para a batalha o Pokémon recupera o estado anterior;
-- o slot só é encerrado quando o Pokémon desmaia ou a partida termina.
+- o slot só é encerrado quando o Pokémon desmaia ou a partida termina;
+- os dois charged moves são armazenados em ordem, correspondendo aos botões esquerdo e direito do overlay;
+- `setFastMove` e `setChargedMove` permitem correção manual pelas setas do overlay.
+
+### Charged move pelo banner da batalha
+
+`BattleTextEventParser` e `BattleObservationProcessor` tratam mensagens OCR como:
+
+`Plusle usou Relâmpago!`
+
+O charged move é aplicado independentemente de o jogador usar escudo. O custo é subtraído da energia estimada, a energia residual é preservada e os contadores são recalculados imediatamente. Eventos repetidos do mesmo banner em frames consecutivos são deduplicados.
+
+Aliases localizados ficam em `data/localization/moves_pt_BR.tsv` e podem ser carregados com `MoveAliasTable`.
 
 ### Camada de visão com confiança
 
@@ -40,6 +52,16 @@ Pipeline alvo:
 
 `captura -> ROI -> observações -> estabilização -> eventos -> BattleSession/BattleEnergyTracker -> decisão -> overlay`
 
+### Ícones de tipo
+
+O projeto pode sincronizar localmente o conjunto SVG MIT de `partywhale/pokemon-type-icons` com:
+
+```bash
+python tools/sync_type_icons.py
+```
+
+Os assets devem ser empacotados no APK e usados offline durante a batalha. A atribuição está em `THIRD_PARTY_NOTICES.md`.
+
 ## Estrutura atual
 
 ```text
@@ -51,11 +73,14 @@ core/
     vision/
 
 data/pvpoke/
+data/localization/
 docs/PVPOKE_INTEGRATION.md
 docs/APK_CROSS_REFERENCE_2026-09-25.md
 docs/APK_BASELINE_AND_IMPLEMENTATION_MAP_2026-09-26.md
+docs/BATTLE_OVERLAY_FIXES_2026-09-26.md
 docs/PROJECT_CONTEXT_MEMORY.md
 tools/update_pvpoke_data.py
+tools/sync_type_icons.py
 THIRD_PARTY_NOTICES.md
 ```
 

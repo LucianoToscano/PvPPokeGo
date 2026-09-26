@@ -52,7 +52,11 @@ data class EnemyPokemonState(
     val slot: Int,
     val speciesId: String? = null,
     val fastMoveId: String? = null,
-    val selectedChargedMoveIds: Set<String> = emptySet(),
+    /**
+     * Ordered list matching the two charged-move controls in the overlay.
+     * Index 0 is the left button and index 1 is the right button.
+     */
+    val selectedChargedMoveIds: List<String> = emptyList(),
     val energy: Int = 0,
     val fastMovesObserved: Int = 0,
     val chargedMovesUsed: Int = 0,
