@@ -16,6 +16,7 @@ import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.engine.TypeChart
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.min
 
 /** Canonical PvPPokeGo HUD anchored around Pokemon GO's native battle layout. */
@@ -264,13 +265,29 @@ class BattleOverlayView(
         canvas.restore()
         stroke.color=hudColor(Color.WHITE); stroke.strokeWidth=2.2f*u(); canvas.drawCircle(cx,cy,radius,stroke)
         drawTypeGlyph(canvas,cx,cy,prediction.move.type,23f*u())
-        if (settings.showChargedCounter) drawChargeProgressDots(canvas,cx,cy,radius,prediction.progress,prediction.ready)
+        if (settings.showChargedCounter) drawChargeProgressDots(canvas,cx,cy,radius,prediction)
     }
 
-    private fun drawChargeProgressDots(canvas: Canvas,cx: Float,cy: Float,radius: Float,progress: Float,ready: Boolean) {
-        val total=5; val normalized=progress.coerceIn(0f,1f); val filled=if (ready) total else ceil(normalized*total).toInt().coerceIn(0,total)
+    /**
+     * Dots show useful information even when the main circle is already full. Before the first
+     * charge is ready they mirror progress to that charge. Once ready, they show banked overflow
+     * toward a second copy. That makes a spend visible even when residual energy still leaves the
+     * move immediately ready again, exactly matching Pokemon GO's shared-energy behavior.
+     */
+    private fun drawChargeProgressDots(canvas: Canvas,cx: Float,cy: Float,radius: Float,prediction: ChargedPrediction) {
+        val total=5
+        val progress = if (prediction.ready) prediction.overflowProgress.coerceIn(0f,1f) else prediction.progress.coerceIn(0f,1f)
+        val filled = if (prediction.ready) {
+            if (progress >= .999f) total else floor(progress * total).toInt().coerceIn(0,total)
+        } else {
+            if (progress <= 0f) 0 else ceil(progress * total).toInt().coerceIn(0,total)
+        }
         val dotRadius=2.5f*u(); val gap=7.5f*u(); val startX=cx-gap*(total-1)/2f; val y=cy+radius*.72f
-        repeat(total) { i -> paint.style=Paint.Style.FILL; paint.color=if(i<filled) hudColor(Color.WHITE) else hudColor(Color.rgb(34,37,44),.92f); canvas.drawCircle(startX+i*gap,y,dotRadius,paint) }
+        repeat(total) { i ->
+            paint.style=Paint.Style.FILL
+            paint.color=if(i<filled) hudColor(Color.WHITE) else hudColor(Color.rgb(34,37,44),.92f)
+            canvas.drawCircle(startX+i*gap,y,dotRadius,paint)
+        }
     }
 
     private fun drawMoveCircle(canvas: Canvas,cx: Float,cy: Float,radius: Float,move: MoveDef) {
@@ -285,7 +302,7 @@ class BattleOverlayView(
     }
 
     private fun drawReserves(canvas: Canvas) {
-        val indicatorX=rx(827f); val firstY=ry(905f); val secondY=ry(1052f); val typeYDelta=ry(61f)
+        val indicatorX=rx(827f); val firstY=ry(905f); val secondY=ry(1052f); val typeYDelta=ry(65f)
         state.reserves.take(2).forEachIndexed { index,reserve ->
             if (!reserve.visible) return@forEachIndexed
             val cardCenterY=if(index==0) firstY else secondY
