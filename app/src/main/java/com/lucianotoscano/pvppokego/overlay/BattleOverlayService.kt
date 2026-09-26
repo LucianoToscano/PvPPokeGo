@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -11,11 +12,14 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import android.widget.PopupMenu
 import androidx.core.app.NotificationCompat
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
+import com.lucianotoscano.pvppokego.data.BattleLeagueMode
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
@@ -32,6 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.min
 
 class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -45,6 +50,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var windowManager: WindowManager? = null
     private var overlayView: BattleOverlayView? = null
     private var scanJob: Job? = null
+    private var currentLeagueCp: Int = 1500
+
+    // The visual V03 HUD stays fully click-through. Only these three small transparent
+    // windows receive touches, so Pokémon GO remains touchable everywhere else.
+    private var fastTouch: View? = null
+    private var charged1Touch: View? = null
+    private var charged2Touch: View? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -76,7 +88,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private fun startProjection(resultCode: Int, resultData: Intent) {
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { gameRepo.load(1500) }
+                currentLeagueCp = settingsRepo.configuredLeagueCp()
+                    ?: settingsRepo.lastDetectedLeagueCp.takeIf { it in SUPPORTED_LEAGUE_CPS }
+                    ?: 1500
+                withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
                 engine = BattleEngine(gameRepo)
                 detector = BattleOcrDetector(gameRepo)
                 frameDetector = BattleFrameEventDetector()
@@ -89,7 +104,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, projection!!).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("V03: contador visual ativo"))
+                startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(currentLeagueCp)} • base visual V03"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -100,6 +115,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private fun attachOverlay() {
         if (overlayView != null) return
         windowManager = getSystemService(WindowManager::class.java)
+
+        // Exact V03 visual view: keep it non-touchable so it never blocks battle taps.
         overlayView = BattleOverlayView(this, settingsRepo, this).also { view ->
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -113,7 +130,101 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             ).apply { gravity = Gravity.TOP or Gravity.START }
             windowManager?.addView(view, params)
         }
+
+        attachMoveTouchZones()
         redraw()
+    }
+
+    /**
+     * V03 already draws and positions the three move selectors. Instead of making the entire
+     * full-screen HUD touchable, place three tiny transparent overlay windows over those selectors.
+     * This preserves the old design and lets taps open native submenus without stealing the rest
+     * of Pokémon GO's touch surface.
+     */
+    private fun attachMoveTouchZones() {
+        val wm = windowManager ?: return
+        if (fastTouch != null) return
+
+        val metrics = resources.displayMetrics
+        val sx = metrics.widthPixels / 864f
+        val sy = metrics.heightPixels / 1536f
+        val unit = min(sx, sy) * (settingsRepo.scale / .8f).coerceIn(.62f, 1.5f)
+
+        fun zone(
+            centerRefX: Float,
+            centerRefY: Float,
+            widthRef: Float,
+            heightRef: Float,
+            onTap: (View) -> Unit
+        ): View {
+            val view = View(this).apply {
+                setBackgroundColor(Color.TRANSPARENT)
+                isClickable = true
+                setOnClickListener { onTap(this) }
+            }
+            val w = (widthRef * unit).toInt().coerceAtLeast(44)
+            val h = (heightRef * unit).toInt().coerceAtLeast(44)
+            val cx = centerRefX * sx
+            val cy = centerRefY * sy
+            val params = smallTouchableParams(w, h).apply {
+                x = (cx - w / 2f).toInt()
+                y = (cy - h / 2f).toInt()
+            }
+            wm.addView(view, params)
+            return view
+        }
+
+        // Matches BattleOverlayView's unchanged V03 hit geometry.
+        fastTouch = zone(620f, 370f, 106f, 116f) { showNativeMoveMenu(MoveKind.FAST, it) }
+        charged1Touch = zone(548f, 495f, 120f, 130f) { showNativeMoveMenu(MoveKind.CHARGED_1, it) }
+        charged2Touch = zone(692f, 495f, 120f, 130f) { showNativeMoveMenu(MoveKind.CHARGED_2, it) }
+    }
+
+    private fun smallTouchableParams(width: Int, height: Int): WindowManager.LayoutParams =
+        WindowManager.LayoutParams(
+            width,
+            height,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+
+    private fun showNativeMoveMenu(kind: MoveKind, anchor: View) {
+        val e = engine ?: return
+        val options = when (kind) {
+            MoveKind.FAST -> e.possibleFastMoves()
+            MoveKind.CHARGED_1, MoveKind.CHARGED_2 -> e.possibleChargedMoves()
+        }
+        if (options.isEmpty()) return
+
+        PopupMenu(this, anchor).apply {
+            menu.add("Automático (PvPoke/OCR)").setOnMenuItemClickListener {
+                when (kind) {
+                    MoveKind.FAST -> e.clearFastManualOverride()
+                    MoveKind.CHARGED_1 -> e.clearChargedManualOverride(0)
+                    MoveKind.CHARGED_2 -> e.clearChargedManualOverride(1)
+                }
+                frameDetector?.reset()
+                redraw()
+                true
+            }
+            options.forEach { move ->
+                val detail = if (kind == MoveKind.FAST) "+${move.energyGain}E" else "${move.chargedCost}E"
+                menu.add("${move.name}  •  $detail").setOnMenuItemClickListener {
+                    when (kind) {
+                        MoveKind.FAST -> e.selectFast(move)
+                        MoveKind.CHARGED_1 -> e.selectCharged1(move)
+                        MoveKind.CHARGED_2 -> e.selectCharged2(move)
+                    }
+                    frameDetector?.reset()
+                    redraw()
+                    true
+                }
+            }
+            show()
+        }
     }
 
     private fun startScanLoop() {
@@ -121,13 +232,35 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         scanJob = scope.launch {
             var lastOcrAt = 0L
             var lastTeamOcrAt = 0L
+            var lastLeagueOcrAt = 0L
             var consecutiveErrors = 0
             while (isActive) {
                 val frame = capture?.acquireLatestBitmap()
                 if (frame != null) {
                     try {
                         val now = System.currentTimeMillis()
-                        val e = engine
+
+                        // Manual league changes from Settings are picked up before battle starts.
+                        val manualCp = settingsRepo.configuredLeagueCp()
+                        if (manualCp != null && manualCp != currentLeagueCp && engine?.activeEnemyName() == null) {
+                            reloadLeague(manualCp)
+                        }
+
+                        // Automatic mode reads Great/Ultra/Master from the lobby. If OCR cannot
+                        // identify it, the last detected/manual selection remains available.
+                        if (
+                            settingsRepo.leagueMode == BattleLeagueMode.AUTO &&
+                            engine?.activeEnemyName() == null &&
+                            now - lastLeagueOcrAt >= LEAGUE_OCR_INTERVAL_MS
+                        ) {
+                            detector?.detectLeagueCp(frame)?.takeIf { it in SUPPORTED_LEAGUE_CPS }?.let { detectedCp ->
+                                settingsRepo.lastDetectedLeagueCp = detectedCp
+                                if (detectedCp != currentLeagueCp) reloadLeague(detectedCp)
+                            }
+                            lastLeagueOcrAt = now
+                        }
+
+                        var e = engine
 
                         // Cheap visual event detector runs much faster than OCR.
                         if (settingsRepo.autoRecognition && e != null) {
@@ -137,9 +270,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             }
                         }
 
-                        // OCR remains throttled: name/CP + charged prompt only.
+                        // OCR remains throttled: name/CP + charged prompt/banner text.
                         if (settingsRepo.autoRecognition && now - lastOcrAt >= OCR_INTERVAL_MS) {
                             val d = detector?.detect(frame)
+                            e = engine
                             if (d != null && e != null) {
                                 val changes = e.onDetection(d)
                                 if (changes.playerChanged || changes.enemyChanged) frameDetector?.reset()
@@ -151,14 +285,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
                         // A larger OCR pass remembers the user's three Pokémon. Once all three are
                         // known it stops, so it does not stay in the hot path for the whole battle.
+                        e = engine
                         if (settingsRepo.autoRecognition && e != null && e.needsOwnTeamScan() && now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS) {
                             detector?.detectOwnTeam(frame)?.let(e::onOwnTeamDetected)
                             lastTeamOcrAt = now
                         }
 
-                        // Charged prompt was seen but the exact move text may be hidden by a shield.
-                        // Confirm the likely move after the charge animation and preserve residual energy.
-                        e?.maybeConfirmPendingCharged(now)
+                        // Exact "X usou Y" text wins. This is only a fallback for charge animations
+                        // where the exact move text was unreadable; residual energy is preserved.
+                        engine?.maybeConfirmPendingCharged(now)
 
                         consecutiveErrors = 0
                         withContext(Dispatchers.Main) { redraw() }
@@ -171,12 +306,32 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
     }
 
-    private fun redraw() {
-        val view = overlayView ?: return
-        view.visibility = if (settingsRepo.overlayEnabled) android.view.View.VISIBLE else android.view.View.GONE
-        engine?.uiState(settingsRepo.debugMode)?.let(view::render)
+    private suspend fun reloadLeague(cp: Int) {
+        if (cp == currentLeagueCp) return
+        withContext(Dispatchers.IO) { gameRepo.load(cp) }
+        currentLeagueCp = cp
+        engine = BattleEngine(gameRepo)
+        frameDetector?.reset()
+        withContext(Dispatchers.Main) {
+            startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(cp)} • base visual V03"))
+            redraw()
+        }
     }
 
+    private fun redraw() {
+        val view = overlayView ?: return
+        val enabled = settingsRepo.overlayEnabled
+        view.visibility = if (enabled) View.VISIBLE else View.GONE
+        val ui = engine?.uiState(settingsRepo.debugMode)
+        ui?.let(view::render)
+
+        // Transparent touch areas are only active when their corresponding V03 icon exists.
+        fastTouch?.visibility = if (enabled && ui?.fastMove != null) View.VISIBLE else View.GONE
+        charged1Touch?.visibility = if (enabled && ui?.charged1 != null) View.VISIBLE else View.GONE
+        charged2Touch?.visibility = if (enabled && ui?.charged2 != null) View.VISIBLE else View.GONE
+    }
+
+    // Retained callbacks keep BattleOverlayView API/source compatible with the exact V03 base.
     override fun onFastMoveTapped() {
         val options = engine?.possibleFastMoves().orEmpty()
         overlayView?.showMoveMenu(BattleOverlayView.MoveKind.FAST, options)
@@ -223,7 +378,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onDestroy() {
         scanJob?.cancel()
         runCatching { overlayView?.let { windowManager?.removeView(it) } }
+        runCatching { fastTouch?.let { windowManager?.removeView(it) } }
+        runCatching { charged1Touch?.let { windowManager?.removeView(it) } }
+        runCatching { charged2Touch?.let { windowManager?.removeView(it) } }
         overlayView = null
+        fastTouch = null; charged1Touch = null; charged2Touch = null
         detector?.close(); detector = null
         frameDetector = null
         capture?.stop(); capture = null
@@ -234,6 +393,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun leagueLabel(cp: Int): String = when (cp) {
+        2500 -> "Liga Ultra"
+        10000 -> "Liga Mestra"
+        else -> "Liga Grande"
+    }
+
+    private enum class MoveKind { FAST, CHARGED_1, CHARGED_2 }
+
     companion object {
         const val EXTRA_RESULT_CODE = "media_projection_result_code"
         const val EXTRA_RESULT_DATA = "media_projection_result_data"
@@ -243,5 +410,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         private const val FRAME_INTERVAL_MS = 105L
         private const val OCR_INTERVAL_MS = 720L
         private const val TEAM_OCR_INTERVAL_MS = 1_650L
+        private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
+        private val SUPPORTED_LEAGUE_CPS = setOf(1500, 2500, 10000)
     }
 }
