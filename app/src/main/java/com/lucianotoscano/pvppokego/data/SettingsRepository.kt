@@ -15,7 +15,9 @@ class SettingsRepository(context: Context) {
 
     var leagueMode: BattleLeagueMode
         get() = runCatching {
-            BattleLeagueMode.valueOf(prefs.getString("league_mode", BattleLeagueMode.AUTO.name)!!)
+            BattleLeagueMode.valueOf(
+                prefs.getString("league_mode", BattleLeagueMode.AUTO.name)!!
+            )
         }.getOrDefault(BattleLeagueMode.AUTO)
         set(v) = prefs.edit().putString("league_mode", v.name).apply()
 
@@ -73,12 +75,26 @@ class SettingsRepository(context: Context) {
         get() = prefs.getFloat("overlay_opacity", .9f)
         set(v) = prefs.edit().putFloat("overlay_opacity", v.coerceIn(.3f, 1f)).apply()
 
+    var overlayServiceRunning: Boolean
+        get() = prefs.getBoolean("overlay_service_running", false)
+        set(v) = prefs.edit().putBoolean("overlay_service_running", v).apply()
+
     fun setPosition(block: String, x: Float, y: Float) {
-        prefs.edit().putFloat("${block}_x", x).putFloat("${block}_y", y).apply()
+        prefs.edit()
+            .putFloat("${block}_x", x)
+            .putFloat("${block}_y", y)
+            .apply()
     }
 
-    fun getPosition(block: String, defaultX: Float, defaultY: Float): Pair<Float, Float> =
-        prefs.getFloat("${block}_x", defaultX) to prefs.getFloat("${block}_y", defaultY)
+    fun getPosition(
+        block: String,
+        defaultX: Float,
+        defaultY: Float
+    ): Pair<Float, Float> =
+        prefs.getFloat("${block}_x", defaultX) to
+            prefs.getFloat("${block}_y", defaultY)
 
-    companion object { private const val FILE = "pvppokego_prefs" }
+    companion object {
+        private const val FILE = "pvppokego_prefs"
+    }
 }

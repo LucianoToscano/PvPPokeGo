@@ -58,7 +58,11 @@ fun SettingsScreen(
     MaterialTheme {
         Scaffold { padding ->
             Column(
-                Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp).verticalScroll(rememberScrollState()),
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 18.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Spacer(Modifier.height(8.dp))
@@ -66,19 +70,48 @@ fun SettingsScreen(
                 Text("Assistente visual externo de PvP. Não modifica nem envia comandos ao Pokémon GO.")
 
                 if (!overlayPermissionGranted) {
-                    Button(onClick = onRequestOverlayPermission, modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = onRequestOverlayPermission,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text("Permitir sobreposição")
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onStartOverlay, modifier = Modifier.weight(1f)) { Text("Iniciar overlay") }
-                    Button(onClick = onStopOverlay, modifier = Modifier.weight(1f)) { Text("Parar") }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onStartOverlay,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Iniciar overlay")
+                    }
+                    Button(
+                        onClick = onStopOverlay,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Parar")
+                    }
                 }
-                Button(onClick = onResetBattle, modifier = Modifier.fillMaxWidth()) { Text("RESET BATTLE") }
+
+                Button(
+                    onClick = onResetBattle,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("RESET BATTLE")
+                }
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Toggle("Overlay", overlay) { overlay = it; repository.overlayEnabled = it }
-                Toggle("Reconhecimento automático", auto) { auto = it; repository.autoRecognition = it }
+                Toggle("Overlay", overlay) {
+                    overlay = it
+                    repository.overlayEnabled = it
+                }
+                Toggle("Reconhecimento automático", auto) {
+                    auto = it
+                    repository.autoRecognition = it
+                }
 
                 Text("Liga / ranking PvP", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -89,39 +122,100 @@ fun SettingsScreen(
                             else -> "Liga Grande"
                         }
                         "Automático: ler o lobby. Última detectada: $detected"
-                    } else league.label
+                    } else {
+                        league.label
+                    }
                 )
+
                 LeagueSelectorRow(
                     left = BattleLeagueMode.AUTO,
                     right = BattleLeagueMode.GREAT,
                     selected = league
-                ) { selected -> league = selected; repository.leagueMode = selected }
+                ) { selected ->
+                    league = selected
+                    repository.leagueMode = selected
+                }
+
                 LeagueSelectorRow(
                     left = BattleLeagueMode.ULTRA,
                     right = BattleLeagueMode.MASTER,
                     selected = league
-                ) { selected -> league = selected; repository.leagueMode = selected }
+                ) { selected ->
+                    league = selected
+                    repository.leagueMode = selected
+                }
 
-                Toggle("Tipos fortes contra inimigo", strong) { strong = it; repository.showStrongTypes = it }
-                Toggle("Indicador do Pokémon atual", current) { current = it; repository.showCurrentIndicator = it }
-                Toggle("Analisar reservas", reserves) { reserves = it; repository.analyzeReserves = it }
-                Toggle("Mostrar tipos das reservas", reserveTypes) { reserveTypes = it; repository.showReserveTypes = it }
-                Toggle("Ataques do inimigo", moves) { moves = it; repository.showEnemyMoves = it }
-                Toggle("Contador de carregados", counter) { counter = it; repository.showChargedCounter = it }
-                Toggle("Progresso de energia", progress) { progress = it; repository.showEnergyProgress = it }
-                Toggle("Timer de troca", timer) { timer = it; repository.showSwitchTimer = it }
-                Toggle("Modo edição", edit) { edit = it; repository.editMode = it }
-                Toggle("DEBUG", debug) { debug = it; repository.debugMode = it }
+                Toggle("Fraquezas do inimigo no topo", strong) {
+                    strong = it
+                    repository.showStrongTypes = it
+                }
+                Toggle("Indicador do Pokémon atual", current) {
+                    current = it
+                    repository.showCurrentIndicator = it
+                }
+                Toggle("Analisar reservas", reserves) {
+                    reserves = it
+                    repository.analyzeReserves = it
+                }
+                Toggle("Mostrar tipos das reservas", reserveTypes) {
+                    reserveTypes = it
+                    repository.showReserveTypes = it
+                }
+                Toggle("Ataques do inimigo", moves) {
+                    moves = it
+                    repository.showEnemyMoves = it
+                }
+                Toggle("Pontos de carregamento", counter) {
+                    counter = it
+                    repository.showChargedCounter = it
+                }
+                Toggle("Progresso de energia", progress) {
+                    progress = it
+                    repository.showEnergyProgress = it
+                }
+                Toggle("Timer de troca", timer) {
+                    timer = it
+                    repository.showSwitchTimer = it
+                }
+                Toggle("Modo edição", edit) {
+                    edit = it
+                    repository.editMode = it
+                }
+                Toggle("DEBUG", debug) {
+                    debug = it
+                    repository.debugMode = it
+                }
 
                 Text("Escala: ${(scale * 100).toInt()}%")
-                Slider(value = scale, onValueChange = { scale = it; repository.scale = it }, valueRange = .5f..1.2f, steps = 6)
+                Slider(
+                    value = scale,
+                    onValueChange = {
+                        scale = it
+                        repository.scale = it
+                    },
+                    valueRange = .5f..1.2f,
+                    steps = 6
+                )
+
                 Text("Opacidade: ${(opacity * 100).toInt()}%")
-                Slider(value = opacity, onValueChange = { opacity = it; repository.opacity = it }, valueRange = .3f..1f, steps = 6)
+                Slider(
+                    value = opacity,
+                    onValueChange = {
+                        opacity = it
+                        repository.opacity = it
+                    },
+                    valueRange = .3f..1f,
+                    steps = 6
+                )
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("Base visual V03 preservada. A evolução adiciona leitura da liga, memória de energia/moves e confirmação automática dos carregados reais sem redesenhar o HUD.")
+                Text(
+                    "Base visual V03 preservada. O HUD usa apenas um indicador no topo esquerdo, " +
+                        "fraquezas sem duplicar os tipos nativos do jogo, carregamento visual e botão " +
+                        "de olho inferior para ocultar/restaurar."
+                )
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -135,7 +229,10 @@ private fun LeagueSelectorRow(
     selected: BattleLeagueMode,
     onSelect: (BattleLeagueMode) -> Unit
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         LeagueButton(left, selected == left, Modifier.weight(1f), onSelect)
         LeagueButton(right, selected == right, Modifier.weight(1f), onSelect)
     }
@@ -149,15 +246,32 @@ private fun LeagueButton(
     onSelect: (BattleLeagueMode) -> Unit
 ) {
     if (selected) {
-        Button(onClick = { onSelect(mode) }, modifier = modifier) { Text(mode.label) }
+        Button(
+            onClick = { onSelect(mode) },
+            modifier = modifier
+        ) {
+            Text(mode.label)
+        }
     } else {
-        OutlinedButton(onClick = { onSelect(mode) }, modifier = modifier) { Text(mode.label) }
+        OutlinedButton(
+            onClick = { onSelect(mode) },
+            modifier = modifier
+        ) {
+            Text(mode.label)
+        }
     }
 }
 
 @Composable
-private fun Toggle(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+private fun Toggle(
+    label: String,
+    value: Boolean,
+    onChange: (Boolean) -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = value, onCheckedChange = onChange)
     }

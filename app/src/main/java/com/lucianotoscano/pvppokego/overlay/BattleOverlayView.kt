@@ -14,13 +14,15 @@ import com.lucianotoscano.pvppokego.data.ChargedPrediction
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
+import kotlin.math.ceil
 import kotlin.math.min
 
 /**
  * Canonical PvPPokeGo battle HUD.
  *
- * Coordinates are tied to the approved 864x1536 reference mockup. The full view remains
- * click-through in BattleOverlayService; only tiny separate windows receive touches.
+ * Coordinates are tied to the approved 864x1536 reference mockup.
+ * Pokémon GO remains untouched; the service exposes only tiny touch zones over
+ * move selectors and the bottom visibility control.
  */
 class BattleOverlayView(
     context: Context,
@@ -55,6 +57,7 @@ class BattleOverlayView(
     private var state = BattleUiState()
     private var scaleFactor = settings.scale
     private var opacityFactor = settings.opacity
+    private var hudAlpha = 255
     private var collapsed = false
 
     private val hitFast = RectF()
@@ -105,59 +108,70 @@ class BattleOverlayView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        paint.alpha = (255 * opacityFactor).toInt().coerceIn(40, 255)
-        stroke.alpha = paint.alpha
-        stroke.color = Color.WHITE
+
+        // Never derive a new alpha from Paint.alpha. setColor() changes Paint.alpha,
+        // which previously caused cumulative transparency even with the slider at 100%.
+        hudAlpha = (255f * opacityFactor).toInt().coerceIn(76, 255)
+        paint.alpha = 255
+        stroke.alpha = 255
+        stroke.color = hudColor(Color.WHITE)
 
         if (collapsed) {
-            drawRestoreControl(canvas, rx(42f), ry(38f))
+            drawVisibilityToggle(canvas, hidden = true)
             return
         }
 
-        // Top-left pair from the approved mockup.
+        // Only ONE top-left status icon. Hide/show now lives at the bottom.
         if (settings.showCurrentIndicator) {
             drawMatchupIndicator(canvas, rx(42f), ry(38f), state.playerMatchup, 19f * u())
         }
-        drawHideControl(canvas, rx(96f), ry(38f), 19f * u())
 
+        // Only weaknesses are drawn by PvPPokeGo. Native opponent type icons belong to Pokémon GO.
         if (settings.showStrongTypes) drawStrongTypes(canvas)
         if (settings.showEnemyMoves) drawMoveTriangle(canvas)
         if (settings.analyzeReserves) drawReserves(canvas)
         if (settings.showSwitchTimer) drawTimers(canvas)
         if (settings.editMode) drawResetAndCorrection(canvas)
         if (settings.debugMode) drawDebug(canvas)
+
+        // Canonical bottom control from the approved reference image.
+        drawVisibilityToggle(canvas, hidden = false)
         popup?.let { drawPopup(canvas, it) }
     }
 
-    private fun drawHideControl(canvas: Canvas, cx: Float, cy: Float, r: Float) {
-        paint.style = Paint.Style.FILL
-        paint.color = withAlpha(Color.rgb(225, 38, 54), paint.alpha)
-        canvas.drawCircle(cx, cy, r, paint)
-        stroke.strokeWidth = 2.2f * u()
-        canvas.drawCircle(cx, cy, r, stroke)
-        paint.color = Color.WHITE
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = Typeface.DEFAULT_BOLD
-        paint.textSize = 23f * u()
-        canvas.drawText("×", cx, cy + 7.5f * u(), paint)
-    }
+    private fun drawVisibilityToggle(canvas: Canvas, hidden: Boolean) {
+        val cx = rx(432f)
+        val cy = ry(1480f)
+        val radius = 21f * u()
 
-    private fun drawRestoreControl(canvas: Canvas, cx: Float, cy: Float) {
-        val outer = 21f * u()
         paint.style = Paint.Style.FILL
-        paint.color = withAlpha(Color.rgb(43, 53, 69), paint.alpha)
-        canvas.drawCircle(cx, cy, outer, paint)
-        stroke.color = withAlpha(Color.rgb(77, 168, 232), paint.alpha)
-        stroke.strokeWidth = 3f * u()
-        canvas.drawCircle(cx, cy, outer - 1.5f * u(), stroke)
-        paint.color = withAlpha(Color.rgb(251, 165, 75), paint.alpha)
-        canvas.drawCircle(cx, cy, 12f * u(), paint)
-        paint.color = Color.WHITE
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = Typeface.DEFAULT_BOLD
-        paint.textSize = 12f * u()
-        canvas.drawText("P", cx, cy + 4f * u(), paint)
-        stroke.color = Color.WHITE
+        paint.color = hudColor(Color.rgb(72, 76, 82), .90f)
+        canvas.drawCircle(cx, cy, radius, paint)
+
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 1.5f * u()
+        stroke.color = hudColor(Color.WHITE, .65f)
+        canvas.drawCircle(cx, cy, radius, stroke)
+
+        val eye = RectF(
+            cx - 10.5f * u(), cy - 6.2f * u(),
+            cx + 10.5f * u(), cy + 6.2f * u()
+        )
+        stroke.color = hudColor(Color.WHITE)
+        stroke.strokeWidth = 2.2f * u()
+        canvas.drawOval(eye, stroke)
+
+        paint.color = hudColor(Color.WHITE)
+        canvas.drawCircle(cx, cy, 3.2f * u(), paint)
+
+        if (!hidden) {
+            stroke.strokeWidth = 2.6f * u()
+            canvas.drawLine(
+                cx - 11.5f * u(), cy + 10f * u(),
+                cx + 11.5f * u(), cy - 10f * u(),
+                stroke
+            )
+        }
     }
 
     private fun drawMatchupIndicator(
@@ -169,66 +183,70 @@ class BattleOverlayView(
     ) {
         paint.style = Paint.Style.FILL
         paint.color = when (matchup) {
-            MatchupState.FAVORABLE -> withAlpha(Color.rgb(20, 190, 80), paint.alpha)
-            MatchupState.UNFAVORABLE -> withAlpha(Color.rgb(225, 45, 55), paint.alpha)
-            MatchupState.NEUTRAL -> withAlpha(Color.rgb(150, 150, 150), paint.alpha)
-            MatchupState.UNKNOWN -> withAlpha(Color.rgb(105, 105, 105), paint.alpha)
+            MatchupState.FAVORABLE -> hudColor(Color.rgb(20, 190, 80))
+            MatchupState.UNFAVORABLE -> hudColor(Color.rgb(225, 45, 55))
+            MatchupState.NEUTRAL -> hudColor(Color.rgb(145, 145, 145))
+            MatchupState.UNKNOWN -> hudColor(Color.rgb(105, 105, 105))
         }
         canvas.drawCircle(cx, cy, radius, paint)
-        stroke.color = Color.WHITE
+
+        stroke.color = hudColor(Color.WHITE)
         stroke.strokeWidth = 2.2f * u()
         canvas.drawCircle(cx, cy, radius, stroke)
 
-        paint.color = Color.WHITE
+        paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.CENTER
-        paint.textSize = 20f * u()
         paint.typeface = Typeface.DEFAULT_BOLD
-        val glyph = when (matchup) {
-            MatchupState.FAVORABLE -> "✓"
-            MatchupState.UNFAVORABLE -> "×"
-            else -> "•"
+
+        when (matchup) {
+            MatchupState.FAVORABLE -> {
+                paint.textSize = 20f * u()
+                canvas.drawText("✓", cx, cy + 6.5f * u(), paint)
+            }
+            MatchupState.UNFAVORABLE -> {
+                paint.textSize = 21f * u()
+                canvas.drawText("×", cx, cy + 6.8f * u(), paint)
+            }
+            MatchupState.NEUTRAL -> {
+                canvas.drawCircle(cx, cy, 6.2f * u(), paint)
+            }
+            MatchupState.UNKNOWN -> {
+                paint.textSize = 14f * u()
+                canvas.drawText("?", cx, cy + 4.8f * u(), paint)
+            }
         }
-        canvas.drawText(glyph, cx, cy + 6.5f * u(), paint)
     }
 
     /**
-     * Approved top row at 864x1536:
-     * strong types 574/616/658/701, arrow 739, opponent types 777/819, y=39.
+     * The game already renders the enemy Pokémon's own types. PvPPokeGo only adds
+     * the types that hit that opponent super-effectively, then a small › pointing
+     * toward the native GO type area. No duplicate opponent-type chips are drawn.
      */
     private fun drawStrongTypes(canvas: Canvas) {
         val strong = state.strongTypesAgainstOpponent.take(4)
-        val opponentTypes = state.opponentTypes.take(2)
-        if (strong.isEmpty() && opponentTypes.isEmpty()) return
+        if (strong.isEmpty()) return
 
         val radius = 18f * u()
         val y = ry(39f)
         val spacing = rx(42f)
         val strongRight = rx(701f)
         val arrowX = rx(739f)
-        val opponentStart = rx(777f)
 
         val firstStrong = strongRight - spacing * (strong.size - 1).coerceAtLeast(0)
         strong.forEachIndexed { index, type ->
             drawTypeChip(canvas, firstStrong + spacing * index, y, type, radius)
         }
 
-        if (strong.isNotEmpty() && opponentTypes.isNotEmpty()) {
-            paint.color = Color.WHITE
-            paint.textAlign = Paint.Align.CENTER
-            paint.textSize = 24f * u()
-            paint.typeface = Typeface.DEFAULT_BOLD
-            paint.setShadowLayer(3f, 0f, 1f, Color.BLACK)
-            canvas.drawText("›", arrowX, y + 7f * u(), paint)
-            paint.clearShadowLayer()
-        }
-
-        opponentTypes.forEachIndexed { index, type ->
-            drawTypeChip(canvas, opponentStart + spacing * index, y, type, radius)
-        }
+        paint.color = hudColor(Color.WHITE)
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = 24f * u()
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.setShadowLayer(3f, 0f, 1f, Color.BLACK)
+        canvas.drawText("›", arrowX, y + 7f * u(), paint)
+        paint.clearShadowLayer()
     }
 
     private fun drawMoveTriangle(canvas: Canvas) {
-        // Keeps the enemy move cluster away from the human trainer.
         val centerX = rx(620f)
         val fastY = ry(355f)
         val chargedY = ry(478f)
@@ -238,7 +256,12 @@ class BattleOverlayView(
 
         state.fastMove?.let { move ->
             drawMoveCircle(canvas, centerX, fastY, fastRadius, move)
-            drawMoveLabel(canvas, centerX, fastY + fastRadius + 20f * u(), shortMoveName(move.name) + " ▼")
+            drawMoveLabel(
+                canvas,
+                centerX,
+                fastY + fastRadius + 20f * u(),
+                shortMoveName(move.name) + " ▼"
+            )
             hitFast.set(
                 centerX-fastRadius-22f*u(), fastY-fastRadius-12f*u(),
                 centerX+fastRadius+22f*u(), fastY+fastRadius+42f*u()
@@ -248,7 +271,12 @@ class BattleOverlayView(
         state.charged1?.let { prediction ->
             val cx = centerX - spread
             drawCharged(canvas, cx, chargedY, chargedRadius, prediction)
-            drawMoveLabel(canvas, cx, chargedY + chargedRadius + 22f * u(), shortMoveName(prediction.move.name) + " ▼")
+            drawMoveLabel(
+                canvas,
+                cx,
+                chargedY + chargedRadius + 22f * u(),
+                shortMoveName(prediction.move.name) + " ▼"
+            )
             hitCharge1.set(
                 cx-chargedRadius-22f*u(), chargedY-chargedRadius-10f*u(),
                 cx+chargedRadius+22f*u(), chargedY+chargedRadius+44f*u()
@@ -258,7 +286,12 @@ class BattleOverlayView(
         state.charged2?.let { prediction ->
             val cx = centerX + spread
             drawCharged(canvas, cx, chargedY, chargedRadius, prediction)
-            drawMoveLabel(canvas, cx, chargedY + chargedRadius + 22f * u(), shortMoveName(prediction.move.name) + " ▼")
+            drawMoveLabel(
+                canvas,
+                cx,
+                chargedY + chargedRadius + 22f * u(),
+                shortMoveName(prediction.move.name) + " ▼"
+            )
             hitCharge2.set(
                 cx-chargedRadius-22f*u(), chargedY-chargedRadius-10f*u(),
                 cx+chargedRadius+22f*u(), chargedY+chargedRadius+44f*u()
@@ -267,71 +300,98 @@ class BattleOverlayView(
     }
 
     /**
-     * Mirrors GO's own charged buttons: the enemy move fills from bottom to top while energy builds.
+     * Enemy charged move mirrors Pokémon GO: colored energy rises from bottom to top.
+     * The old numeric badge was replaced with small progress points per the approved
+     * refinement; the exact remaining count is still available in debug state.
      */
-    private fun drawCharged(canvas: Canvas, cx: Float, cy: Float, radius: Float, prediction: ChargedPrediction) {
+    private fun drawCharged(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        prediction: ChargedPrediction
+    ) {
         val circle = Path().apply { addCircle(cx, cy, radius, Path.Direction.CW) }
         canvas.save()
         canvas.clipPath(circle)
 
         paint.style = Paint.Style.FILL
-        paint.color = withAlpha(Color.rgb(49, 55, 69), paint.alpha)
+        paint.color = hudColor(Color.rgb(49, 55, 69))
         canvas.drawRect(cx-radius, cy-radius, cx+radius, cy+radius, paint)
 
         if (settings.showEnergyProgress) {
             val progress = prediction.progress.coerceIn(0f, 1f)
             val fillTop = cy + radius - (2f * radius * progress)
-            paint.color = withAlpha(typeColor(prediction.move.type), paint.alpha)
+            paint.color = hudColor(typeColor(prediction.move.type))
             canvas.drawRect(cx-radius, fillTop, cx+radius, cy+radius, paint)
+
             if (progress > .02f && progress < .98f) {
-                paint.color = Color.argb((paint.alpha * .85f).toInt(), 255, 255, 255)
-                canvas.drawRect(cx-radius, fillTop-1f*u(), cx+radius, fillTop+1f*u(), paint)
+                paint.color = hudColor(Color.WHITE, .84f)
+                canvas.drawRect(
+                    cx-radius, fillTop-1f*u(),
+                    cx+radius, fillTop+1f*u(),
+                    paint
+                )
             }
         } else {
-            paint.color = withAlpha(typeColor(prediction.move.type), paint.alpha)
+            paint.color = hudColor(typeColor(prediction.move.type))
             canvas.drawRect(cx-radius, cy-radius, cx+radius, cy+radius, paint)
         }
         canvas.restore()
 
-        stroke.color = Color.WHITE
+        stroke.color = hudColor(Color.WHITE)
         stroke.strokeWidth = 2.2f * u()
         canvas.drawCircle(cx, cy, radius, stroke)
         drawTypeGlyph(canvas, cx, cy, prediction.move.type, 23f * u())
 
         if (settings.showChargedCounter) {
-            val badgeRadius = 14.5f * u()
-            val badgeX = cx + radius * .74f
-            val badgeY = cy + radius * .72f
-            paint.color = if (prediction.ready) {
-                withAlpha(Color.rgb(15, 185, 75), paint.alpha)
+            drawChargeProgressDots(canvas, cx, cy, radius, prediction.progress, prediction.ready)
+        }
+    }
+
+    private fun drawChargeProgressDots(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        progress: Float,
+        ready: Boolean
+    ) {
+        val totalDots = 5
+        val normalized = progress.coerceIn(0f, 1f)
+        val filled = if (ready) totalDots else ceil(normalized * totalDots).toInt().coerceIn(0, totalDots)
+        val dotRadius = 2.5f * u()
+        val gap = 7.5f * u()
+        val startX = cx - gap * (totalDots - 1) / 2f
+        val y = cy + radius * .72f
+
+        repeat(totalDots) { index ->
+            paint.style = Paint.Style.FILL
+            paint.color = if (index < filled) {
+                hudColor(Color.WHITE)
             } else {
-                withAlpha(Color.rgb(28, 30, 34), paint.alpha)
+                hudColor(Color.rgb(34, 37, 44), .92f)
             }
-            canvas.drawCircle(badgeX, badgeY, badgeRadius, paint)
-            stroke.strokeWidth = 1.7f * u()
-            canvas.drawCircle(badgeX, badgeY, badgeRadius, stroke)
-            paint.color = Color.WHITE
-            paint.textSize = 15.5f * u()
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.DEFAULT_BOLD
-            canvas.drawText(prediction.fastMovesRemaining.toString(), badgeX, badgeY + 5.5f*u(), paint)
+            canvas.drawCircle(startX + index * gap, y, dotRadius, paint)
         }
     }
 
     private fun drawMoveCircle(canvas: Canvas, cx: Float, cy: Float, radius: Float, move: MoveDef) {
         paint.style = Paint.Style.FILL
-        paint.color = withAlpha(Color.rgb(35, 40, 52), (paint.alpha * .65f).toInt())
+        paint.color = hudColor(Color.rgb(35, 40, 52), .72f)
         canvas.drawCircle(cx, cy + 2f*u(), radius + 3f*u(), paint)
-        paint.color = withAlpha(typeColor(move.type), paint.alpha)
+
+        paint.color = hudColor(typeColor(move.type))
         canvas.drawCircle(cx, cy, radius, paint)
-        stroke.color = Color.WHITE
+
+        stroke.color = hudColor(Color.WHITE)
         stroke.strokeWidth = 2.2f * u()
         canvas.drawCircle(cx, cy, radius, stroke)
-        drawTypeGlyph(canvas, cx, cy, move.type, 20f * u())
+        drawTypeGlyph(canvas, cx, cy, move.type, 20f*u())
     }
 
     private fun drawMoveLabel(canvas: Canvas, x: Float, y: Float, text: String) {
-        paint.color = Color.WHITE
+        paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = 13.5f * u()
         paint.typeface = Typeface.DEFAULT_BOLD
@@ -349,6 +409,7 @@ class BattleOverlayView(
         state.reserves.take(2).forEachIndexed { index, reserve ->
             val y = if (index == 0) firstY else secondY
             drawMatchupIndicator(canvas, indicatorX, y, reserve.matchup, 16f * u())
+
             if (settings.showReserveTypes && reserve.types.isNotEmpty()) {
                 val typeRadius = 13f * u()
                 val spacing = rx(38f)
@@ -366,7 +427,7 @@ class BattleOverlayView(
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = 12f * u()
         paint.typeface = Typeface.DEFAULT_BOLD
-        paint.color = Color.WHITE
+        paint.color = hudColor(Color.WHITE)
         state.ownSwitchSeconds?.let { canvas.drawText("↻ $it", 10f*u(), height*.47f, paint) }
         state.opponentSwitchSeconds?.let { canvas.drawText("↻ $it", width-58f*u(), height*.47f, paint) }
     }
@@ -375,11 +436,14 @@ class BattleOverlayView(
         val y = ry(274f)
         val radius = 15f * u()
         val resetX = rx(22f)
+
         hitReset.set(resetX-radius, y-radius, resetX+radius, y+radius)
-        paint.color = Color.argb(paint.alpha, 45, 45, 45)
+        paint.color = hudColor(Color.rgb(45, 45, 45))
         canvas.drawCircle(resetX, y, radius, paint)
+        stroke.color = hudColor(Color.WHITE)
         canvas.drawCircle(resetX, y, radius, stroke)
-        paint.color = Color.WHITE
+
+        paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = 16f * u()
         canvas.drawText("↻", resetX, y+5f*u(), paint)
@@ -387,23 +451,26 @@ class BattleOverlayView(
         val minusX = resetX
         val plusX = resetX + 38f*u()
         val correctionY = y + 40f*u()
+
         hitMinus.set(minusX-radius, correctionY-radius, minusX+radius, correctionY+radius)
         hitPlus.set(plusX-radius, correctionY-radius, plusX+radius, correctionY+radius)
+
         listOf(minusX to "−", plusX to "+").forEach { (x, glyph) ->
-            paint.color = Color.argb(paint.alpha, 45, 45, 45)
+            paint.color = hudColor(Color.rgb(45, 45, 45))
             canvas.drawCircle(x, correctionY, radius, paint)
             canvas.drawCircle(x, correctionY, radius, stroke)
-            paint.color = Color.WHITE
+            paint.color = hudColor(Color.WHITE)
             canvas.drawText(glyph, x, correctionY+5f*u(), paint)
         }
     }
 
     private fun drawDebug(canvas: Canvas) {
         val text = state.debugText ?: return
-        paint.color = Color.argb(190, 0, 0, 0)
+        paint.color = hudColor(Color.BLACK, .78f)
         val box = RectF(8f, height-166f*u(), width*.82f, height-8f)
         canvas.drawRoundRect(box, 8f, 8f, paint)
-        paint.color = Color.WHITE
+
+        paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.LEFT
         paint.textSize = 10f * u()
         text.lines().take(9).forEachIndexed { index, line ->
@@ -418,17 +485,18 @@ class BattleOverlayView(
         val top = (popupState.anchor.bottom + 4f)
             .coerceAtMost(height - popupState.options.size*itemHeight - 8f)
         val box = RectF(left, top, left+popupWidth, top+popupState.options.size*itemHeight)
-        paint.color = Color.argb(235, 20, 25, 32)
+
+        paint.color = hudColor(Color.rgb(20, 25, 32), .94f)
         canvas.drawRoundRect(box, 9f, 9f, paint)
 
         popupState.options.forEachIndexed { index, move ->
             val y = top + index*itemHeight
             if (index > 0) {
-                paint.color = Color.argb(90, 255, 255, 255)
+                paint.color = hudColor(Color.WHITE, .30f)
                 canvas.drawRect(left, y, left+popupWidth, y+1f, paint)
             }
             drawTypeChip(canvas, left+19f*u(), y+itemHeight/2, move.type, 9f*u())
-            paint.color = Color.WHITE
+            paint.color = hudColor(Color.WHITE)
             paint.textAlign = Paint.Align.LEFT
             paint.textSize = 12f*u()
             canvas.drawText(shortMoveName(move.name), left+37f*u(), y+21f*u(), paint)
@@ -472,29 +540,29 @@ class BattleOverlayView(
 
     private fun drawTypeChip(canvas: Canvas, cx: Float, cy: Float, type: String, radius: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = withAlpha(Color.rgb(29, 34, 45), (paint.alpha * .55f).toInt())
+        paint.color = hudColor(Color.rgb(29, 34, 45), .62f)
         canvas.drawCircle(cx, cy + 1.5f*u(), radius + 2.2f*u(), paint)
-        paint.color = withAlpha(typeColor(type), paint.alpha)
+
+        paint.color = hudColor(typeColor(type))
         canvas.drawCircle(cx, cy, radius, paint)
-        stroke.color = Color.argb((paint.alpha * .86f).toInt(), 255, 255, 255)
+
+        stroke.color = hudColor(Color.WHITE, .92f)
         stroke.strokeWidth = 1.35f * u()
         canvas.drawCircle(cx, cy, radius, stroke)
+
         drawTypeGlyph(canvas, cx, cy, type, radius * .95f)
-        stroke.color = Color.WHITE
+        stroke.color = hudColor(Color.WHITE)
     }
 
-    /**
-     * Uses the 18 white silhouettes traced from the icon sheet supplied for this project.
-     * EVEN_ODD contours in TypeGlyphPaths preserve holes in Normal/Steel/Psychic/etc.
-     */
     private fun drawTypeGlyph(canvas: Canvas, cx: Float, cy: Float, type: String, size: Float) {
         paint.style = Paint.Style.FILL
-        paint.color = Color.argb(paint.alpha, 255, 255, 255)
+        paint.color = hudColor(Color.WHITE)
         val path = TypeGlyphPaths.build(type, cx, cy, size * 1.18f)
         if (path != null) {
             canvas.drawPath(path, paint)
             return
         }
+
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = size * 1.05f
         paint.typeface = Typeface.DEFAULT_BOLD
@@ -504,14 +572,11 @@ class BattleOverlayView(
     private fun shortMoveName(name: String): String =
         if (name.length <= 19) name else name.take(18) + "…"
 
-    private fun withAlpha(color: Int, alpha: Int): Int = Color.argb(
-        alpha.coerceIn(0, 255),
-        Color.red(color),
-        Color.green(color),
-        Color.blue(color)
-    )
+    private fun hudColor(color: Int, multiplier: Float = 1f): Int {
+        val alpha = (hudAlpha * multiplier).toInt().coerceIn(0, 255)
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+    }
 
-    // Palette sampled from the supplied Pokémon GO-style icon sheet.
     private fun typeColor(type: String): Int = when (type.lowercase()) {
         "fairy" -> Color.rgb(239, 153, 230)
         "psychic" -> Color.rgb(250, 137, 131)
