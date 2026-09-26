@@ -13,6 +13,18 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("auto_recognition", true)
         set(v) = prefs.edit().putBoolean("auto_recognition", v).apply()
 
+    var leagueMode: BattleLeagueMode
+        get() = runCatching {
+            BattleLeagueMode.valueOf(prefs.getString("league_mode", BattleLeagueMode.AUTO.name)!!)
+        }.getOrDefault(BattleLeagueMode.AUTO)
+        set(v) = prefs.edit().putString("league_mode", v.name).apply()
+
+    var lastDetectedLeagueCp: Int
+        get() = prefs.getInt("last_detected_league_cp", 1500)
+        set(v) = prefs.edit().putInt("last_detected_league_cp", v).apply()
+
+    fun configuredLeagueCp(): Int? = leagueMode.cpCap
+
     var showStrongTypes: Boolean
         get() = prefs.getBoolean("show_strong_types", true)
         set(v) = prefs.edit().putBoolean("show_strong_types", v).apply()
