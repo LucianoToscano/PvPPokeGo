@@ -11,20 +11,24 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.Spinner
 import android.widget.TextView
 
 class MainActivity : Activity() {
     private lateinit var status: TextView
-    private val projectionManager by lazy {
-        getSystemService(MediaProjectionManager::class.java)
-    }
+    private lateinit var leaguePreference: LeaguePreference
+    private val projectionManager by lazy { getSystemService(MediaProjectionManager::class.java) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "PvPPokeGo"
+        leaguePreference = LeaguePreference(this)
         setContentView(buildUi())
         requestNotificationPermissionIfNeeded()
         updateStatus()
@@ -50,7 +54,7 @@ class MainActivity : Activity() {
             textSize = 15f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(24))
+            setPadding(0, dp(8), 0, dp(20))
         }, fullWidth())
 
         status = TextView(this).apply {
@@ -61,15 +65,55 @@ class MainActivity : Activity() {
         }
         root.addView(status, fullWidth())
 
+        root.addView(TextView(this).apply {
+            text = "Liga / ranking PvP"
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            setPadding(0, dp(18), 0, dp(4))
+        }, fullWidth())
+
+        val modes = listOf(
+            "Automático — ler lobby",
+            "Liga Grande — 1500 PC",
+            "Liga Ultra — 2500 PC",
+            "Liga Mestra — sem limite"
+        )
+        val spinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, modes)
+            setSelection(
+                when (leaguePreference.mode) {
+                    LeagueSelectionMode.AUTO -> 0
+                    LeagueSelectionMode.GREAT -> 1
+                    LeagueSelectionMode.ULTRA -> 2
+                    LeagueSelectionMode.MASTER -> 3
+                }
+            )
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    leaguePreference.mode = when (position) {
+                        1 -> LeagueSelectionMode.GREAT
+                        2 -> LeagueSelectionMode.ULTRA
+                        3 -> LeagueSelectionMode.MASTER
+                        else -> LeagueSelectionMode.AUTO
+                    }
+                    updateStatus()
+                }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }
+        root.addView(spinner, fullWidth())
+
+        root.addView(TextView(this).apply {
+            text = "No Automático, o app lê Grande/Ultra/Mestra no lobby. Se não conseguir detectar, o overlay mostra um seletor para você escolher. O moveset inicial usa o rank #1 do PvPoke para a liga selecionada."
+            textSize = 12f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(5), 0, dp(6))
+        }, fullWidth())
+
         root.addView(Button(this).apply {
             text = "1. Permitir sobreposição"
             setOnClickListener {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName")
-                    )
-                )
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             }
         }, buttonParams())
 
@@ -89,7 +133,7 @@ class MainActivity : Activity() {
         }, buttonParams())
 
         root.addView(TextView(this).apply {
-            text = "Na primeira execução o Android pedirá autorização para capturar a tela. O PvPPokeGo usa essa captura apenas para analisar visualmente a batalha e mantém a lógica separada do Pokémon GO."
+            text = "A captura é usada para leitura visual da batalha. O PvPPokeGo continua externo ao processo do Pokémon GO."
             setTextColor(Color.LTGRAY)
             textSize = 13f
             setPadding(0, dp(22), 0, 0)
@@ -103,6 +147,7 @@ class MainActivity : Activity() {
             updateStatus("Primeiro permita a sobreposição.")
             return
         }
+        @Suppress("DEPRECATION")
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQ_CAPTURE)
     }
 
@@ -120,11 +165,7 @@ class MainActivity : Activity() {
             putExtra(OverlayService.EXTRA_RESULT_CODE, resultCode)
             putExtra(OverlayService.EXTRA_RESULT_DATA, data)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(service)
-        } else {
-            startService(service)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(service) else startService(service)
         updateStatus("Overlay iniciado. Abra o Pokémon GO e entre na batalha.")
     }
 
@@ -135,8 +176,14 @@ class MainActivity : Activity() {
 
     private fun updateStatus(extra: String? = null) {
         val overlay = if (Settings.canDrawOverlays(this)) "OK" else "PENDENTE"
+        val leagueText = when (leaguePreference.mode) {
+            LeagueSelectionMode.AUTO -> leaguePreference.lastDetectedLeague?.let { "AUTO (${it.labelPtBr})" } ?: "AUTO"
+            LeagueSelectionMode.GREAT -> BattleLeague.GREAT.labelPtBr
+            LeagueSelectionMode.ULTRA -> BattleLeague.ULTRA.labelPtBr
+            LeagueSelectionMode.MASTER -> BattleLeague.MASTER.labelPtBr
+        }
         status.text = buildString {
-            append("Permissão de overlay: $overlay")
+            append("Permissão de overlay: $overlay\nLiga: $leagueText")
             if (!extra.isNullOrBlank()) append("\n$extra")
         }
     }
@@ -144,9 +191,7 @@ class MainActivity : Activity() {
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
-        }
+        ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
     }
 
     private fun fullWidth() = LinearLayout.LayoutParams(
@@ -161,7 +206,5 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    companion object {
-        private const val REQ_CAPTURE = 5001
-    }
+    companion object { private const val REQ_CAPTURE = 5001 }
 }
