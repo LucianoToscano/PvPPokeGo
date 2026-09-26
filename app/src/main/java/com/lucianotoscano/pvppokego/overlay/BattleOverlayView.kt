@@ -10,9 +10,11 @@ import android.graphics.Typeface
 import android.view.View
 import com.lucianotoscano.pvppokego.data.BattleUiState
 import com.lucianotoscano.pvppokego.data.ChargedPrediction
+import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
+import com.lucianotoscano.pvppokego.engine.TypeChart
 import kotlin.math.ceil
 import kotlin.math.min
 
@@ -20,6 +22,7 @@ import kotlin.math.min
 class BattleOverlayView(
     context: Context,
     private val settings: SettingsRepository,
+    private val gameRepo: GameDataRepository,
     private val callbacks: Callbacks
 ) : View(context) {
 
@@ -82,6 +85,7 @@ class BattleOverlayView(
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
         if (settings.showEnemyMoves) drawMoveTriangle(canvas)
+        if (state.chargedIncoming && settings.showEnemyMoves) drawShieldAdvice(canvas)
         if (settings.analyzeReserves) drawReserves(canvas)
         if (settings.showSwitchTimer) drawTimers(canvas)
         if (settings.editMode) drawResetAndCorrection(canvas)
@@ -146,13 +150,104 @@ class BattleOverlayView(
             drawMoveLabel(canvas,centerX,fastY+fastRadius+20f*u(),shortMoveName(m.name)+" ▼")
         }
         state.charged1?.let { p ->
-            val cx=centerX-spread; drawCharged(canvas,cx,chargedY,chargedRadius,p)
-            drawMoveLabel(canvas,cx,chargedY+chargedRadius+22f*u(),shortMoveName(p.move.name)+" ▼")
+            val cx=centerX-spread
+            drawCharged(canvas,cx,chargedY,chargedRadius,p)
+            val labelY=chargedY+chargedRadius+22f*u()
+            drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
+            drawEnemyEffectivenessText(canvas,cx,labelY+17f*u(),p.move)
         }
         state.charged2?.let { p ->
-            val cx=centerX+spread; drawCharged(canvas,cx,chargedY,chargedRadius,p)
-            drawMoveLabel(canvas,cx,chargedY+chargedRadius+22f*u(),shortMoveName(p.move.name)+" ▼")
+            val cx=centerX+spread
+            drawCharged(canvas,cx,chargedY,chargedRadius,p)
+            val labelY=chargedY+chargedRadius+22f*u()
+            drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
+            drawEnemyEffectivenessText(canvas,cx,labelY+17f*u(),p.move)
         }
+    }
+
+    private fun drawEnemyEffectivenessText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
+        val playerTypes = currentPlayerTypes()
+        if (playerTypes.isEmpty()) return
+        val multiplier = TypeChart.multiplier(move.type, playerTypes)
+        val (text, color) = when {
+            multiplier > 1.01 -> "SUPEREFICAZ" to Color.rgb(255, 210, 48)
+            multiplier < .99 -> "NÃO É MUITO EFICAZ" to Color.rgb(205, 209, 215)
+            else -> return
+        }
+        paint.color = hudColor(color)
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = if (multiplier > 1.01) 10.8f*u() else 8.5f*u()
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.setShadowLayer(3.2f,0f,1.2f,Color.BLACK)
+        canvas.drawText(text,x,y,paint)
+        paint.clearShadowLayer()
+    }
+
+    /**
+     * Shield advice is intentionally qualitative until exact live IV/level stats are known.
+     * It combines PvP move power and real GO type effectiveness, never inventing a fake HP %.
+     */
+    private fun drawShieldAdvice(canvas: Canvas) {
+        val playerTypes = currentPlayerTypes()
+        if (playerTypes.isEmpty()) return
+
+        val all = listOfNotNull(state.charged1, state.charged2)
+        if (all.isEmpty()) return
+        val plausible = all.filter { it.ready || it.progress >= .72f }.ifEmpty { all }
+        val threat = plausible.maxByOrNull { p ->
+            p.move.power.toDouble() * TypeChart.multiplier(p.move.type, playerTypes)
+        } ?: return
+
+        val eff = TypeChart.multiplier(threat.move.type, playerTypes)
+        val threatScore = threat.move.power.toDouble() * eff
+        val advice = when {
+            eff >= 1.5 || threatScore >= 100.0 -> ShieldAdvice(
+                title = "ESCUDO ✓",
+                detail = "${shortMoveName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}AMEAÇA ALTA",
+                color = Color.rgb(232, 61, 72)
+            )
+            eff <= .65 && threatScore < 70.0 -> ShieldAdvice(
+                title = "NÃO ESCUDAR",
+                detail = "${shortMoveName(threat.move.name)} • POUCO EFICAZ • AMEAÇA BAIXA",
+                color = Color.rgb(46, 188, 105)
+            )
+            threatScore >= 70.0 -> ShieldAdvice(
+                title = "ESCUDO?",
+                detail = "${shortMoveName(threat.move.name)} • AMEAÇA MÉDIA",
+                color = Color.rgb(245, 175, 52)
+            )
+            else -> ShieldAdvice(
+                title = "NÃO ESCUDAR",
+                detail = "${shortMoveName(threat.move.name)} • AMEAÇA BAIXA",
+                color = Color.rgb(46, 188, 105)
+            )
+        }
+
+        val centerX = rx(ENEMY_MOVE_CENTER_X)
+        val centerY = ry(592f)
+        val halfW = 142f*u()
+        val halfH = 31f*u()
+        val box = RectF(centerX-halfW, centerY-halfH, centerX+halfW, centerY+halfH)
+
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(Color.rgb(22, 27, 34), .90f)
+        canvas.drawRoundRect(box, 16f*u(), 16f*u(), paint)
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 2.4f*u()
+        stroke.color = hudColor(advice.color)
+        canvas.drawRoundRect(box, 16f*u(), 16f*u(), stroke)
+
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.color = hudColor(advice.color)
+        paint.textSize = 16f*u()
+        paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+        canvas.drawText(advice.title, centerX, centerY-4f*u(), paint)
+
+        paint.color = hudColor(Color.WHITE)
+        paint.textSize = 10.5f*u()
+        canvas.drawText(advice.detail, centerX, centerY+16f*u(), paint)
+        paint.clearShadowLayer()
     }
 
     private fun drawCharged(canvas: Canvas,cx: Float,cy: Float,radius: Float,prediction: ChargedPrediction) {
@@ -194,8 +289,6 @@ class BattleOverlayView(
     private fun drawReserves(canvas: Canvas) {
         val indicatorX=rx(827f); val firstY=ry(905f); val secondY=ry(1052f); val typeYDelta=ry(61f)
         state.reserves.take(2).forEachIndexed { index,reserve ->
-            // Visibility mirrors the corresponding native card. When GO removes a fainted card,
-            // no PvPPokeGo indicator/type chip remains floating in that slot.
             if (!reserve.visible) return@forEachIndexed
             val cardCenterY=if(index==0) firstY else secondY
             drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,14.5f*u())
@@ -236,6 +329,10 @@ class BattleOverlayView(
         paint.style=Paint.Style.FILL; paint.color=hudColor(Color.WHITE); val path=TypeGlyphPaths.build(type,cx,cy,size*1.18f)
         if(path!=null){canvas.drawPath(path,paint);return}; paint.textAlign=Paint.Align.CENTER; paint.textSize=size*1.05f; paint.typeface=Typeface.DEFAULT_BOLD; canvas.drawText(type.take(1).uppercase().ifBlank{"?"},cx,cy+size*.35f,paint)
     }
+
+    private fun currentPlayerTypes(): List<String> = gameRepo.pokemon(state.playerName)?.types.orEmpty()
+
+    private data class ShieldAdvice(val title: String, val detail: String, val color: Int)
 
     private fun shortMoveName(name:String)=if(name.length<=19) name else name.take(18)+"…"
     private fun hudColor(color:Int,multiplier:Float=1f):Int { val a=(hudAlpha*multiplier).toInt().coerceIn(0,255); return Color.argb(a,Color.red(color),Color.green(color),Color.blue(color)) }
