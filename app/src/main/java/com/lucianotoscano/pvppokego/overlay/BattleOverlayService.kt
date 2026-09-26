@@ -40,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.Normalizer
 import kotlin.math.min
 
 class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
@@ -64,6 +65,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var hudCollapsed = false
     private var appUiVisible = false
 
+    // The HUD should exist only while a real PvP battle UI is present. Frame detection provides
+    // the two HP-bar anchors; OCR battle text extends the grace period through Charged/shield UI.
+    private var battleActive = false
+    private var lastBattleEvidenceAtMs = 0L
+
     override fun onCreate() {
         super.onCreate()
         settingsRepo = SettingsRepository(this)
@@ -78,6 +84,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             ACTION_RESET -> {
                 engine?.resetBattle()
                 frameDetector?.reset()
+                battleActive = false
+                lastBattleEvidenceAtMs = 0L
                 dismissMoveMenu()
                 redraw()
                 return START_STICKY
@@ -244,12 +252,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START }
 
-    /**
-     * Poke-Genie-like move picker: colored type rows, rank order and the PvP values that matter.
-     * It is our own overlay UI and does not send any input to Pokemon GO.
-     */
+    /** Compact, translucent submenu for changing the enemy move without covering the battle. */
     private fun showMoveMenu(kind: MoveKind) {
-        if (hudCollapsed || appUiVisible) return
+        if (hudCollapsed || appUiVisible || !battleActive) return
         val wm = windowManager ?: return
         val e = engine ?: return
         val options = when (kind) {
@@ -273,8 +278,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            background = roundedBackground(Color.argb(246, 20, 24, 31), Color.argb(220, 225, 230, 238), 18f*density, dp(1))
+            setPadding(dp(7), dp(6), dp(7), dp(7))
+            background = roundedBackground(
+                Color.argb(168, 18, 22, 28),
+                Color.argb(110, 225, 230, 238),
+                13f * density,
+                dp(1)
+            )
         }
 
         val header = LinearLayout(this).apply {
@@ -282,12 +292,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             gravity = Gravity.CENTER_VERTICAL
         }
         val title = TextView(this).apply {
-            text = when (kind) {
-                MoveKind.FAST -> "SELECIONAR ATAQUE RÁPIDO"
-                else -> "SELECIONAR ATAQUE CARREGADO"
-            }
+            text = if (kind == MoveKind.FAST) "ATAQUE RÁPIDO" else "ATAQUE CARREGADO"
             setTextColor(Color.WHITE)
-            textSize = 15f
+            textSize = 12.5f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -295,27 +302,28 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             text = "✕"
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = 20f
-            setPadding(dp(12), dp(4), dp(6), dp(4))
+            textSize = 16f
+            setPadding(dp(8), 0, dp(2), 0)
             isClickable = true
             setOnClickListener { dismissMoveMenu() }
         }
-        header.addView(title); header.addView(close)
+        header.addView(title)
+        header.addView(close)
         panel.addView(header)
 
         panel.addView(TextView(this).apply {
-            text = "Cores por tipo • ordem pelo ranking PvP • toque para trocar"
-            setTextColor(Color.rgb(178, 185, 196))
-            textSize = 10.5f
-            setPadding(0, dp(2), 0, dp(8))
+            text = "PvP • toque para trocar"
+            setTextColor(Color.argb(210, 210, 215, 224))
+            textSize = 8.5f
+            setPadding(0, 0, 0, dp(4))
         })
 
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         addMoveMenuRow(
             parent = list,
-            title = "AUTOMÁTICO  •  PvPoke/OCR",
-            detail = "Usa o moveset mais provável e aprende o golpe observado.",
+            title = "AUTO • PvPoke/OCR",
+            detail = "moveset provável + aprendizado OCR",
             baseColor = Color.rgb(74, 82, 96),
             selected = false
         ) {
@@ -324,19 +332,20 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 MoveKind.CHARGED_1 -> e.clearChargedManualOverride(0)
                 MoveKind.CHARGED_2 -> e.clearChargedManualOverride(1)
             }
-            frameDetector?.reset(); dismissMoveMenu(); redraw()
+            frameDetector?.reset()
+            dismissMoveMenu()
+            redraw()
         }
 
         options.forEachIndexed { index, move ->
             val detail = if (kind == MoveKind.FAST) {
-                val turns = move.turns
-                "${move.type.uppercase()}  •  Poder ${move.power}  •  +${move.energyGain} energia  •  $turns turno${if (turns == 1) "" else "s"}"
+                "${move.type.uppercase()} • ${move.power} DMG • +${move.energyGain}E • ${move.turns}T"
             } else {
-                "${move.type.uppercase()}  •  Poder ${move.power}  •  Custo ${move.chargedCost} energia"
+                "${move.type.uppercase()} • ${move.power} DMG • ${move.chargedCost}E"
             }
             addMoveMenuRow(
                 parent = list,
-                title = "TOP #${index + 1}   ${move.name}",
+                title = "#${index + 1} ${move.name}",
                 detail = detail,
                 baseColor = moveTypeColor(move.type),
                 selected = move.moveId == selectedId
@@ -346,7 +355,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     MoveKind.CHARGED_1 -> e.selectCharged1(move)
                     MoveKind.CHARGED_2 -> e.selectCharged2(move)
                 }
-                frameDetector?.reset(); dismissMoveMenu(); redraw()
+                frameDetector?.reset()
+                dismissMoveMenu()
+                redraw()
             }
         }
 
@@ -356,10 +367,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
         panel.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        val width = min((metrics.widthPixels * .92f).toInt(), dp(430))
+        val width = min((metrics.widthPixels * .70f).toInt(), dp(325))
         val estimatedRows = (options.size + 1).coerceAtMost(7)
-        val desiredHeight = dp(74 + estimatedRows * 70)
-        val height = min(desiredHeight, (metrics.heightPixels * .68f).toInt())
+        val desiredHeight = dp(48 + estimatedRows * 51)
+        val height = min(desiredHeight, (metrics.heightPixels * .52f).toInt())
         val params = WindowManager.LayoutParams(
             width,
             height,
@@ -371,7 +382,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = (metrics.widthPixels - width) / 2
-            y = (metrics.heightPixels * .15f).toInt()
+            y = (metrics.heightPixels * .26f).toInt()
         }
 
         moveMenuView = panel
@@ -387,31 +398,33 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         onTap: () -> Unit
     ) {
         val d = resources.displayMetrics.density
-        fun dp(v: Int): Int = (v*d).toInt()
-        val rowColor = darken(baseColor, .54f)
+        fun dp(v: Int): Int = (v * d).toInt()
+        val rgb = darken(baseColor, .60f)
+        val rowColor = withAlpha(rgb, 78) // ~30%: color hint without becoming a large opaque card.
+        val border = if (selected) Color.argb(220, 255, 255, 255) else withAlpha(baseColor, 125)
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(9), dp(12), dp(9))
-            background = roundedBackground(rowColor, if (selected) Color.WHITE else baseColor, 13f*d, if (selected) dp(2) else dp(1))
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+            background = roundedBackground(rowColor, border, 9f * d, if (selected) dp(2) else dp(1))
             isClickable = true
             setOnClickListener { onTap() }
         }
         row.addView(TextView(this).apply {
-            text = (if (selected) "✓  " else "") + title
+            text = (if (selected) "✓ " else "") + title
             setTextColor(Color.WHITE)
-            textSize = 14f
+            textSize = 11.5f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             maxLines = 1
         })
         row.addView(TextView(this).apply {
             text = detail
-            setTextColor(Color.rgb(234, 237, 242))
-            textSize = 10.5f
-            setPadding(0, dp(3), 0, 0)
-            maxLines = 2
+            setTextColor(Color.argb(225, 238, 241, 246))
+            textSize = 9f
+            setPadding(0, dp(1), 0, 0)
+            maxLines = 1
         })
         parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = dp(7)
+            bottomMargin = dp(4)
         })
     }
 
@@ -422,6 +435,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             cornerRadius = radius
             setStroke(strokeWidth, strokeColor)
         }
+
+    private fun withAlpha(color: Int, alpha: Int): Int = Color.argb(
+        alpha.coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color)
+    )
 
     private fun darken(color: Int, factor: Float): Int = Color.rgb(
         (Color.red(color) * factor).toInt().coerceIn(0, 255),
@@ -446,6 +463,18 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val view = moveMenuView ?: return
         runCatching { windowManager?.removeView(view) }
         moveMenuView = null
+    }
+
+    private fun markBattleEvidence(now: Long) {
+        lastBattleEvidenceAtMs = now
+        battleActive = true
+    }
+
+    private fun battleTextLooksActive(raw: String): Boolean {
+        if (raw.isBlank()) return false
+        val normalized = Normalizer.normalize(raw.lowercase(), Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+        return BATTLE_TEXT_MARKERS.any(normalized::contains)
     }
 
     private fun startScanLoop() {
@@ -482,8 +511,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         if (settingsRepo.autoRecognition && e != null) {
                             val event = frameDetector?.analyze(frame, e.currentFastDurationMs(), now)
                             if (event != null) {
-                                e.onReserveSlotsDetected(event.reserve1Visible, event.reserve2Visible)
-                                e.onFastDetected(event.fastMoveCount, event.confidence, event.source, event.hpRatio, event.motion)
+                                if (event.battleUiVisible) markBattleEvidence(now)
+                                if (battleActive || event.battleUiVisible) {
+                                    e.onReserveSlotsDetected(event.reserve1Visible, event.reserve2Visible)
+                                }
+                                if (event.fastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
+                                    e.onFastDetected(event.fastMoveCount, event.confidence, event.source, event.hpRatio, event.motion)
+                                }
                             }
                         }
 
@@ -491,6 +525,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             val d = detector?.detect(frame)
                             e = engine
                             if (d != null && e != null) {
+                                if ((d.player != null && d.opponent != null) || battleTextLooksActive(d.battleText)) {
+                                    markBattleEvidence(now)
+                                }
                                 val changes = e.onDetection(d)
                                 if (changes.playerChanged || changes.enemyChanged) frameDetector?.reset()
                                 val textEvent = e.onBattleText(d.battleText, now)
@@ -512,7 +549,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         if (engine?.maybeConfirmPendingCharged(now) == true) {
+                            markBattleEvidence(now)
                             frameDetector?.freezeForCharged(now, 1_800L)
+                        }
+
+                        if (battleActive && now - lastBattleEvidenceAtMs > BATTLE_VISIBILITY_GRACE_MS) {
+                            battleActive = false
                         }
 
                         consecutiveErrors = 0
@@ -545,7 +587,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     private fun redraw() {
         val view = overlayView ?: return
-        val enabled = settingsRepo.overlayEnabled && !appUiVisible
+        val enabled = settingsRepo.overlayEnabled && !appUiVisible && battleActive
         view.visibility = if (enabled) View.VISIBLE else View.GONE
         view.setCollapsed(hudCollapsed)
 
@@ -564,10 +606,16 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onCharged1Tapped() { showMoveMenu(MoveKind.CHARGED_1) }
     override fun onCharged2Tapped() { showMoveMenu(MoveKind.CHARGED_2) }
     override fun onResetTapped() {
-        engine?.resetBattle(); frameDetector?.reset(); dismissMoveMenu(); redraw()
+        engine?.resetBattle()
+        frameDetector?.reset()
+        battleActive = false
+        lastBattleEvidenceAtMs = 0L
+        dismissMoveMenu()
+        redraw()
     }
     override fun onManualFastDelta(delta: Int) {
-        engine?.manualFastDelta(delta); redraw()
+        engine?.manualFastDelta(delta)
+        redraw()
     }
     override fun onMoveSelected(kind: BattleOverlayView.MoveKind, move: MoveDef) {
         when (kind) {
@@ -575,7 +623,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             BattleOverlayView.MoveKind.CHARGED_1 -> engine?.selectCharged1(move)
             BattleOverlayView.MoveKind.CHARGED_2 -> engine?.selectCharged2(move)
         }
-        frameDetector?.reset(); dismissMoveMenu(); redraw()
+        frameDetector?.reset()
+        dismissMoveMenu()
+        redraw()
     }
 
     private fun notification(text: String): Notification {
@@ -605,9 +655,18 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         runCatching { charged1Touch?.let { windowManager?.removeView(it) } }
         runCatching { charged2Touch?.let { windowManager?.removeView(it) } }
         runCatching { hudToggleTouch?.let { windowManager?.removeView(it) } }
-        overlayView = null; fastTouch = null; charged1Touch = null; charged2Touch = null; hudToggleTouch = null
-        detector?.close(); detector = null; frameDetector = null
-        capture?.stop(); capture = null; projection?.stop(); projection = null
+        overlayView = null
+        fastTouch = null
+        charged1Touch = null
+        charged2Touch = null
+        hudToggleTouch = null
+        detector?.close()
+        detector = null
+        frameDetector = null
+        capture?.stop()
+        capture = null
+        projection?.stop()
+        projection = null
         settingsRepo.overlayServiceRunning = false
         scope.cancel()
         super.onDestroy()
@@ -636,6 +695,17 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         private const val OCR_INTERVAL_MS = 520L
         private const val TEAM_OCR_INTERVAL_MS = 1_650L
         private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
+        private const val BATTLE_VISIBILITY_GRACE_MS = 3_800L
         private val SUPPORTED_LEAGUE_CPS = setOf(1500, 2500, 10000)
+        private val BATTLE_TEXT_MARKERS = listOf(
+            "usou ",
+            "quer usar um escudo",
+            "escudo protetor",
+            "bloqueado",
+            "supereficaz",
+            "nao e muito eficaz",
+            "quer trocar por um pokemon",
+            "agora nao"
+        )
     }
 }
