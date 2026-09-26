@@ -67,7 +67,8 @@ data class ReserveState(
     val name: String?,
     val cp: Int?,
     val types: List<String>,
-    val matchup: MatchupState
+    val matchup: MatchupState,
+    val visible: Boolean = true
 )
 
 data class BattlePokemonState(

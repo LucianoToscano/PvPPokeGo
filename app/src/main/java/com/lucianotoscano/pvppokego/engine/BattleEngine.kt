@@ -35,6 +35,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var charge2: MoveDef? = null
 
     private val ownTeam = linkedMapOf<String, Int?>()
+    private val reserveSlotVisible = arrayOfNulls<Boolean>(2)
     private var chargedPendingSinceMs: Long? = null
     private var lastChargedConfirmedAtMs: Long = 0L
     private var ignoreFastUntilMs: Long = 0L
@@ -54,6 +55,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         charge1 = null
         charge2 = null
         ownTeam.clear()
+        reserveSlotVisible.fill(null)
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = 0L
         ignoreFastUntilMs = 0L
@@ -80,8 +82,11 @@ class BattleEngine(private val repo: GameDataRepository) {
             if (!canonical.equals(enemyName, ignoreCase = true)) onEnemyChanged(canonical)
         }
 
+        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
+        if (playerChanged) reserveSlotVisible.fill(null)
+
         return DetectionChanges(
-            playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true),
+            playerChanged = playerChanged,
             enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
         )
     }
@@ -91,6 +96,12 @@ class BattleEngine(private val repo: GameDataRepository) {
             val canonical = repo.canonicalPokemonName(p.name) ?: p.name
             if (!canonical.equals(enemyName, ignoreCase = true)) rememberOwnPokemon(canonical, p.cp)
         }
+    }
+
+    /** Native reserve card visibility comes from their own small HP bars on the right side. */
+    fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
+        if (firstVisible != null) reserveSlotVisible[0] = firstVisible
+        if (secondVisible != null) reserveSlotVisible[1] = secondVisible
     }
 
     fun needsOwnTeamScan(): Boolean = ownTeam.size < 3
@@ -201,9 +212,6 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastMotion = motion
         if (count <= 0) return
 
-        // Charged damage/animation must never be mistaken for another Fast Move. The visual frame
-        // detector also freezes, but this domain-level guard protects energy even if OCR and frame
-        // sampling arrive in a different order.
         if (System.currentTimeMillis() < ignoreFastUntilMs) {
             lastAutoSource = "charged-guard"
             return
@@ -214,14 +222,12 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveActiveState()
     }
 
-    /** Manual/known charged move. */
     fun chargedUsed(move: MoveDef): Boolean {
         val ok = tracker.onChargedMove(move)
         if (ok) recordChargedMove(move, observed = false)
         return ok
     }
 
-    /** Exact visual confirmation from Pokemon GO battle text. */
     private fun observedChargedUsed(move: MoveDef, nowMs: Long = System.currentTimeMillis()): Boolean {
         tracker.onObservedChargedMove(move)
         recordChargedMove(move, observed = true)
@@ -270,11 +276,6 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
     }
 
-    /**
-     * Reads banners such as "Nidoqueen usou Poder da Terra!". Once the exact move is known,
-     * its PvP energy cost is subtracted immediately and both charged progress circles recalculate
-     * from the same residual energy, exactly as in Pokemon GO.
-     */
     fun onBattleText(raw: String, nowMs: Long = System.currentTimeMillis()): BattleTextResult {
         if (raw.isBlank()) return BattleTextResult()
         val text = normalizeText(raw)
@@ -303,8 +304,6 @@ class BattleEngine(private val repo: GameDataRepository) {
                 return BattleTextResult(newPrompt, false)
             }
 
-            // The game clearly said a move was used but OCR missed part of its name. Mark a pending
-            // charged event so the conservative fallback can still spend energy shortly afterward.
             if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
@@ -314,7 +313,6 @@ class BattleEngine(private val repo: GameDataRepository) {
         return BattleTextResult(newPrompt, false)
     }
 
-    /** Conservative fallback when the exact move-name banner could not be read. */
     fun maybeConfirmPendingCharged(nowMs: Long = System.currentTimeMillis()): Boolean {
         val since = chargedPendingSinceMs ?: return false
         if (nowMs - since < PENDING_CONFIRM_DELAY_MS) return false
@@ -354,9 +352,15 @@ class BattleEngine(private val repo: GameDataRepository) {
         val reserveStates = ownTeam.entries
             .filterNot { it.key.equals(playerName, ignoreCase = true) }
             .take(2)
-            .map { (name, cp) ->
+            .mapIndexed { index, (name, cp) ->
                 val types = repo.pokemon(name)?.types.orEmpty()
-                ReserveState(name, cp, types, classify(types, eTypes))
+                ReserveState(
+                    name = name,
+                    cp = cp,
+                    types = types,
+                    matchup = classify(types, eTypes),
+                    visible = reserveSlotVisible.getOrNull(index) != false
+                )
             }
 
         return BattleUiState(
@@ -380,9 +384,9 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.energy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
                 appendLine("HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"} | movimento=${"%.1f".format(lastMotion)}")
+                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
-                appendLine("Observados=${s?.observedChargedMoveIds?.joinToString().orEmpty()}")
                 append("Charged pendente=${chargedPendingSinceMs != null}")
             } else null
         )
