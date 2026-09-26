@@ -8,6 +8,34 @@ Este documento registra as decisões visuais que NÃO devem ser perdidas em vers
 
 A base visual aprovada é o HUD compacto mostrado nos mockups do projeto. Novas funções devem ser adicionadas por cima dessa base sem redesenhar toda a interface e sem remover funções já existentes.
 
+## REFERÊNCIA FINAL APROVADA — 2026-09-26 09:04 (UTC-03)
+
+A imagem enviada pelo proprietário do projeto nesta data passa a ser a **referência visual final/canônica** para o resultado do overlay em batalha.
+
+Características que devem permanecer iguais ao aprovado:
+
+- canvas de referência: `864 x 1536`;
+- indicador de matchup do Pokémon atual no canto superior esquerdo;
+- botão vermelho `×` imediatamente ao lado do indicador;
+- tipos fortes contra o inimigo alinhados no topo, à direita, antes da seta `›`;
+- tipos do oponente após a seta, alinhados ao HUD nativo;
+- Fast Move inimigo em círculo no topo do triângulo, com nome e `▼` abaixo;
+- dois Charged Moves inimigos abaixo, esquerda/direita, com nome e `▼`;
+- Charged Move com preenchimento de energia **de baixo para cima**, ficando escuro na parte ainda não carregada;
+- contador numérico em bolha junto ao Charged, mostrando quantos Fast Moves faltam;
+- reservas do usuário permanecem junto às cartas nativas da direita;
+- cada reserva mostra indicador de matchup (`✓`, `•` ou `×`) e seus tipos logo abaixo;
+- botão discreto de ocultar/mostrar overlay com ícone de olho riscado na região inferior central, sem cobrir os Charged Moves do usuário;
+- o overlay não deve cobrir nome/CP, Pokébolas, escudos, HP, botões de ataque do jogador ou área importante de toque;
+- o visual deve parecer integrado ao HUD do Pokémon GO, sem painel central grande.
+
+Identificação da imagem de referência original enviada no chat:
+
+- resolução: `864 x 1536`;
+- SHA-256: `d4a91442fd160b041832643ec3c2d4810be9e1e802f64b76ca797d1733cd5ccb`.
+
+**Regra de regressão visual:** qualquer alteração futura no overlay deve ser comparada com esta referência antes de ser considerada concluída. Se uma função nova deslocar, remover ou substituir esses elementos, a alteração deve ser corrigida em vez de redefinir o layout.
+
 ## Topo da batalha
 
 Referência 864x1536:
@@ -71,12 +99,12 @@ Para cada reserva conhecida:
 
 ## Ocultar / restaurar HUD
 
-O HUD deve ter um botão vermelho `×` pequeno no topo esquerdo para ocultar a interface durante a batalha.
+O HUD deve ter um botão vermelho `×` pequeno no topo esquerdo e também preservar o controle discreto de olho riscado mostrado na referência final para ocultar/mostrar a interface sem atrapalhar a batalha.
 
 Quando oculto:
 
 - todos os elementos e áreas de toque do overlay desaparecem;
-- fica somente um pequeno botão/bubble do PvPPokeGo para restaurar o HUD;
+- fica somente o controle mínimo necessário para restaurar o HUD;
 - a batalha continua sendo analisada normalmente em segundo plano;
 - o overlay não pode bloquear os toques do Pokémon GO.
 
@@ -93,4 +121,4 @@ podem receber toque.
 
 ## Continuidade
 
-Não substituir este layout por painel central grande. Não reposicionar os elementos sem comparar com as referências aprovadas. Novos recursos como Battle Brain, timing, Sac Swap, Win Condition, timers, confiança e recorder devem entrar de forma adaptativa/minimalista, preservando este contrato visual.
+Não substituir este layout por painel central grande. Não reposicionar os elementos sem comparar com a referência final aprovada. Novos recursos como Battle Brain, timing, Sac Swap, Win Condition, timers, confiança e recorder devem entrar de forma adaptativa/minimalista, preservando este contrato visual.
