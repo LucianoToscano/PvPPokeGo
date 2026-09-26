@@ -6,6 +6,7 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -13,8 +14,11 @@ import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.PopupMenu
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
@@ -56,6 +60,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var charged1Touch: View? = null
     private var charged2Touch: View? = null
     private var hudToggleTouch: View? = null
+    private var moveMenuView: View? = null
     private var hudCollapsed = false
     private var appUiVisible = false
 
@@ -73,11 +78,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             ACTION_RESET -> {
                 engine?.resetBattle()
                 frameDetector?.reset()
+                dismissMoveMenu()
                 redraw()
                 return START_STICKY
             }
             ACTION_APP_FOREGROUND -> {
                 appUiVisible = true
+                dismissMoveMenu()
                 redraw()
                 return START_STICKY
             }
@@ -143,7 +150,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (overlayView != null) return
         windowManager = getSystemService(WindowManager::class.java)
 
-        overlayView = BattleOverlayView(this, settingsRepo, this).also { view ->
+        overlayView = BattleOverlayView(this, settingsRepo, gameRepo, this).also { view ->
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -190,9 +197,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
 
         val centerX = BattleOverlayView.ENEMY_MOVE_CENTER_X
-        fastTouch = zone(centerX, 370f, 106f, 116f) { showNativeMoveMenu(MoveKind.FAST, it) }
-        charged1Touch = zone(centerX - 72f, 495f, 120f, 130f) { showNativeMoveMenu(MoveKind.CHARGED_1, it) }
-        charged2Touch = zone(centerX + 72f, 495f, 120f, 130f) { showNativeMoveMenu(MoveKind.CHARGED_2, it) }
+        fastTouch = zone(centerX, 370f, 106f, 116f) { showMoveMenu(MoveKind.FAST) }
+        charged1Touch = zone(centerX - 72f, 495f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_1) }
+        charged2Touch = zone(centerX + 72f, 495f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_2) }
     }
 
     private fun attachHudToggleTouch() {
@@ -210,9 +217,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val sx = metrics.widthPixels / 864f
         val sy = metrics.heightPixels / 1536f
         val unit = min(sx, sy) * (settingsRepo.scale / .8f).coerceIn(.62f, 1.5f)
-        val size = (58f * unit).toInt().coerceAtLeast(46)
-        val centerX = 432f * sx
-        val centerY = 1480f * sy
+        val size = (52f * unit).toInt().coerceAtLeast(44)
+        val centerX = BattleOverlayView.HUD_TOGGLE_CENTER_X * sx
+        val centerY = BattleOverlayView.HUD_TOGGLE_CENTER_Y * sy
         return smallTouchableParams(size, size).apply {
             x = (centerX - size / 2f).toInt()
             y = (centerY - size / 2f).toInt()
@@ -221,6 +228,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     private fun toggleHudCollapsed() {
         hudCollapsed = !hudCollapsed
+        dismissMoveMenu()
         overlayView?.setCollapsed(hudCollapsed)
         redraw()
     }
@@ -236,8 +244,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START }
 
-    private fun showNativeMoveMenu(kind: MoveKind, anchor: View) {
+    /**
+     * Poke-Genie-like move picker: colored type rows, rank order and the PvP values that matter.
+     * It is our own overlay UI and does not send any input to Pokemon GO.
+     */
+    private fun showMoveMenu(kind: MoveKind) {
         if (hudCollapsed || appUiVisible) return
+        val wm = windowManager ?: return
         val e = engine ?: return
         val options = when (kind) {
             MoveKind.FAST -> e.possibleFastMoves()
@@ -245,28 +258,194 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
         if (options.isEmpty()) return
 
-        PopupMenu(this, anchor).apply {
-            menu.add("Automático (PvPoke/OCR)").setOnMenuItemClickListener {
-                when (kind) {
-                    MoveKind.FAST -> e.clearFastManualOverride()
-                    MoveKind.CHARGED_1 -> e.clearChargedManualOverride(0)
-                    MoveKind.CHARGED_2 -> e.clearChargedManualOverride(1)
-                }
-                frameDetector?.reset(); redraw(); true
-            }
-            options.forEach { move ->
-                val detail = if (kind == MoveKind.FAST) "+${move.energyGain}E" else "${move.chargedCost}E"
-                menu.add("${move.name}  •  $detail").setOnMenuItemClickListener {
-                    when (kind) {
-                        MoveKind.FAST -> e.selectFast(move)
-                        MoveKind.CHARGED_1 -> e.selectCharged1(move)
-                        MoveKind.CHARGED_2 -> e.selectCharged2(move)
-                    }
-                    frameDetector?.reset(); redraw(); true
-                }
-            }
-            show()
+        dismissMoveMenu()
+
+        val metrics = resources.displayMetrics
+        val density = metrics.density
+        fun dp(v: Int): Int = (v * density).toInt()
+
+        val ui = e.uiState(false)
+        val selectedId = when (kind) {
+            MoveKind.FAST -> ui.fastMove?.moveId
+            MoveKind.CHARGED_1 -> ui.charged1?.move?.moveId
+            MoveKind.CHARGED_2 -> ui.charged2?.move?.moveId
         }
+
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = roundedBackground(Color.argb(246, 20, 24, 31), Color.argb(220, 225, 230, 238), 18f*density, dp(1))
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val title = TextView(this).apply {
+            text = when (kind) {
+                MoveKind.FAST -> "SELECIONAR ATAQUE RÁPIDO"
+                else -> "SELECIONAR ATAQUE CARREGADO"
+            }
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val close = TextView(this).apply {
+            text = "✕"
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            textSize = 20f
+            setPadding(dp(12), dp(4), dp(6), dp(4))
+            isClickable = true
+            setOnClickListener { dismissMoveMenu() }
+        }
+        header.addView(title); header.addView(close)
+        panel.addView(header)
+
+        panel.addView(TextView(this).apply {
+            text = "Cores por tipo • ordem pelo ranking PvP • toque para trocar"
+            setTextColor(Color.rgb(178, 185, 196))
+            textSize = 10.5f
+            setPadding(0, dp(2), 0, dp(8))
+        })
+
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        addMoveMenuRow(
+            parent = list,
+            title = "AUTOMÁTICO  •  PvPoke/OCR",
+            detail = "Usa o moveset mais provável e aprende o golpe observado.",
+            baseColor = Color.rgb(74, 82, 96),
+            selected = false
+        ) {
+            when (kind) {
+                MoveKind.FAST -> e.clearFastManualOverride()
+                MoveKind.CHARGED_1 -> e.clearChargedManualOverride(0)
+                MoveKind.CHARGED_2 -> e.clearChargedManualOverride(1)
+            }
+            frameDetector?.reset(); dismissMoveMenu(); redraw()
+        }
+
+        options.forEachIndexed { index, move ->
+            val detail = if (kind == MoveKind.FAST) {
+                val turns = move.turns
+                "${move.type.uppercase()}  •  Poder ${move.power}  •  +${move.energyGain} energia  •  $turns turno${if (turns == 1) "" else "s"}"
+            } else {
+                "${move.type.uppercase()}  •  Poder ${move.power}  •  Custo ${move.chargedCost} energia"
+            }
+            addMoveMenuRow(
+                parent = list,
+                title = "TOP #${index + 1}   ${move.name}",
+                detail = detail,
+                baseColor = moveTypeColor(move.type),
+                selected = move.moveId == selectedId
+            ) {
+                when (kind) {
+                    MoveKind.FAST -> e.selectFast(move)
+                    MoveKind.CHARGED_1 -> e.selectCharged1(move)
+                    MoveKind.CHARGED_2 -> e.selectCharged2(move)
+                }
+                frameDetector?.reset(); dismissMoveMenu(); redraw()
+            }
+        }
+
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(list, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        panel.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        val width = min((metrics.widthPixels * .92f).toInt(), dp(430))
+        val estimatedRows = (options.size + 1).coerceAtMost(7)
+        val desiredHeight = dp(74 + estimatedRows * 70)
+        val height = min(desiredHeight, (metrics.heightPixels * .68f).toInt())
+        val params = WindowManager.LayoutParams(
+            width,
+            height,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = (metrics.widthPixels - width) / 2
+            y = (metrics.heightPixels * .15f).toInt()
+        }
+
+        moveMenuView = panel
+        wm.addView(panel, params)
+    }
+
+    private fun addMoveMenuRow(
+        parent: LinearLayout,
+        title: String,
+        detail: String,
+        baseColor: Int,
+        selected: Boolean,
+        onTap: () -> Unit
+    ) {
+        val d = resources.displayMetrics.density
+        fun dp(v: Int): Int = (v*d).toInt()
+        val rowColor = darken(baseColor, .54f)
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = roundedBackground(rowColor, if (selected) Color.WHITE else baseColor, 13f*d, if (selected) dp(2) else dp(1))
+            isClickable = true
+            setOnClickListener { onTap() }
+        }
+        row.addView(TextView(this).apply {
+            text = (if (selected) "✓  " else "") + title
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            maxLines = 1
+        })
+        row.addView(TextView(this).apply {
+            text = detail
+            setTextColor(Color.rgb(234, 237, 242))
+            textSize = 10.5f
+            setPadding(0, dp(3), 0, 0)
+            maxLines = 2
+        })
+        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(7)
+        })
+    }
+
+    private fun roundedBackground(color: Int, strokeColor: Int, radius: Float, strokeWidth: Int): GradientDrawable =
+        GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(color)
+            cornerRadius = radius
+            setStroke(strokeWidth, strokeColor)
+        }
+
+    private fun darken(color: Int, factor: Float): Int = Color.rgb(
+        (Color.red(color) * factor).toInt().coerceIn(0, 255),
+        (Color.green(color) * factor).toInt().coerceIn(0, 255),
+        (Color.blue(color) * factor).toInt().coerceIn(0, 255)
+    )
+
+    private fun moveTypeColor(type: String): Int = when(type.lowercase()) {
+        "fairy" -> Color.rgb(239,153,230); "psychic" -> Color.rgb(250,137,131)
+        "fighting" -> Color.rgb(219,66,86); "rock" -> Color.rgb(206,193,141)
+        "fire" -> Color.rgb(251,165,75); "steel" -> Color.rgb(85,151,164)
+        "water" -> Color.rgb(91,166,224); "flying" -> Color.rgb(155,180,229)
+        "ghost" -> Color.rgb(99,111,191); "grass" -> Color.rgb(93,190,101)
+        "bug" -> Color.rgb(161,194,49); "ground" -> Color.rgb(214,133,85)
+        "ice" -> Color.rgb(125,212,200); "dark" -> Color.rgb(113,121,140)
+        "dragon" -> Color.rgb(7,115,200); "normal" -> Color.rgb(153,156,161)
+        "electric" -> Color.rgb(243,219,85); "poison" -> Color.rgb(178,98,204)
+        else -> Color.rgb(130,136,146)
+    }
+
+    private fun dismissMoveMenu() {
+        val view = moveMenuView ?: return
+        runCatching { windowManager?.removeView(view) }
+        moveMenuView = null
     }
 
     private fun startScanLoop() {
@@ -358,6 +537,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         engine = BattleEngine(gameRepo)
         frameDetector?.reset()
         withContext(Dispatchers.Main) {
+            dismissMoveMenu()
             startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
@@ -377,19 +557,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
         hudToggleTouch?.visibility = if (enabled) View.VISIBLE else View.GONE
+        if (!selectorsEnabled) dismissMoveMenu()
     }
 
-    override fun onFastMoveTapped() {
-        overlayView?.showMoveMenu(BattleOverlayView.MoveKind.FAST, engine?.possibleFastMoves().orEmpty())
-    }
-    override fun onCharged1Tapped() {
-        overlayView?.showMoveMenu(BattleOverlayView.MoveKind.CHARGED_1, engine?.possibleChargedMoves().orEmpty())
-    }
-    override fun onCharged2Tapped() {
-        overlayView?.showMoveMenu(BattleOverlayView.MoveKind.CHARGED_2, engine?.possibleChargedMoves().orEmpty())
-    }
+    override fun onFastMoveTapped() { showMoveMenu(MoveKind.FAST) }
+    override fun onCharged1Tapped() { showMoveMenu(MoveKind.CHARGED_1) }
+    override fun onCharged2Tapped() { showMoveMenu(MoveKind.CHARGED_2) }
     override fun onResetTapped() {
-        engine?.resetBattle(); frameDetector?.reset(); redraw()
+        engine?.resetBattle(); frameDetector?.reset(); dismissMoveMenu(); redraw()
     }
     override fun onManualFastDelta(delta: Int) {
         engine?.manualFastDelta(delta); redraw()
@@ -400,7 +575,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             BattleOverlayView.MoveKind.CHARGED_1 -> engine?.selectCharged1(move)
             BattleOverlayView.MoveKind.CHARGED_2 -> engine?.selectCharged2(move)
         }
-        frameDetector?.reset(); redraw()
+        frameDetector?.reset(); dismissMoveMenu(); redraw()
     }
 
     private fun notification(text: String): Notification {
@@ -424,6 +599,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     override fun onDestroy() {
         scanJob?.cancel()
+        dismissMoveMenu()
         runCatching { overlayView?.let { windowManager?.removeView(it) } }
         runCatching { fastTouch?.let { windowManager?.removeView(it) } }
         runCatching { charged1Touch?.let { windowManager?.removeView(it) } }
