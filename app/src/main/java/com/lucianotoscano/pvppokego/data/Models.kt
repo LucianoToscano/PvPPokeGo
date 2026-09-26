@@ -81,6 +81,10 @@ data class BattlePokemonState(
     var lastChargedMoveId: String? = null,
     var charge1Confirmed: Boolean = false,
     var charge2Confirmed: Boolean = false,
+    var fastMoveManual: Boolean = false,
+    var charge1Manual: Boolean = false,
+    var charge2Manual: Boolean = false,
+    var observedChargedMoveIds: MutableSet<String> = linkedSetOf(),
     var lastSeenAtMs: Long = 0L
 )
 
