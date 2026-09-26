@@ -1,7 +1,6 @@
 # PvPPokeGo
 
-Aplicativo Android de assistência PvP para Pokémon GO com overlay externo,
-contador de ataques e ferramentas de batalha.
+Aplicativo Android de assistência PvP para Pokémon GO com overlay externo, contador de ataques e ferramentas de batalha.
 
 ## Arquitetura em desenvolvimento
 
@@ -18,8 +17,7 @@ A integração usa o projeto PvPoke como fonte atualizável para:
 - custo de energia dos ataques carregados;
 - movesets/rankings de Grande, Ultra e Mestre.
 
-A batalha não depende de acesso ao site PvPoke. Os dados são convertidos antes
-da execução e usados localmente.
+A batalha não depende de acesso ao site PvPoke. Os dados são convertidos antes da execução e usados localmente.
 
 ### Memória dos três Pokémon inimigos
 
@@ -30,11 +28,17 @@ da execução e usados localmente.
 - ao voltar para a batalha o Pokémon recupera o estado anterior;
 - o slot só é encerrado quando o Pokémon desmaia ou a partida termina.
 
-### Meu time antes da batalha
+### Camada de visão com confiança
 
-`BattleSession` registra os três Pokémon detectados na tela pré-batalha. Os
-tipos vêm do repositório local e podem alimentar a assistência visual de
-fraquezas, resistências e vantagem de tipos.
+`core/src/main/kotlin/pvppokego/core/vision/VisionObservation.kt` implementa a primeira camada derivada da auditoria dos APKs:
+
+- observações OCR/visuais com confiança por campo;
+- `BattleFrameObservation` para cada frame;
+- `StableObservationReducer` para exigir confirmações antes de alterar o estado da batalha.
+
+Pipeline alvo:
+
+`captura -> ROI -> observações -> estabilização -> eventos -> BattleSession/BattleEnergyTracker -> decisão -> overlay`
 
 ## Estrutura atual
 
@@ -44,10 +48,12 @@ core/
     battle/
     data/
     model/
+    vision/
 
 data/pvpoke/
 docs/PVPOKE_INTEGRATION.md
 docs/APK_CROSS_REFERENCE_2026-09-25.md
+docs/APK_BASELINE_AND_IMPLEMENTATION_MAP_2026-09-26.md
 docs/PROJECT_CONTEXT_MEMORY.md
 tools/update_pvpoke_data.py
 THIRD_PARTY_NOTICES.md
@@ -63,16 +69,15 @@ Consulte `docs/PVPOKE_INTEGRATION.md` para o contrato completo de integração.
 
 ## Auditoria de APKs de referência
 
-A análise comparativa de Poke Genie, iPogo, Pokemod e Pokémon GO oficial está em
-`docs/APK_CROSS_REFERENCE_2026-09-25.md`. O documento registra quais ideias
-arquiteturais podem ser reimplementadas no PvPPokeGo e quais devem permanecer
-isoladas no projeto de recuperação.
+A análise comparativa e o baseline oficial corrigido estão em:
+
+- `docs/APK_CROSS_REFERENCE_2026-09-25.md`;
+- `docs/APK_BASELINE_AND_IMPLEMENTATION_MAP_2026-09-26.md`.
+
+O Pokémon GO oficial 0.429.1 recebido em APKM é usado apenas como baseline para distinguir funções do jogo base das adicionadas por terceiros.
 
 ## Memória técnica do projeto
 
-O contexto consolidado dos APKs analisados, funções candidatas, prioridades e
-regras de compartilhamento com o projeto de recuperação está em
-`docs/PROJECT_CONTEXT_MEMORY.md`.
+O contexto consolidado dos APKs analisados, funções candidatas, prioridades e regras de compartilhamento com PGLOT está em `docs/PROJECT_CONTEXT_MEMORY.md`.
 
-> O PvPPokeGo é uma ferramenta externa de assistência. O motor descrito aqui
-> não executa cliques, ataques, trocas ou injeção de código no Pokémon GO.
+> O PvPPokeGo é uma ferramenta externa de assistência. O core de batalha permanece separado de root/injeção/concealment e não depende de modificar o processo do Pokémon GO.
