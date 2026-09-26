@@ -81,7 +81,8 @@ class BattleOverlayView(
         }
 
         if (settings.showCurrentIndicator) {
-            drawMatchupIndicator(canvas, rx(78f), ry(TOP_ICON_Y), state.playerMatchup, 17.5f*u())
+            // Keep our current-Pokemon indicator beside, never over, GO's native portrait.
+            drawMatchupIndicator(canvas, rx(PLAYER_MATCHUP_X), ry(TOP_ICON_Y), state.playerMatchup, 17.5f*u())
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
         if (settings.showEnemyMoves) drawMoveTriangle(canvas)
@@ -94,21 +95,21 @@ class BattleOverlayView(
     }
 
     private fun drawVisibilityToggle(canvas: Canvas, hidden: Boolean) {
-        val cx = rx(432f); val cy = ry(1480f); val radius = 21f*u()
+        val cx = rx(HUD_TOGGLE_CENTER_X); val cy = ry(HUD_TOGGLE_CENTER_Y); val radius = 19f*u()
         paint.style = Paint.Style.FILL
-        paint.color = hudColor(Color.rgb(72,76,82), .90f)
+        paint.color = hudColor(Color.rgb(72,76,82), .88f)
         canvas.drawCircle(cx, cy, radius, paint)
         stroke.style = Paint.Style.STROKE
         stroke.strokeWidth = 1.5f*u()
-        stroke.color = hudColor(Color.WHITE, .65f)
+        stroke.color = hudColor(Color.WHITE, .68f)
         canvas.drawCircle(cx, cy, radius, stroke)
-        val eye = RectF(cx-10.5f*u(), cy-6.2f*u(), cx+10.5f*u(), cy+6.2f*u())
-        stroke.color = hudColor(Color.WHITE); stroke.strokeWidth = 2.2f*u()
+        val eye = RectF(cx-9.8f*u(), cy-5.6f*u(), cx+9.8f*u(), cy+5.6f*u())
+        stroke.color = hudColor(Color.WHITE); stroke.strokeWidth = 2.0f*u()
         canvas.drawOval(eye, stroke)
-        paint.color = hudColor(Color.WHITE); canvas.drawCircle(cx,cy,3.2f*u(),paint)
+        paint.color = hudColor(Color.WHITE); canvas.drawCircle(cx,cy,3f*u(),paint)
         if (!hidden) {
-            stroke.strokeWidth = 2.6f*u()
-            canvas.drawLine(cx-11.5f*u(),cy+10f*u(),cx+11.5f*u(),cy-10f*u(),stroke)
+            stroke.strokeWidth = 2.4f*u()
+            canvas.drawLine(cx-10.5f*u(),cy+9f*u(),cx+10.5f*u(),cy-9f*u(),stroke)
         }
     }
 
@@ -154,38 +155,35 @@ class BattleOverlayView(
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
-            drawEnemyEffectivenessText(canvas,cx,labelY+17f*u(),p.move)
+            drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
         state.charged2?.let { p ->
             val cx=centerX+spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
-            drawEnemyEffectivenessText(canvas,cx,labelY+17f*u(),p.move)
+            drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
     }
 
-    private fun drawEnemyEffectivenessText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
+    /** Mirrors GO's compact SUPEREFICAZ! feedback under the dangerous enemy Charged Move. */
+    private fun drawEnemySuperEffectiveText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
         val playerTypes = currentPlayerTypes()
         if (playerTypes.isEmpty()) return
-        val multiplier = TypeChart.multiplier(move.type, playerTypes)
-        val (text, color) = when {
-            multiplier > 1.01 -> "SUPEREFICAZ" to Color.rgb(255, 210, 48)
-            multiplier < .99 -> "NÃO É MUITO EFICAZ" to Color.rgb(205, 209, 215)
-            else -> return
-        }
-        paint.color = hudColor(color)
+        if (TypeChart.multiplier(move.type, playerTypes) <= 1.01) return
+        paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.CENTER
-        paint.textSize = if (multiplier > 1.01) 10.8f*u() else 8.5f*u()
+        paint.textSize = 10.8f*u()
         paint.typeface = Typeface.DEFAULT_BOLD
-        paint.setShadowLayer(3.2f,0f,1.2f,Color.BLACK)
-        canvas.drawText(text,x,y,paint)
+        paint.setShadowLayer(3.4f,0f,1.3f,Color.BLACK)
+        canvas.drawText("SUPEREFICAZ!",x,y,paint)
         paint.clearShadowLayer()
     }
 
     /**
-     * Shield advice is intentionally qualitative until exact live IV/level stats are known.
-     * It combines PvP move power and real GO type effectiveness, never inventing a fake HP %.
+     * Qualitative shield alert. Exact HP percentage is deliberately not invented because the
+     * overlay does not know exact live IV/level/defense; it uses real type effectiveness plus
+     * PvP move power and the enemy's current energy prediction.
      */
     private fun drawShieldAdvice(canvas: Canvas) {
         val playerTypes = currentPlayerTypes()
@@ -202,23 +200,23 @@ class BattleOverlayView(
         val threatScore = threat.move.power.toDouble() * eff
         val advice = when {
             eff >= 1.5 || threatScore >= 100.0 -> ShieldAdvice(
-                title = "ESCUDO ✓",
-                detail = "${shortMoveName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}AMEAÇA ALTA",
+                title = "USAR ESCUDO",
+                detail = "${shortMoveName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}DANO ALTO",
                 color = Color.rgb(232, 61, 72)
             )
             eff <= .65 && threatScore < 70.0 -> ShieldAdvice(
-                title = "NÃO ESCUDAR",
-                detail = "${shortMoveName(threat.move.name)} • POUCO EFICAZ • AMEAÇA BAIXA",
+                title = "PODE NÃO USAR",
+                detail = "${shortMoveName(threat.move.name)} • POUCO EFICAZ • DANO BAIXO",
                 color = Color.rgb(46, 188, 105)
             )
             threatScore >= 70.0 -> ShieldAdvice(
-                title = "ESCUDO?",
-                detail = "${shortMoveName(threat.move.name)} • AMEAÇA MÉDIA",
+                title = "ESCUDO OPCIONAL",
+                detail = "${shortMoveName(threat.move.name)} • DANO MÉDIO",
                 color = Color.rgb(245, 175, 52)
             )
             else -> ShieldAdvice(
-                title = "NÃO ESCUDAR",
-                detail = "${shortMoveName(threat.move.name)} • AMEAÇA BAIXA",
+                title = "PODE NÃO USAR",
+                detail = "${shortMoveName(threat.move.name)} • DANO BAIXO",
                 color = Color.rgb(46, 188, 105)
             )
         }
@@ -331,7 +329,6 @@ class BattleOverlayView(
     }
 
     private fun currentPlayerTypes(): List<String> = gameRepo.pokemon(state.playerName)?.types.orEmpty()
-
     private data class ShieldAdvice(val title: String, val detail: String, val color: Int)
 
     private fun shortMoveName(name:String)=if(name.length<=19) name else name.take(18)+"…"
@@ -341,7 +338,11 @@ class BattleOverlayView(
     }
 
     companion object {
-        private const val TOP_ICON_Y=11f
+        // Kept comfortably inside the real full-screen overlay so circles are never clipped.
+        private const val TOP_ICON_Y=44f
+        private const val PLAYER_MATCHUP_X=30f
+        const val HUD_TOGGLE_CENTER_X=432f
+        const val HUD_TOGGLE_CENTER_Y=44f
         const val ENEMY_MOVE_CENTER_X=558f
     }
 }
