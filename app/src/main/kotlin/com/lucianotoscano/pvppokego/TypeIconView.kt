@@ -12,13 +12,16 @@ class TypeIconView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : ImageView(context, attrs) {
 
-    fun setType(type: String?) {
+    fun setType(type: String?) = setAsset(type, "type_icons")
+    fun setTypeSymbol(type: String?) = setAsset(type, "type_symbols")
+
+    private fun setAsset(type: String?, folder: String) {
         if (type.isNullOrBlank()) {
             setImageDrawable(null)
             return
         }
         try {
-            val svg = SVG.getFromAsset(context.assets, "type_icons/${type.lowercase()}.svg")
+            val svg = SVG.getFromAsset(context.assets, "$folder/${type.lowercase()}.svg")
             setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             scaleType = ScaleType.CENTER_INSIDE
             setImageDrawable(PictureDrawable(svg.renderToPicture()))
