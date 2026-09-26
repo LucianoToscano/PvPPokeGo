@@ -1,184 +1,101 @@
-# Auditoria cruzada de APKs — 2026-09-25
+# Auditoria cruzada de APKs — atualizada em 2026-09-26
 
 Objetivo: registrar funções e padrões arquiteturais encontrados nos APKs fornecidos e decidir o que pode ser reimplementado de forma própria no PvPPokeGo.
 
 > Regra do projeto: usar os APKs como referência comportamental/arquitetural. Não copiar código proprietário, não remover licenças/premium e não implementar ocultação/bypass de anti-cheat.
 
-## Arquivos analisados
+## Baseline oficial correto
 
-| Artefato | SHA-256 | Papel na análise |
-|---|---|---|
-| Pokemod 13.3.4 | `2eafb8a85c700addcf7fd4aa96dc478688bf782004d749b4f80cec140332fd01` | referência de launcher, root/injeção, vPGP, contas e notificações |
-| iPogo 237 / Pokémon GO 0.429.1 | `561abbcd0ff23a343f5e85480f0736dea1ba71b4f55b0e512dc0472258e7d0e6` | referência de funções nativas integradas ao jogo |
-| Poke Genie 8.15.0 | `32b8a0b98ccc8d16b79411e81fcac4ef8471e785a4bf444a3014273ad908969b` | referência de overlay, OCR, IV/PvP e simulador |
-| Pokémon GO oficial 0.429.1 | `df4d00f24f4165063715eb7890fb331bc55acc04a12c090173e02c354832ac0c` | baseline para comparar o iPogo |
-| PVPPokeGo Source Phase1 | `922b08752549e380ca8f74654595da47e8223c8606a92eeca29abfb45eabdb42` | base editável atual |
+Pokémon GO oficial 0.429.1 foi recebido em APKM, package `com.nianticlabs.pokemongo`, versionCode `2026091602`, ARM64, Android 9+.
 
-## Descobertas confirmadas
+- APKM SHA-256: `af397f568a929d37e8c46d3cd9f6bdcf1a1a908bc18c4b85cebf17cf78251ad9`
+- `base.apk`: `5c6cc61a6752c42f6114845b45cb6d4d2568dbb9a7eab34af290706a86f8d29e`
+- split ARM64: `70364d9968ce14c4c5f450a99e76ca9f9491ba7732db7df2a5df540c58fd90c4`
 
-### Poke Genie — altamente aproveitável como referência para PvPPokeGo
+Correção: o SHA `df4d00f24f4165063715eb7890fb331bc55acc04a12c090173e02c354832ac0c` pertence ao PGSharp 1.271 sem root e ao arquivo LOT atual, que são byte-idênticos. Não é o hash do Pokémon GO oficial.
 
-O APK declara `SYSTEM_ALERT_WINDOW` e foreground service de `MEDIA_PROJECTION`, confirmando um modelo externo de captura + overlay semelhante ao adotado pelo PvPPokeGo.
+## Comparação nativa
 
-Classes/módulos encontrados diretamente no APK:
+O split ARM64 oficial possui 25 bibliotecas. Comparando com PGSharp 1.271 e iPogo 237, 24 são byte-idênticas e somente `libmain.so` difere.
 
-- `IVisionHelper`, `IVisionView` e `ACTION_STOP_IVISION`;
-- `OcrHelper`;
-- `OverlayMenuView`;
-- `BattleTeamOverlayView`;
-- `BattleSimulatorManager`;
-- `SimulationBestCounterActivity`, `SimulationAllMovesActivity`, `BreakpointActivity`;
-- módulo `PvPIV` com candidatos, chart e settings;
-- `MovesetActivity` e referência de efetividade de tipos;
-- módulos de histórico, rename, Pokédex e backup.
+| Build | `libmain.so` |
+|---|---:|
+| Pokémon GO oficial | 6.696 bytes |
+| PGSharp 1.271 | 38.247.680 bytes |
+| iPogo 237 | 16.234.824 bytes |
 
-### iPogo — funções nativas confirmadas
+Isso permite separar melhor funções oficiais de extensões adicionadas por mods.
 
-A comparação com o Pokémon GO oficial da mesma versão mostrou que o iPogo mantém praticamente a mesma estrutura Java e concentra alterações importantes no binário nativo `libmain.so`.
+## Descobertas relevantes
 
-Símbolos/strings exclusivos encontrados no `libmain.so` do iPogo:
+### Poke Genie — principal referência para PvPPokeGo
 
-- `setLocationNative`;
-- `set_autoconnectvgp`;
-- `set_shinyscanner`;
-- `set_skip_animations`;
-- `set_skip_team_leader`;
-- `set_skip_team_rocket`;
-- `set_fastmap`;
-- `set_boostspawn`;
-- `set_freezepokemon`;
-- `set_spin`;
-- `set_throw`;
-- `set_arplus`;
-- `set_challenge`;
-- `release_pokemon`;
-- `update_shinies`;
-- `get_player_stats`;
-- `individual_attack`, `individual_defense`, `individual_stamina`;
-- string `excellent`;
-- string `iPogo`.
+Confirmados no APK:
 
-Interpretação: existem hooks/bridges nativos para localização, captura/arremesso, mapa/spawn, shiny scanner, vGP, animações e rotinas de Team GO Rocket/Líder.
+- Tesseract OCR (`libtess.so`);
+- modelos OCR para texto e números;
+- `move_list.txt`, `move_pvp_data.txt`, `move_stats.txt`, `moveset_ranking_genie_v3.txt`;
+- layouts de `ivision_overlay`, `battle_team_overlay`, PvP IV e Battle Simulator;
+- estrutura de movesets, counters, raids e análise visual.
 
-### Pokemod — arquitetura de launcher/injetor confirmada
+Uso no projeto: captura/MediaProjection, OCR por ROI, confiança por campo, overlay modular, simulador, PvP IV, movesets e fallback por screenshot, todos por implementação própria.
 
-O APK contém:
+### PGSharp / iPogo
 
-- permissão `ACCESS_SUPERUSER`;
-- `SYSTEM_ALERT_WINDOW`, `MANAGE_EXTERNAL_STORAGE`, `QUERY_ALL_PACKAGES`, `REQUEST_INSTALL_PACKAGES`;
-- `assets/pokemod-injector`;
-- `assets/busybox-arm64`;
-- `assets/sqlite3-arm64`;
-- `assets/nostatusbar.zip`;
-- `libconceal.so` e `libfancier.so`;
-- serviço `com.pokemod.app.injector.HALService`;
-- `DataReceiver`, `InjectionResult` e `VpgpTelemetryData`.
+A comparação com o oficial confirma que recursos como `battleAssistant`, `enhancedThrowExcellent`, `instantRocket`, `set_shinyscanner`, `set_fastmap`, `set_skip_team_rocket` e `set_autoconnectvgp` pertencem às extensões/mods, não ao jogo base.
 
-Strings de interface confirmam:
+No PvPPokeGo, aproveitar apenas conceitos de observação, estado e assistência visual. Localização, VGP, farm e automação invasiva ficam fora do core.
 
-- Account Manager;
-- troca rápida de contas;
-- vPGP / Virtual Pokémon GO Plus;
-- Injection Settings / Injection Type / Injection Time;
-- Shiny Scanner notifications;
-- Teleport;
-- gravação/logs;
-- atualização automática do Pokémon GO;
-- Discord Rich Presence;
-- configurações avançadas/root/SELinux.
+### PGTools
 
-Observação: o launcher não contém necessariamente todo o código das funções de gameplay; parte pode ser entregue/carregada na etapa de injeção.
+Confirmou arquitetura modular de regras/filtros/stats. Aproveitar somente componentes genéricos: configuração, filtros, logging e modelos de estado.
 
-## O que incorporar no PvPPokeGo
+### Data Hub
 
-### Prioridade A — encaixa diretamente na arquitetura atual
+Confirmados `pokemons.json`, `gym_team.json`, `raidRatings.json` e `maxBattleRatings.json`. Usar como referência de schema, não como dependência binária.
 
-1. **Pipeline de captura com fallback**
-   - manter `MediaProjection` como principal;
-   - adicionar modo screenshot/manual quando a captura contínua falhar;
-   - diagnóstico claro de captura e permissão.
+### Pokemod / PGSRoot / Shungo
 
-2. **OCR especializado por tela/ROI**
-   - separar detector de nome/CP, detector de moveset, detector de energia/eventos e detector de reserva;
-   - normalização OCR números↔letras para nomes/CP;
-   - confiança por campo em vez de uma confiança global.
+Servem como referência de separação entre app/serviço/módulos privilegiados. O PvPPokeGo permanece externo ao processo do jogo, sem root, injeção ou concealment.
 
-3. **Overlay modular**
-   - menu pequeno independente do overlay passivo;
-   - módulos minimizáveis: inimigo, golpes, energia, reservas, tipos e debug;
-   - posição/escala persistentes.
+## O que incorporar
 
-4. **Battle Simulator local**
-   - engine independente da captura;
-   - comparar todos os movesets possíveis;
-   - breakpoint/bulkpoint básico;
-   - estimar dano/energia/turnos;
-   - servir tanto para recomendação pré-batalha quanto para overlay.
+### Prioridade A
 
-5. **PvP IV / candidatos**
-   - cálculo de rank por liga;
-   - melhor evolução elegível;
-   - nível/CP alvo;
-   - custo de poeira/doces;
-   - marcador de candidato PvP.
+1. pipeline de captura com fallback;
+2. OCR por ROI e por tipo de campo;
+3. confiança independente por leitura;
+4. estabilização multi-frame;
+5. overlay modular;
+6. Battle Simulator local;
+7. PvP IV/rank;
+8. moveset/type reference;
+9. histórico/debug;
+10. correção manual rápida.
 
-6. **Moveset reference**
-   - lista de golpes possíveis por Pokémon;
-   - legado/Elite quando aplicável;
-   - energia, dano, duração e DPE/DPT;
-   - type effectiveness local.
+### Implementação já iniciada
 
-### Prioridade B — útil depois da detecção principal
+`core/src/main/kotlin/pvppokego/core/vision/VisionObservation.kt` adiciona:
 
-7. **Histórico de batalha/diagnóstico**
-   - registrar apenas eventos derivados da captura: troca detectada, fast contado, charged confirmado, confiança e correções manuais;
-   - export JSON para depuração.
+- `FieldObservation<T>`;
+- `BattleFrameObservation`;
+- `StableObservation<T>`;
+- `StableObservationReducer<T>`.
 
-8. **Modo de correção rápida**
-   - botões `+1/-1 Fast`;
-   - seleção manual de Fast/Charged quando detector estiver inseguro;
-   - botão para confirmar charged usado;
-   - restauração do estado por inimigo ao retornar de uma troca.
+O objetivo é impedir que uma única leitura OCR ruim altere imediatamente o estado da batalha.
 
-9. **Perfis/layouts**
-   - salvar tamanho, posição, opacidade e módulos visíveis;
-   - perfil compacto para PvP e perfil detalhado para análise.
+## Fora do núcleo PvPPokeGo
 
-### Fora do núcleo PvPPokeGo
-
-As funções abaixo pertencem ao projeto de recuperação/mod completo, não ao assistente visual PvP:
-
-- alteração de localização/teleporte;
-- injeção/root/SELinux/concealment;
+- teleporte/localização;
+- injeção/root/concealment;
 - Virtual GO Plus interno;
-- fast map/boost spawn/freeze Pokémon;
-- skip de animações/Team Rocket/Líder via hook interno;
-- modificação do arremesso interno (`set_throw`).
+- farm/hunt;
+- fast map/boost spawn/freeze;
+- skip de animações/Rocket por hook;
+- modificação interna de arremesso.
 
-O PvPPokeGo deve continuar funcional sem modificar o processo do Pokémon GO.
+## Pipeline alvo
 
-## Mapa de reutilização
+`captura -> ROI -> observações com confiança -> estabilização -> eventos -> BattleSession/BattleEnergyTracker -> decisão -> overlay`
 
-| Função/padrão | Poke Genie | iPogo | Pokemod | PvPPokeGo destino |
-|---|---:|---:|---:|---|
-| MediaProjection + overlay | confirmado | n/a | overlay launcher | **incorporar** |
-| OCR de tela | confirmado | n/a | n/a | **incorporar** |
-| IV/PvP rank | confirmado | stats nativas | n/a | **incorporar** |
-| Battle simulator | confirmado | dados nativos | n/a | **incorporar** |
-| Moveset/type chart | confirmado | dados nativos | n/a | **incorporar** |
-| Shiny scanner | n/a | confirmado | notificações confirmadas | projeto recuperação |
-| vPGP | n/a | `set_autoconnectvgp` | confirmado | projeto recuperação |
-| Skip Rocket/Líder | n/a | confirmado | provável payload | projeto recuperação |
-| Throw helper | n/a | `set_throw`, `excellent` | provável payload | projeto recuperação |
-| Localização/teleporte | n/a | `setLocationNative` | Teleport UI | projeto recuperação |
-| Account Manager | n/a | n/a | confirmado | projeto recuperação |
-| Root/injetor | n/a | patch nativo | confirmado | **não incorporar no PvPPokeGo** |
-
-## Próximas implementações recomendadas no PvPPokeGo
-
-1. `CaptureHealthMonitor` + fallback screenshot.
-2. `BattleEventDetector` separado do OCR de nome/CP.
-3. `MoveCandidateResolver` com confiança e correção manual.
-4. `BattleSimulator` puro Kotlin, testável fora do Android.
-5. `PvPIvRankEngine` e tela de candidatos.
-6. `BattleHistoryStore` + export de diagnóstico.
+Mais detalhes em `docs/APK_BASELINE_AND_IMPLEMENTATION_MAP_2026-09-26.md`.
