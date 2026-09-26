@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.view.MotionEvent
 import android.view.View
 import com.lucianotoscano.pvppokego.data.BattleUiState
 import com.lucianotoscano.pvppokego.data.ChargedPrediction
@@ -20,8 +19,8 @@ import kotlin.math.min
 /**
  * Canonical PvPPokeGo battle HUD.
  *
- * Layout reference: 864x1536 approved battle mockup.
- * Important: elements are placed around the native Pokemon GO HUD and never replace it.
+ * The native Pokemon GO HUD is never replaced. Extra information is anchored around it and
+ * tuned against the approved 864x1536 reference layout.
  */
 class BattleOverlayView(
     context: Context,
@@ -40,12 +39,6 @@ class BattleOverlayView(
 
     enum class MoveKind { FAST, CHARGED_1, CHARGED_2 }
 
-    data class PopupState(
-        val kind: MoveKind,
-        val anchor: RectF,
-        val options: List<MoveDef>
-    )
-
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -59,14 +52,6 @@ class BattleOverlayView(
     private var hudAlpha = 255
     private var collapsed = false
 
-    private val hitFast = RectF()
-    private val hitCharge1 = RectF()
-    private val hitCharge2 = RectF()
-    private val hitReset = RectF()
-    private val hitMinus = RectF()
-    private val hitPlus = RectF()
-    private var popup: PopupState? = null
-
     fun render(newState: BattleUiState) {
         state = newState
         scaleFactor = settings.scale
@@ -76,28 +61,15 @@ class BattleOverlayView(
 
     fun setCollapsed(value: Boolean) {
         collapsed = value
-        if (value) popup = null
         invalidate()
     }
 
     fun isCollapsed(): Boolean = collapsed
 
-    fun showMoveMenu(kind: MoveKind, options: List<MoveDef>) {
-        if (collapsed) return
-        val anchor = when (kind) {
-            MoveKind.FAST -> hitFast
-            MoveKind.CHARGED_1 -> hitCharge1
-            MoveKind.CHARGED_2 -> hitCharge2
-        }
-        if (anchor.isEmpty || options.isEmpty()) return
-        popup = PopupState(kind, RectF(anchor), options.take(7))
-        invalidate()
-    }
-
-    fun dismissMenu() {
-        popup = null
-        invalidate()
-    }
+    // Native PopupMenu windows are used by BattleOverlayService, so these are intentionally
+    // lightweight compatibility hooks for the old callback surface.
+    fun showMoveMenu(kind: MoveKind, options: List<MoveDef>) = Unit
+    fun dismissMenu() = Unit
 
     private fun sx(): Float = width / 864f
     private fun sy(): Float = height / 1536f
@@ -108,7 +80,7 @@ class BattleOverlayView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Opacity is applied once. 100% means a fully solid foreground icon.
+        // Opacity is applied exactly once. 100% means fully solid foreground icons.
         hudAlpha = (255f * opacityFactor).toInt().coerceIn(76, 255)
         paint.alpha = 255
         stroke.alpha = 255
@@ -119,8 +91,6 @@ class BattleOverlayView(
             return
         }
 
-        // Current-Pokemon matchup icon sits on the SAME top line as the game's native icons,
-        // above the white name/CP card. It no longer overlaps the ally card or reserve cards.
         if (settings.showCurrentIndicator) {
             drawMatchupIndicator(
                 canvas = canvas,
@@ -139,7 +109,6 @@ class BattleOverlayView(
         if (settings.debugMode) drawDebug(canvas)
 
         drawVisibilityToggle(canvas, hidden = false)
-        popup?.let { drawPopup(canvas, it) }
     }
 
     /** Bottom-center eye/eye-slash control from the approved reference. */
@@ -201,7 +170,6 @@ class BattleOverlayView(
         paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = Typeface.DEFAULT_BOLD
-
         when (matchup) {
             MatchupState.FAVORABLE -> {
                 paint.textSize = 19f * u()
@@ -219,10 +187,7 @@ class BattleOverlayView(
         }
     }
 
-    /**
-     * Only weaknesses are added. Pokemon GO's own opponent-type icons remain untouched.
-     * The row is glued to the top and aligned with the native type row.
-     */
+    /** Only weaknesses are added; Pokemon GO's native opponent-type icons remain untouched. */
     private fun drawStrongTypes(canvas: Canvas) {
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isEmpty()) return
@@ -230,15 +195,15 @@ class BattleOverlayView(
         val radius = 16.5f * u()
         val y = ry(TOP_ICON_Y)
         val spacing = rx(39f)
-        val strongRight = rx(700f)
-        val arrowX = rx(738f)
+        // Slightly closer to the game's native right-side type row than the previous build.
+        val strongRight = rx(712f)
+        val arrowX = rx(750f)
 
         val firstStrong = strongRight - spacing * (strong.size - 1).coerceAtLeast(0)
         strong.forEachIndexed { index, type ->
             drawTypeChip(canvas, firstStrong + spacing * index, y, type, radius)
         }
 
-        // Separator only: the icons to the right belong to the game itself.
         paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = 21f * u()
@@ -248,8 +213,9 @@ class BattleOverlayView(
         paint.clearShadowLayer()
     }
 
+    /** Fast above, two charged below. Height is preserved; only horizontal center was corrected. */
     private fun drawMoveTriangle(canvas: Canvas) {
-        val centerX = rx(620f)
+        val centerX = rx(ENEMY_MOVE_CENTER_X)
         val fastY = ry(355f)
         val chargedY = ry(478f)
         val spread = rx(72f)
@@ -259,34 +225,22 @@ class BattleOverlayView(
         state.fastMove?.let { move ->
             drawMoveCircle(canvas, centerX, fastY, fastRadius, move)
             drawMoveLabel(canvas, centerX, fastY + fastRadius + 20f*u(), shortMoveName(move.name) + " ▼")
-            hitFast.set(
-                centerX-fastRadius-22f*u(), fastY-fastRadius-12f*u(),
-                centerX+fastRadius+22f*u(), fastY+fastRadius+42f*u()
-            )
-        } ?: hitFast.setEmpty()
+        }
 
         state.charged1?.let { prediction ->
             val cx = centerX - spread
             drawCharged(canvas, cx, chargedY, chargedRadius, prediction)
             drawMoveLabel(canvas, cx, chargedY + chargedRadius + 22f*u(), shortMoveName(prediction.move.name) + " ▼")
-            hitCharge1.set(
-                cx-chargedRadius-22f*u(), chargedY-chargedRadius-10f*u(),
-                cx+chargedRadius+22f*u(), chargedY+chargedRadius+44f*u()
-            )
-        } ?: hitCharge1.setEmpty()
+        }
 
         state.charged2?.let { prediction ->
             val cx = centerX + spread
             drawCharged(canvas, cx, chargedY, chargedRadius, prediction)
             drawMoveLabel(canvas, cx, chargedY + chargedRadius + 22f*u(), shortMoveName(prediction.move.name) + " ▼")
-            hitCharge2.set(
-                cx-chargedRadius-22f*u(), chargedY-chargedRadius-10f*u(),
-                cx+chargedRadius+22f*u(), chargedY+chargedRadius+44f*u()
-            )
-        } ?: hitCharge2.setEmpty()
+        }
     }
 
-    /** Enemy Charged Move fills from bottom to top like Pokemon GO. */
+    /** Enemy Charged Move fills from bottom to top from the shared tracked energy value. */
     private fun drawCharged(
         canvas: Canvas,
         cx: Float,
@@ -327,7 +281,6 @@ class BattleOverlayView(
         }
     }
 
-    /** Five compact progress dots replace the old numeric badge. */
     private fun drawChargeProgressDots(
         canvas: Canvas,
         cx: Float,
@@ -375,15 +328,13 @@ class BattleOverlayView(
     }
 
     /**
-     * Native reserve cards are never covered:
-     * - matchup indicator: right side, vertically centered on each gray card;
-     * - type icons: directly below each gray card.
+     * Native reserve cards stay untouched. Extra icons are anchored tightly to each card.
      */
     private fun drawReserves(canvas: Canvas) {
         val indicatorX = rx(827f)
-        val firstY = ry(928f)
-        val secondY = ry(1092f)
-        val typeYDelta = ry(68f)
+        val firstY = ry(905f)
+        val secondY = ry(1052f)
+        val typeYDelta = ry(61f)
 
         state.reserves.take(2).forEachIndexed { index, reserve ->
             val cardCenterY = if (index == 0) firstY else secondY
@@ -422,8 +373,6 @@ class BattleOverlayView(
         val y = ry(274f)
         val radius = 15f*u()
         val resetX = rx(22f)
-
-        hitReset.set(resetX-radius, y-radius, resetX+radius, y+radius)
         paint.color = hudColor(Color.rgb(45,45,45))
         canvas.drawCircle(resetX, y, radius, paint)
         stroke.color = hudColor(Color.WHITE)
@@ -436,9 +385,6 @@ class BattleOverlayView(
         val minusX = resetX
         val plusX = resetX + 38f*u()
         val correctionY = y + 40f*u()
-        hitMinus.set(minusX-radius, correctionY-radius, minusX+radius, correctionY+radius)
-        hitPlus.set(plusX-radius, correctionY-radius, plusX+radius, correctionY+radius)
-
         listOf(minusX to "−", plusX to "+").forEach { (x, glyph) ->
             paint.color = hudColor(Color.rgb(45,45,45))
             canvas.drawCircle(x, correctionY, radius, paint)
@@ -461,75 +407,12 @@ class BattleOverlayView(
         }
     }
 
-    private fun drawPopup(canvas: Canvas, popupState: PopupState) {
-        val itemHeight = 34f*u()
-        val popupWidth = min(240f*u(), width*.46f)
-        val left = (popupState.anchor.centerX()-popupWidth/2).coerceIn(4f, width-popupWidth-4f)
-        val top = (popupState.anchor.bottom+4f)
-            .coerceAtMost(height-popupState.options.size*itemHeight-8f)
-        val box = RectF(left, top, left+popupWidth, top+popupState.options.size*itemHeight)
-
-        paint.color = hudColor(Color.rgb(20,25,32), .94f)
-        canvas.drawRoundRect(box, 9f, 9f, paint)
-
-        popupState.options.forEachIndexed { index, move ->
-            val y = top + index*itemHeight
-            if (index > 0) {
-                paint.color = hudColor(Color.WHITE, .30f)
-                canvas.drawRect(left, y, left+popupWidth, y+1f, paint)
-            }
-            drawTypeChip(canvas, left+19f*u(), y+itemHeight/2, move.type, 9f*u())
-            paint.color = hudColor(Color.WHITE)
-            paint.textAlign = Paint.Align.LEFT
-            paint.textSize = 12f*u()
-            canvas.drawText(shortMoveName(move.name), left+37f*u(), y+21f*u(), paint)
-        }
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action != MotionEvent.ACTION_UP) return true
-        val x = event.x
-        val y = event.y
-
-        popup?.let { popupState ->
-            val itemHeight = 34f*u()
-            val popupWidth = min(240f*u(), width*.46f)
-            val left = (popupState.anchor.centerX()-popupWidth/2).coerceIn(4f, width-popupWidth-4f)
-            val top = (popupState.anchor.bottom+4f)
-                .coerceAtMost(height-popupState.options.size*itemHeight-8f)
-            if (x in left..(left+popupWidth) && y in top..(top+popupState.options.size*itemHeight)) {
-                val index = ((y-top)/itemHeight).toInt().coerceIn(0, popupState.options.lastIndex)
-                callbacks.onMoveSelected(popupState.kind, popupState.options[index])
-                popup = null
-                invalidate()
-                return true
-            }
-            popup = null
-            invalidate()
-            return true
-        }
-
-        when {
-            hitFast.contains(x,y) -> callbacks.onFastMoveTapped()
-            hitCharge1.contains(x,y) -> callbacks.onCharged1Tapped()
-            hitCharge2.contains(x,y) -> callbacks.onCharged2Tapped()
-            hitReset.contains(x,y) -> callbacks.onResetTapped()
-            hitMinus.contains(x,y) -> callbacks.onManualFastDelta(-1)
-            hitPlus.contains(x,y) -> callbacks.onManualFastDelta(1)
-            else -> return false
-        }
-        return true
-    }
-
     private fun drawTypeChip(canvas: Canvas, cx: Float, cy: Float, type: String, radius: Float) {
         paint.style = Paint.Style.FILL
         paint.color = hudColor(Color.rgb(29,34,45), .62f)
         canvas.drawCircle(cx, cy+1.5f*u(), radius+2.2f*u(), paint)
-
-        // Main chip uses the global opacity exactly once; at 100% it is fully solid.
         paint.color = hudColor(typeColor(type))
         canvas.drawCircle(cx, cy, radius, paint)
-
         stroke.color = hudColor(Color.WHITE, .92f)
         stroke.strokeWidth = 1.35f*u()
         canvas.drawCircle(cx, cy, radius, stroke)
@@ -582,7 +465,8 @@ class BattleOverlayView(
     }
 
     companion object {
-        // Top chips should touch the top edge visually and sit above the native white cards.
-        private const val TOP_ICON_Y = 19f
+        // Intentionally clips a few pixels like the native Pokemon GO top-row chips.
+        private const val TOP_ICON_Y = 11f
+        const val ENEMY_MOVE_CENTER_X = 558f
     }
 }

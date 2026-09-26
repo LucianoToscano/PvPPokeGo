@@ -52,8 +52,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var scanJob: Job? = null
     private var currentLeagueCp: Int = 1500
 
-    // Full HUD stays click-through. Only the three move selectors and the bottom eye button
-    // receive touch in their own tiny transparent windows.
+    // Full HUD stays click-through. Only the three move selectors and bottom eye button receive touch.
     private var fastTouch: View? = null
     private var charged1Touch: View? = null
     private var charged2Touch: View? = null
@@ -211,13 +210,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             return view
         }
 
-        fastTouch = zone(620f, 370f, 106f, 116f) {
+        val centerX = BattleOverlayView.ENEMY_MOVE_CENTER_X
+        fastTouch = zone(centerX, 370f, 106f, 116f) {
             showNativeMoveMenu(MoveKind.FAST, it)
         }
-        charged1Touch = zone(548f, 495f, 120f, 130f) {
+        charged1Touch = zone(centerX - 72f, 495f, 120f, 130f) {
             showNativeMoveMenu(MoveKind.CHARGED_1, it)
         }
-        charged2Touch = zone(692f, 495f, 120f, 130f) {
+        charged2Touch = zone(centerX + 72f, 495f, 120f, 130f) {
             showNativeMoveMenu(MoveKind.CHARGED_2, it)
         }
     }
@@ -231,9 +231,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             setOnClickListener { toggleHudCollapsed() }
-        }.also { view ->
-            wm.addView(view, hudToggleParams())
-        }
+        }.also { view -> wm.addView(view, hudToggleParams()) }
     }
 
     private fun hudToggleParams(): WindowManager.LayoutParams {
@@ -293,12 +291,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             }
 
             options.forEach { move ->
-                val detail = if (kind == MoveKind.FAST) {
-                    "+${move.energyGain}E"
-                } else {
-                    "${move.chargedCost}E"
-                }
-
+                val detail = if (kind == MoveKind.FAST) "+${move.energyGain}E" else "${move.chargedCost}E"
                 menu.add("${move.name}  •  $detail").setOnMenuItemClickListener {
                     when (kind) {
                         MoveKind.FAST -> e.selectFast(move)
@@ -329,11 +322,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         val now = System.currentTimeMillis()
 
                         val manualCp = settingsRepo.configuredLeagueCp()
-                        if (
-                            manualCp != null &&
-                            manualCp != currentLeagueCp &&
-                            engine?.activeEnemyName() == null
-                        ) {
+                        if (manualCp != null && manualCp != currentLeagueCp && engine?.activeEnemyName() == null) {
                             reloadLeague(manualCp)
                         }
 
@@ -352,13 +341,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         var e = engine
-
                         if (settingsRepo.autoRecognition && e != null) {
-                            val event = frameDetector?.analyze(
-                                frame,
-                                e.currentFastDurationMs(),
-                                now
-                            )
+                            val event = frameDetector?.analyze(frame, e.currentFastDurationMs(), now)
                             if (event != null) {
                                 e.onFastDetected(
                                     event.fastMoveCount,
@@ -370,20 +354,17 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             }
                         }
 
-                        if (
-                            settingsRepo.autoRecognition &&
-                            now - lastOcrAt >= OCR_INTERVAL_MS
-                        ) {
+                        if (settingsRepo.autoRecognition && now - lastOcrAt >= OCR_INTERVAL_MS) {
                             val d = detector?.detect(frame)
                             e = engine
                             if (d != null && e != null) {
                                 val changes = e.onDetection(d)
-                                if (changes.playerChanged || changes.enemyChanged) {
-                                    frameDetector?.reset()
-                                }
+                                if (changes.playerChanged || changes.enemyChanged) frameDetector?.reset()
+
                                 val textEvent = e.onBattleText(d.battleText, now)
-                                if (textEvent.newChargedPrompt) {
-                                    frameDetector?.freezeForCharged(now)
+                                when {
+                                    textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
+                                    textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
                                 }
                             }
                             lastOcrAt = now
@@ -400,7 +381,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             lastTeamOcrAt = now
                         }
 
-                        engine?.maybeConfirmPendingCharged(now)
+                        if (engine?.maybeConfirmPendingCharged(now) == true) {
+                            // Exact OCR is preferred. Fallback confirmation still needs a short guard so
+                            // charged-animation damage cannot be re-counted as a Fast Move.
+                            frameDetector?.freezeForCharged(now, 1_800L)
+                        }
 
                         consecutiveErrors = 0
                         withContext(Dispatchers.Main) { redraw() }
@@ -426,10 +411,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         frameDetector?.reset()
 
         withContext(Dispatchers.Main) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification("V04 • ${leagueLabel(cp)} • HUD PvP ativo")
-            )
+            startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -445,13 +427,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         ui?.let(view::render)
 
         val selectorsEnabled = enabled && !hudCollapsed
-        fastTouch?.visibility =
-            if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
-        charged1Touch?.visibility =
-            if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
-        charged2Touch?.visibility =
-            if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
-
+        fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
+        charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
+        charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
         hudToggleTouch?.visibility = if (enabled) View.VISIBLE else View.GONE
     }
 
@@ -533,7 +511,6 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         detector?.close()
         detector = null
         frameDetector = null
-
         capture?.stop()
         capture = null
         projection?.stop()
@@ -566,7 +543,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         private const val NOTIFICATION_ID = 1107
         private const val FRAME_INTERVAL_MS = 105L
-        private const val OCR_INTERVAL_MS = 720L
+        // The charged-use banner can be short; targeted OCR at ~2 fps catches it reliably without
+        // scanning the whole screen continuously.
+        private const val OCR_INTERVAL_MS = 520L
         private const val TEAM_OCR_INTERVAL_MS = 1_650L
         private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
         private val SUPPORTED_LEAGUE_CPS = setOf(1500, 2500, 10000)

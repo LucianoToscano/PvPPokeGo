@@ -13,16 +13,15 @@ import java.text.Normalizer
 /**
  * Battle-domain state. It never touches Pokémon GO and never sends input.
  *
- * V04 keeps the V03 HUD/UX intact and improves only the battle state:
- * - rank #1 PvPoke moveset remains the initial default;
- * - observed charged moves can correct a wrong default automatically;
- * - the second different observed charged move confirms/corrects the other slot;
- * - manual choices are never overwritten by OCR;
- * - enemy energy/move memory survives switches.
+ * Enemy energy follows Pokemon GO PvP rules: Fast Moves add their PvP energy gain up to 100;
+ * a confirmed Charged Move subtracts its real PvP energy cost and preserves any residual energy.
  */
 class BattleEngine(private val repo: GameDataRepository) {
     data class DetectionChanges(val playerChanged: Boolean, val enemyChanged: Boolean)
-    data class BattleTextResult(val newChargedPrompt: Boolean = false, val chargedMoveConfirmed: Boolean = false)
+    data class BattleTextResult(
+        val newChargedPrompt: Boolean = false,
+        val chargedMoveConfirmed: Boolean = false
+    )
 
     private val enemyStates = BattleStateStore()
     private var playerName: String? = null
@@ -35,24 +34,33 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var charge1: MoveDef? = null
     private var charge2: MoveDef? = null
 
-    // LinkedHashMap preserves team order learned before/during battle.
     private val ownTeam = linkedMapOf<String, Int?>()
     private var chargedPendingSinceMs: Long? = null
     private var lastChargedConfirmedAtMs: Long = 0L
+    private var ignoreFastUntilMs: Long = 0L
     private var lastAutoSource: String = "-"
     private var lastDetectorConfidence = 0f
     private var lastHpRatio: Float? = null
     private var lastMotion = 0f
 
     fun resetBattle() {
-        playerName = null; playerCp = null
-        enemyName = null; enemyCp = null
-        tracker.reset(); activeState = null
-        fast = null; charge1 = null; charge2 = null
+        playerName = null
+        playerCp = null
+        enemyName = null
+        enemyCp = null
+        tracker.reset()
+        activeState = null
+        fast = null
+        charge1 = null
+        charge2 = null
         ownTeam.clear()
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = 0L
-        lastAutoSource = "-"; lastDetectorConfidence = 0f; lastHpRatio = null; lastMotion = 0f
+        ignoreFastUntilMs = 0L
+        lastAutoSource = "-"
+        lastDetectorConfidence = 0f
+        lastHpRatio = null
+        lastMotion = 0f
         enemyStates.clearBattle()
     }
 
@@ -71,6 +79,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             enemyCp = it.cp ?: enemyCp
             if (!canonical.equals(enemyName, ignoreCase = true)) onEnemyChanged(canonical)
         }
+
         return DetectionChanges(
             playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true),
             enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
@@ -99,12 +108,12 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveActiveState()
         enemyName = name
         chargedPendingSinceMs = null
+        ignoreFastUntilMs = 0L
+
         val key = normalize(name)
         activeState = enemyStates.getOrCreate(key, name)
         val saved = activeState!!
 
-        // PvPoke rank #1 / primary recommended moveset is the default. Saved state wins
-        // when this same enemy returns after a switch.
         val likely = repo.likelyMoveset(name)
         fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
         charge1 = repo.move(saved.chargedMove1Id) ?: likely.second ?: repo.possibleChargedMoves(name).getOrNull(0)
@@ -191,6 +200,15 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastHpRatio = hpRatio
         lastMotion = motion
         if (count <= 0) return
+
+        // Charged damage/animation must never be mistaken for another Fast Move. The visual frame
+        // detector also freezes, but this domain-level guard protects energy even if OCR and frame
+        // sampling arrive in a different order.
+        if (System.currentTimeMillis() < ignoreFastUntilMs) {
+            lastAutoSource = "charged-guard"
+            return
+        }
+
         val f = fast ?: return
         tracker.onFastMove(f, count)
         saveActiveState()
@@ -203,20 +221,18 @@ class BattleEngine(private val repo: GameDataRepository) {
         return ok
     }
 
-    /** Visual confirmation from battle text or charged-prompt fallback. */
+    /** Exact visual confirmation from Pokemon GO battle text. */
     private fun observedChargedUsed(move: MoveDef, nowMs: Long = System.currentTimeMillis()): Boolean {
         tracker.onObservedChargedMove(move)
         recordChargedMove(move, observed = true)
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = nowMs
+        ignoreFastUntilMs = maxOf(ignoreFastUntilMs, nowMs + CHARGED_FAST_GUARD_MS)
+        lastAutoSource = "charged:${move.moveId}"
+        saveActiveState()
         return true
     }
 
-    /**
-     * Learns the real enemy charged pair from what Pokémon GO displays.
-     * A manual user choice is protected. Otherwise the first unseen charged move replaces
-     * one unconfirmed default; a second different observed move replaces/confirms the other.
-     */
     private fun recordChargedMove(move: MoveDef, observed: Boolean) {
         val state = activeState
         if (state != null) {
@@ -254,18 +270,23 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
     }
 
+    /**
+     * Reads banners such as "Nidoqueen usou Poder da Terra!". Once the exact move is known,
+     * its PvP energy cost is subtracted immediately and both charged progress circles recalculate
+     * from the same residual energy, exactly as in Pokemon GO.
+     */
     fun onBattleText(raw: String, nowMs: Long = System.currentTimeMillis()): BattleTextResult {
         if (raw.isBlank()) return BattleTextResult()
         val text = normalizeText(raw)
         var newPrompt = false
+
         if (CHARGED_PROMPTS.any { text.contains(it) }) {
-            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > 1_800L) {
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
         }
 
-        // Never infer from our own overlay labels alone. The game action verb must also be present.
         val actionVerbPresent = ACTION_VERBS.any { text.contains(it) }
         if (actionVerbPresent) {
             val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
@@ -273,27 +294,41 @@ class BattleEngine(private val repo: GameDataRepository) {
                 .map { it to normalizedMoveNames(it) }
                 .firstOrNull { (_, names) -> names.any { n -> n.length >= 4 && text.contains(n) } }
                 ?.first
-            if (matched != null && nowMs - lastChargedConfirmedAtMs > 1_800L) {
-                observedChargedUsed(matched, nowMs)
-                return BattleTextResult(newPrompt, true)
+
+            if (matched != null) {
+                if (nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+                    observedChargedUsed(matched, nowMs)
+                    return BattleTextResult(newPrompt, true)
+                }
+                return BattleTextResult(newPrompt, false)
+            }
+
+            // The game clearly said a move was used but OCR missed part of its name. Mark a pending
+            // charged event so the conservative fallback can still spend energy shortly afterward.
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+                chargedPendingSinceMs = nowMs
+                newPrompt = true
             }
         }
+
         return BattleTextResult(newPrompt, false)
     }
 
-    /**
-     * Fallback for shield/animation cases where the exact move text was not readable.
-     * Prefer a uniquely affordable selected move. If both are plausible, prefer a move already
-     * observed for this opponent; only then fall back to the cheaper selected move.
-     */
+    /** Conservative fallback when the exact move-name banner could not be read. */
     fun maybeConfirmPendingCharged(nowMs: Long = System.currentTimeMillis()): Boolean {
         val since = chargedPendingSinceMs ?: return false
-        if (nowMs - since < 4_900L) return false
+        if (nowMs - since < PENDING_CONFIRM_DELAY_MS) return false
+        if (nowMs - lastChargedConfirmedAtMs <= CHARGED_DEBOUNCE_MS) {
+            chargedPendingSinceMs = null
+            return false
+        }
+
         val candidates = listOfNotNull(charge1, charge2).distinctBy { it.moveId }
         if (candidates.isEmpty()) {
             chargedPendingSinceMs = null
             return false
         }
+
         val affordable = candidates.filter { tracker.energy >= it.chargedCost }
         val observed = activeState?.observedChargedMoveIds.orEmpty()
         val selected = when {
@@ -303,6 +338,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             else -> candidates.firstOrNull { it.moveId in observed }
                 ?: candidates.minByOrNull { it.chargedCost }
         } ?: return false
+
         return observedChargedUsed(selected, nowMs)
     }
 
@@ -314,6 +350,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         val eTypes = repo.pokemon(enemyName)?.types.orEmpty()
         val matchup = classify(pTypes, eTypes)
         val f = fast
+
         val reserveStates = ownTeam.entries
             .filterNot { it.key.equals(playerName, ignoreCase = true) }
             .take(2)
@@ -321,6 +358,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 val types = repo.pokemon(name)?.types.orEmpty()
                 ReserveState(name, cp, types, classify(types, eTypes))
             }
+
         return BattleUiState(
             playerName = playerName,
             playerCp = playerCp,
@@ -361,8 +399,6 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun saveActiveState() {
         val state = activeState ?: return
-        // BattleStateStore keeps the same mutable BattlePokemonState instance returned
-        // by getOrCreate(), so updating it in place is enough to persist this opponent.
         state.fastMoveId = fast?.moveId
         state.chargedMove1Id = charge1?.moveId
         state.chargedMove2Id = charge2?.moveId
@@ -384,6 +420,10 @@ class BattleEngine(private val repo: GameDataRepository) {
         .replace(Regex("[^a-z0-9]+"), "")
 
     companion object {
+        private const val CHARGED_DEBOUNCE_MS = 4_200L
+        private const val CHARGED_FAST_GUARD_MS = 2_200L
+        private const val PENDING_CONFIRM_DELAY_MS = 2_400L
+
         private val CHARGED_PROMPTS = listOf(
             "ataquecarregado", "ataquechegando", "ataquecarregadoagora",
             "attackincoming", "chargemoveincoming", "usarumescudo", "useumescudo", "protectshield"
