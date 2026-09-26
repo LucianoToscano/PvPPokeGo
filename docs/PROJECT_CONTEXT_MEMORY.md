@@ -72,6 +72,40 @@ A comparação com o baseline oficial separou claramente funções adicionadas c
 
 Servem como referência de separação entre app/serviço/módulos. O PvPPokeGo permanece externo ao processo do Pokémon GO, sem root, injeção, concealment ou bypass.
 
+## Pesquisa web/GitHub — 2026-09-26
+
+### Referências PvP prioritárias
+
+- `pvpoke/pvpoke`: fonte canônica e principal referência open source para battle simulation, rankings, team builder, matchups e dados PvP. Continuar como base de dados/conferência do projeto.
+- `sikora-pawel/pvpoke`: fork orientado a disponibilizar dados/matrizes/SQLite para consumo móvel. Útil para estudar pipeline de dados offline e atualização, sem depender do site PvPoke em runtime.
+- `cartolanofacundo/pokego-pvp`: referência extremamente próxima do objetivo do PvPPokeGo. Possui segunda tela de combate 3x3, carregamento de aliados/inimigos, força de ataques, turnos até charged move, recomendação de troca, dados PvPoke, persistência do time e rankeador de IV.
+- O rankeador de `pokego-pvp` percorre as 4096 combinações de IV, calcula nível/CP/stat product, ranks por liga, evoluções/Megas, custos de Stardust/candy/XL e posição da espécie no PvPoke. Usar como referência de comportamento/testes para nosso `PvPIvRankEngine`.
+- `mglerner/gopvpsim`: simulador PvP em Python baseado em PvPoke, com foco em breakpoints/bulkpoints, IV e movesets; excelente oracle de testes para um `BattleSimulator`/`BreakpointEngine` próprio em Kotlin.
+- `Mygod/ohbem`: biblioteca otimizada para rank de IV PvP, com Little/Great/Ultra, níveis 50/51, evoluções/Megas, empates e functional perfect. Excelente referência algorítmica para `PvPIvRankEngine`.
+- `pedrosancao/pokemon-go-pvp-rank`, `jgmcelwain/go-iv`, `Sigafoos/iv` e `DeathbyToast/PvP_IVs`: referências menores para validar resultados, UX e casos de borda de rank/IV.
+
+### OCR e reconhecimento visual
+
+- `ingimar-eyfjord/iv-pokemon-scanner`: referência atual para importar CSV/screenshot/vídeo, OCR de Pokémon, resolução de IV oculto por CP/HP/nível e classificação para PvP/raids/gyms. Relevante para pipeline de coleção e validação do OCR.
+- `AlansApps/PGO-Scanner`: referência de scanner por screenshot/vídeo para espécie/forma/CP/IV. Útil para ROI, estabilização entre frames e extração visual.
+- `PGSS`/`TheRaidMapper`: referências históricas de OCR de screenshots de raids; aproveitar apenas arquitetura de detecção/recorte/classificação.
+- `Brohaffey/pokemon-GO-counter-finder`: gerador simples de strings de busca usando fraqueza/tipo, slots `@1/@2/@3` e favoritos. Pode originar um `StorageSearchGenerator` compartilhado com PGLOT.
+
+### Dados e atualização
+
+- `PokeMiners/game_masters`: referência prioritária para atualização automatizada de espécies, formas, moves e parâmetros do jogo; criar conversão própria e versionada para os modelos do core.
+- `PokeMiners/pogo_assets`: pode auxiliar nomes/localizações/sprites durante desenvolvimento, respeitando direitos/licença dos assets. Não embutir conteúdo de terceiros sem autorização/licença adequada.
+- `JP-study-list/poke-change`: boa referência de pipeline de rebuild de dex/formas/costumes a partir de PokeMiners e de import/export local.
+
+### Referências analíticas auxiliares
+
+- `psoren/pokemon-go-odds`: modelo estatístico de shiny/Hundo/Shundo com IV floors e fontes de encontro. Não entra no motor de batalha, mas pode fornecer ideias para analytics compartilhado no futuro.
+- `EduHunterDev/PokemonGo-Calculadora-Stardust`: utilitário simples; apenas inspiração para calculadoras de custos/recompensas, baixa prioridade.
+
+### O que permanece fora do core PvPPokeGo
+
+Mesmo quando encontrados em Golbat/PoracleNG/ReactMap/PGSharp/iPogo/PGTools, ficam exclusivos do PGLOT: coordenadas, mapa global, ninhos, localização salva para teleporte, farm, hunter, Rocket automation, raid automation, GO Plus/VGP e scanner de mundo. O PvPPokeGo pode compartilhar somente modelos de dados e filtros genéricos.
+
 ## Arquitetura de visão incorporada
 
 Novo componente: `core/src/main/kotlin/pvppokego/core/vision/VisionObservation.kt`.
@@ -87,6 +121,17 @@ Ele introduz:
 Pipeline alvo:
 
 `captura -> ROI -> observações com confiança -> estabilização -> eventos de batalha -> BattleSession/BattleEnergyTracker -> decisão -> overlay`
+
+## Componentes alvo derivados das novas referências
+
+- `BattleSimulator`: simulação local desacoplada de Android/OCR, comparável contra PvPoke/gopvpsim.
+- `BreakpointEngine`: dano, breakpoints, bulkpoints e cenários de IV.
+- `PvPIvRankEngine`: 4096 combinações, CP cap, level cap, stat product, ranks empatados, evoluções/formas/Megas e IV floors configuráveis.
+- `MoveTimingEngine`: energia do fast, custo do charged, número de fasts e turnos/tempo restante.
+- `CounterAdvisor`: matchup/rating + tipos + movesets + energia/escudos.
+- `CollectionVisionScanner`: reconhecimento de Pokémon/CP/HP/IV a partir de screenshot/vídeo, separado do detector de batalha ao vivo.
+- `StorageSearchGenerator`: strings oficiais de busca por tipos/golpes/favoritos.
+- suíte de testes cruzados usando resultados conhecidos de PvPoke, gopvpsim e bibliotecas open source como oracles, sem copiar implementação.
 
 ## Funções prioritárias
 
@@ -104,6 +149,8 @@ Pipeline alvo:
 12. Logs/replay/debug de reconhecimento.
 13. Correção manual rápida de detecções.
 14. Perfis de ROI/layout por resolução.
+15. Breakpoint/bulkpoint engine e validação cruzada.
+16. Scanner de coleção por screenshot/vídeo como módulo separado.
 
 ## Regra de implementação
 
@@ -112,9 +159,10 @@ Pipeline alvo:
 - Não remover licenças/premium.
 - Não incorporar concealment, anti-detection ou bypass de anti-cheat.
 - Manter o core de batalha separado de Android/OCR/gestos para ser testável.
+- Para código open source, conferir licença individual e manter atribuições/avisos exigidos; quando possível, usar projetos externos como oracles de teste e portar a lógica de forma independente.
 
 ## Relação com PGLOT
 
-Podem ser compartilhados somente componentes próprios/genéricos: dados Pokémon/tipos/moves, PvP IV, efetividade, battle engine, filtros, OCR/vision, logs/stats, notificações e modelos de configuração.
+Podem ser compartilhados somente componentes próprios/genéricos: dados Pokémon/tipos/moves, PvP IV, efetividade, battle engine, filtros, OCR/vision, logs/stats, notificações, modelos de configuração e `StorageSearchGenerator`.
 
 Localização, mapa, Virtual GO Plus, farm, hunter por coordenadas, root e automações de gameplay permanecem isolados no PGLOT.
