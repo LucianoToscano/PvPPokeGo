@@ -113,6 +113,8 @@ class BattleEnergyTracker(
 
     /**
      * Replaces both charged-move buttons while preserving the supplied order.
+     * Any previously confirmed move that is intentionally removed here loses
+     * its confirmed marker, allowing manual correction of an OCR mistake.
      */
     fun setChargedMoves(slot: Int, moveIds: Collection<String>): EnemyPokemonState {
         val current = state(slot)
@@ -126,7 +128,10 @@ class BattleEnergyTracker(
                 "One or more charged moves are invalid for ${current.speciesId}: $normalized"
             }
         }
-        val next = current.copy(selectedChargedMoveIds = normalized)
+        val next = current.copy(
+            selectedChargedMoveIds = normalized,
+            confirmedChargedMoveIds = current.confirmedChargedMoveIds.intersect(normalized.toSet())
+        )
         states[slot] = next
         return next
     }
@@ -135,6 +140,9 @@ class BattleEnergyTracker(
      * Updates exactly one overlay charged-move button. Index 0 is left and
      * index 1 is right. Selecting a move already present on the other button
      * swaps the two buttons instead of creating a duplicate.
+     *
+     * Manual replacement of a previously confirmed button is treated as a
+     * correction and clears the confirmation for the replaced move.
      */
     fun setChargedMove(slot: Int, buttonIndex: Int, moveId: String): EnemyPokemonState {
         require(buttonIndex in 0 until MAX_CHARGED_BUTTONS) {
@@ -154,8 +162,11 @@ class BattleEnergyTracker(
             selected.add(filler)
         }
 
+        val previousAtButton = selected.getOrNull(buttonIndex)
         val otherIndex = 1 - buttonIndex
-        if (otherIndex < selected.size && selected[otherIndex] == normalized) {
+        val isSwap = otherIndex < selected.size && selected[otherIndex] == normalized
+
+        if (isSwap) {
             val previous = selected[buttonIndex]
             selected[buttonIndex] = normalized
             selected[otherIndex] = previous
@@ -163,10 +174,17 @@ class BattleEnergyTracker(
             selected[buttonIndex] = normalized
         }
 
+        val nextConfirmed = if (!isSwap && previousAtButton != null && previousAtButton != normalized) {
+            current.confirmedChargedMoveIds - previousAtButton
+        } else {
+            current.confirmedChargedMoveIds
+        }
+
         val next = current.copy(
             selectedChargedMoveIds = selected
                 .take(MAX_CHARGED_BUTTONS)
-                .distinct()
+                .distinct(),
+            confirmedChargedMoveIds = nextConfirmed
         )
         states[slot] = next
         return next
@@ -216,12 +234,12 @@ class BattleEnergyTracker(
     }
 
     /**
-     * Spends only the charged move's cost and preserves residual energy.
+     * Applies a charged move actually observed in battle.
      *
-     * Example: 64 energy - 40 cost = 24 energy remaining.
-     * A charged-move observation must therefore move a ready (0 remaining)
-     * counter back above zero unless enough residual energy remains for the
-     * same move immediately.
+     * The first observed move replaces one unconfirmed prediction and becomes
+     * confirmed. A later, different observed move replaces the other
+     * unconfirmed prediction. Repeating an already confirmed move never
+     * overwrites the other button.
      */
     fun onChargedMove(slot: Int, chargedMoveId: String): EnemyPokemonState {
         val current = state(slot)
@@ -231,11 +249,38 @@ class BattleEnergyTracker(
         }
         require(move.energyCost > 0) { "$normalized is not a charged move" }
 
-        val selected = when {
-            normalized in current.selectedChargedMoveIds -> current.selectedChargedMoveIds
-            current.selectedChargedMoveIds.size < MAX_CHARGED_BUTTONS ->
-                current.selectedChargedMoveIds + normalized
-            else -> current.selectedChargedMoveIds
+        val legal = availableChargedMoves(slot).map(MoveData::moveId).toSet()
+        if (legal.isNotEmpty()) {
+            require(normalized in legal) {
+                "$normalized is not a charged move for ${current.speciesId}"
+            }
+        }
+
+        val selected = current.selectedChargedMoveIds.toMutableList()
+        var canConfirm = normalized in selected
+
+        if (normalized !in selected) {
+            when {
+                selected.size < MAX_CHARGED_BUTTONS -> {
+                    selected.add(normalized)
+                    canConfirm = true
+                }
+                else -> {
+                    val replaceIndex = selected.indexOfFirst {
+                        it !in current.confirmedChargedMoveIds
+                    }
+                    if (replaceIndex >= 0) {
+                        selected[replaceIndex] = normalized
+                        canConfirm = true
+                    }
+                }
+            }
+        }
+
+        val confirmed = if (canConfirm) {
+            current.confirmedChargedMoveIds + normalized
+        } else {
+            current.confirmedChargedMoveIds
         }
 
         val next = current.copy(
@@ -243,6 +288,9 @@ class BattleEnergyTracker(
             chargedMovesUsed = current.chargedMovesUsed + 1,
             lastChargedMoveId = normalized,
             selectedChargedMoveIds = selected
+                .take(MAX_CHARGED_BUTTONS)
+                .distinct(),
+            confirmedChargedMoveIds = confirmed
         )
         states[slot] = next
         return next
