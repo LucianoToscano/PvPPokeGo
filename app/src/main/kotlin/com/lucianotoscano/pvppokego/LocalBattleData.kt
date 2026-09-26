@@ -20,6 +20,9 @@ class LocalBattleData(private val context: Context) {
     val moveAliases: Map<String, String> = parseAliases(
         readAssetOrNull("localization/moves_pt_BR.tsv").orEmpty()
     )
+    private val preferredAliasByMoveId: Map<String, String> = moveAliases.entries
+        .groupBy({ it.value }, { it.key })
+        .mapValues { (_, aliases) -> aliases.first() }
 
     private val speciesNames: List<Pair<String, String>> = pokemonTsv
         .lineSequence()
@@ -31,17 +34,27 @@ class LocalBattleData(private val context: Context) {
         .sortedByDescending { (_, name) -> normalize(name).length }
         .toList()
 
-    fun resolveSpeciesFromText(text: String): String? {
+    fun resolveSpeciesFromText(text: String): String? = resolveAllSpeciesFromText(text).firstOrNull()
+
+    fun resolveAllSpeciesFromText(text: String): List<String> {
         val normalized = " ${normalize(text)} "
-        if (normalized.isBlank()) return null
-        return speciesNames.firstOrNull { (_, name) ->
-            val candidate = normalize(name)
-            candidate.length >= 3 && " $candidate " in normalized
-        }?.first
+        if (normalized.isBlank()) return emptyList()
+        return speciesNames
+            .filter { (_, name) ->
+                val candidate = normalize(name)
+                candidate.length >= 3 && " $candidate " in normalized
+            }
+            .map { it.first }
+            .distinct()
     }
 
     fun displayName(speciesId: String?): String =
         speciesId?.let(repository::pokemon)?.speciesName ?: speciesId ?: "Inimigo"
+
+    fun moveDisplayName(moveId: String?): String? {
+        if (moveId == null) return null
+        return preferredAliasByMoveId[moveId] ?: repository.move(moveId)?.name
+    }
 
     fun strongTypesAgainst(speciesId: String): List<String> {
         val pokemon = repository.pokemon(speciesId) ?: return emptyList()
