@@ -4,6 +4,7 @@ import kotlin.math.max
 import pvppokego.core.data.PvpokeRepository
 import pvppokego.core.model.ChargedMoveProgress
 import pvppokego.core.model.EnemyPokemonState
+import pvppokego.core.model.MoveData
 import pvppokego.core.model.PokemonBattleStatus
 
 /**
@@ -55,7 +56,10 @@ class BattleEnergyTracker(
                     if (existing.selectedChargedMoveIds.isNotEmpty()) {
                         existing.selectedChargedMoveIds
                     } else {
-                        recommendation?.chargedMoveIds.orEmpty().toSet()
+                        recommendation?.chargedMoveIds.orEmpty()
+                            .map(String::normalizeMoveId)
+                            .distinct()
+                            .take(MAX_CHARGED_BUTTONS)
                     }
             )
         } else {
@@ -63,7 +67,10 @@ class BattleEnergyTracker(
                 slot = slot,
                 speciesId = speciesId.lowercase(),
                 fastMoveId = fastMoveId?.normalizeMoveId() ?: recommendation?.fastMoveId,
-                selectedChargedMoveIds = recommendation?.chargedMoveIds.orEmpty().toSet(),
+                selectedChargedMoveIds = recommendation?.chargedMoveIds.orEmpty()
+                    .map(String::normalizeMoveId)
+                    .distinct()
+                    .take(MAX_CHARGED_BUTTONS),
                 status = PokemonBattleStatus.BENCHED
             )
         }
@@ -72,15 +79,94 @@ class BattleEnergyTracker(
         return next
     }
 
+    fun availableFastMoves(slot: Int): List<MoveData> {
+        val current = state(slot)
+        val pokemon = current.speciesId?.let(repository::pokemon) ?: return emptyList()
+        return pokemon.fastMoveIds
+            .mapNotNull(repository::move)
+            .filter(MoveData::isFastMove)
+            .sortedBy(MoveData::name)
+    }
+
+    fun availableChargedMoves(slot: Int): List<MoveData> {
+        val current = state(slot)
+        val pokemon = current.speciesId?.let(repository::pokemon) ?: return emptyList()
+        return pokemon.chargedMoveIds
+            .mapNotNull(repository::move)
+            .filter(MoveData::isChargedMove)
+            .sortedBy(MoveData::name)
+    }
+
     fun setFastMove(slot: Int, fastMoveId: String): EnemyPokemonState {
-        val next = state(slot).copy(fastMoveId = fastMoveId.normalizeMoveId())
+        val normalized = fastMoveId.normalizeMoveId()
+        val current = state(slot)
+        val legal = availableFastMoves(slot).map(MoveData::moveId).toSet()
+        if (legal.isNotEmpty()) {
+            require(normalized in legal) {
+                "$normalized is not a fast move for ${current.speciesId}"
+            }
+        }
+        val next = current.copy(fastMoveId = normalized)
         states[slot] = next
         return next
     }
 
+    /**
+     * Replaces both charged-move buttons while preserving the supplied order.
+     */
     fun setChargedMoves(slot: Int, moveIds: Collection<String>): EnemyPokemonState {
-        val next = state(slot).copy(
-            selectedChargedMoveIds = moveIds.map(String::normalizeMoveId).toSet()
+        val current = state(slot)
+        val normalized = moveIds
+            .map(String::normalizeMoveId)
+            .distinct()
+            .take(MAX_CHARGED_BUTTONS)
+        val legal = availableChargedMoves(slot).map(MoveData::moveId).toSet()
+        if (legal.isNotEmpty()) {
+            require(normalized.all { it in legal }) {
+                "One or more charged moves are invalid for ${current.speciesId}: $normalized"
+            }
+        }
+        val next = current.copy(selectedChargedMoveIds = normalized)
+        states[slot] = next
+        return next
+    }
+
+    /**
+     * Updates exactly one overlay charged-move button. Index 0 is left and
+     * index 1 is right. Selecting a move already present on the other button
+     * swaps the two buttons instead of creating a duplicate.
+     */
+    fun setChargedMove(slot: Int, buttonIndex: Int, moveId: String): EnemyPokemonState {
+        require(buttonIndex in 0 until MAX_CHARGED_BUTTONS) {
+            "buttonIndex must be 0 or 1"
+        }
+        val current = state(slot)
+        val normalized = moveId.normalizeMoveId()
+        val legal = availableChargedMoves(slot).map(MoveData::moveId)
+        require(normalized in legal) {
+            "$normalized is not a charged move for ${current.speciesId}"
+        }
+
+        val selected = current.selectedChargedMoveIds.toMutableList()
+        while (selected.size <= buttonIndex) {
+            val filler = legal.firstOrNull { it !in selected && it != normalized }
+                ?: normalized
+            selected.add(filler)
+        }
+
+        val otherIndex = 1 - buttonIndex
+        if (otherIndex < selected.size && selected[otherIndex] == normalized) {
+            val previous = selected[buttonIndex]
+            selected[buttonIndex] = normalized
+            selected[otherIndex] = previous
+        } else {
+            selected[buttonIndex] = normalized
+        }
+
+        val next = current.copy(
+            selectedChargedMoveIds = selected
+                .take(MAX_CHARGED_BUTTONS)
+                .distinct()
         )
         states[slot] = next
         return next
@@ -133,6 +219,9 @@ class BattleEnergyTracker(
      * Spends only the charged move's cost and preserves residual energy.
      *
      * Example: 64 energy - 40 cost = 24 energy remaining.
+     * A charged-move observation must therefore move a ready (0 remaining)
+     * counter back above zero unless enough residual energy remains for the
+     * same move immediately.
      */
     fun onChargedMove(slot: Int, chargedMoveId: String): EnemyPokemonState {
         val current = state(slot)
@@ -142,11 +231,18 @@ class BattleEnergyTracker(
         }
         require(move.energyCost > 0) { "$normalized is not a charged move" }
 
+        val selected = when {
+            normalized in current.selectedChargedMoveIds -> current.selectedChargedMoveIds
+            current.selectedChargedMoveIds.size < MAX_CHARGED_BUTTONS ->
+                current.selectedChargedMoveIds + normalized
+            else -> current.selectedChargedMoveIds
+        }
+
         val next = current.copy(
             energy = max(0, current.energy - move.energyCost),
             chargedMovesUsed = current.chargedMovesUsed + 1,
             lastChargedMoveId = normalized,
-            selectedChargedMoveIds = current.selectedChargedMoveIds + normalized
+            selectedChargedMoveIds = selected
         )
         states[slot] = next
         return next
@@ -178,11 +274,10 @@ class BattleEnergyTracker(
         val fastMove = current.fastMoveId?.let(repository::move) ?: return emptyList()
         if (fastMove.energyGain <= 0) return emptyList()
 
-        val configured = current.selectedChargedMoveIds
-        val moveIds = if (configured.isNotEmpty()) {
-            configured
+        val moveIds = if (current.selectedChargedMoveIds.isNotEmpty()) {
+            current.selectedChargedMoveIds
         } else {
-            pokemon.chargedMoveIds
+            pokemon.chargedMoveIds.sorted()
         }
 
         return moveIds
@@ -198,11 +293,6 @@ class BattleEnergyTracker(
                     ready = missingEnergy == 0
                 )
             }
-            .sortedWith(
-                compareBy<ChargedMoveProgress> { it.fastMovesNeeded }
-                    .thenBy { it.move.energyCost }
-                    .thenBy { it.move.name }
-            )
     }
 
     fun state(slot: Int): EnemyPokemonState {
@@ -226,6 +316,7 @@ class BattleEnergyTracker(
 
     companion object {
         const val TEAM_SIZE = 3
+        const val MAX_CHARGED_BUTTONS = 2
     }
 }
 
