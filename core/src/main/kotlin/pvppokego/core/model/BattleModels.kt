@@ -7,6 +7,12 @@ enum class PokemonBattleStatus {
     FAINTED
 }
 
+enum class EvidenceLevel {
+    PREDICTED,
+    PROBABLE,
+    CONFIRMED
+}
+
 data class MoveData(
     val moveId: String,
     val name: String,
@@ -41,17 +47,37 @@ data class RecommendedMoveset(
     val score: Double? = null
 )
 
+data class EnergyRangeEstimate(
+    val min: Int,
+    val max: Int,
+    val confidence: EvidenceLevel = EvidenceLevel.PROBABLE
+) {
+    init {
+        require(min in 0..100)
+        require(max in 0..100)
+        require(min <= max)
+    }
+
+    val exact: Boolean
+        get() = min == max
+}
+
 data class ChargedMoveProgress(
     val move: MoveData,
     val currentEnergy: Int,
     val fastMovesNeeded: Int,
-    val ready: Boolean
+    val ready: Boolean,
+    val chargesReady: Int = 0,
+    val fastMovesNeededForSecond: Int = 0,
+    val evidence: EvidenceLevel = EvidenceLevel.PREDICTED
 )
 
 data class EnemyPokemonState(
     val slot: Int,
     val speciesId: String? = null,
+    val speciesEvidence: EvidenceLevel = EvidenceLevel.PREDICTED,
     val fastMoveId: String? = null,
+    val fastMoveEvidence: EvidenceLevel = EvidenceLevel.PREDICTED,
     /**
      * Ordered list matching the two charged-move controls in the overlay.
      * Index 0 is the left button and index 1 is the right button.
@@ -66,6 +92,10 @@ data class EnemyPokemonState(
      */
     val confirmedChargedMoveIds: Set<String> = emptySet(),
     val energy: Int = 0,
+    /** Number of times the tracker had to recover from an impossible low-energy observation. */
+    val energyCorrectionCount: Int = 0,
+    /** Energy that had to be assumed immediately before the last charged move. */
+    val lastEnergyCorrection: Int = 0,
     val fastMovesObserved: Int = 0,
     val chargedMovesUsed: Int = 0,
     val lastChargedMoveId: String? = null,
