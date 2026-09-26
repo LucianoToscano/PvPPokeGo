@@ -32,7 +32,7 @@ class BattleEnergyTrackerTest {
         tracker.setChargedMoves(0, listOf("HYDRO_CANNON", "ICE_BEAM"))
         tracker.switchTo(0)
 
-        tracker.onFastMove(0, count = 8) // 64 energy
+        tracker.onFastMove(0, count = 8)
         tracker.onChargedMove(0, "HYDRO_CANNON")
 
         assertEquals(24, tracker.state(0).energy)
@@ -47,7 +47,7 @@ class BattleEnergyTrackerTest {
         tracker.setChargedMoves(0, listOf("HYDRO_CANNON", "ICE_BEAM"))
         tracker.switchTo(0)
 
-        tracker.onFastMove(0, count = 5) // exactly 40 energy
+        tracker.onFastMove(0, count = 5)
         val ready = tracker.chargedMoveProgress(0).first { it.move.moveId == "HYDRO_CANNON" }
         assertEquals(0, ready.fastMovesNeeded)
         assertTrue(ready.ready)
@@ -67,7 +67,7 @@ class BattleEnergyTrackerTest {
         tracker.identifyPokemon(1, "feraligatr", "SHADOW_CLAW")
 
         tracker.switchTo(0)
-        tracker.onFastMove(0, count = 5) // 40 energy
+        tracker.onFastMove(0, count = 5)
         tracker.switchTo(1)
         tracker.switchTo(0)
 
@@ -82,17 +82,71 @@ class BattleEnergyTrackerTest {
         tracker.setChargedMoves(0, listOf("HYDRO_CANNON", "ICE_BEAM"))
 
         tracker.setChargedMove(0, buttonIndex = 1, moveId = "CRUNCH")
-        assertEquals(
-            listOf("HYDRO_CANNON", "CRUNCH"),
-            tracker.state(0).selectedChargedMoveIds
-        )
+        assertEquals(listOf("HYDRO_CANNON", "CRUNCH"), tracker.state(0).selectedChargedMoveIds)
 
-        // Selecting the move already used by the other button swaps them.
         tracker.setChargedMove(0, buttonIndex = 1, moveId = "HYDRO_CANNON")
-        assertEquals(
-            listOf("CRUNCH", "HYDRO_CANNON"),
-            tracker.state(0).selectedChargedMoveIds
-        )
+        assertEquals(listOf("CRUNCH", "HYDRO_CANNON"), tracker.state(0).selectedChargedMoveIds)
+    }
+
+    @Test
+    fun firstObservedMoveLocksItsSlotAndSecondObservedMoveReplacesOtherDefault() {
+        val rankings = """
+            league_cp\trank\tspecies_id\tfast_move\tcharged_moves\tscore
+            1500\t1\tferaligatr\tSHADOW_CLAW\tHYDRO_CANNON|ICE_BEAM\t100
+        """.trimIndent()
+        val rankedRepo = InMemoryPvpokeRepository.fromTsv(pokemonTsv, movesTsv, rankings)
+        val tracker = BattleEnergyTracker(rankedRepo, leagueCp = 1500)
+        tracker.identifyPokemon(0, "feraligatr")
+        tracker.switchTo(0)
+
+        assertEquals(listOf("HYDRO_CANNON", "ICE_BEAM"), tracker.state(0).selectedChargedMoveIds)
+
+        // First real move matches the #1 default and becomes verified.
+        tracker.onChargedMove(0, "HYDRO_CANNON")
+        assertEquals(setOf("HYDRO_CANNON"), tracker.state(0).observedChargedMoveIds)
+
+        // Second different real move replaces the still-unverified ICE_BEAM slot.
+        tracker.onChargedMove(0, "CRUNCH")
+        assertEquals(listOf("HYDRO_CANNON", "CRUNCH"), tracker.state(0).selectedChargedMoveIds)
+        assertEquals(setOf("HYDRO_CANNON", "CRUNCH"), tracker.state(0).observedChargedMoveIds)
+    }
+
+    @Test
+    fun firstNewObservedMoveUsesSecondarySlotThenSecondObservedUsesOtherUnverifiedSlot() {
+        val rankings = """
+            league_cp\trank\tspecies_id\tfast_move\tcharged_moves\tscore
+            1500\t1\tferaligatr\tSHADOW_CLAW\tHYDRO_CANNON|ICE_BEAM\t100
+        """.trimIndent()
+        val rankedRepo = InMemoryPvpokeRepository.fromTsv(pokemonTsv, movesTsv, rankings)
+        val tracker = BattleEnergyTracker(rankedRepo, leagueCp = 1500)
+        tracker.identifyPokemon(0, "feraligatr")
+        tracker.switchTo(0)
+
+        tracker.onChargedMove(0, "CRUNCH")
+        assertEquals(listOf("HYDRO_CANNON", "CRUNCH"), tracker.state(0).selectedChargedMoveIds)
+        assertEquals(setOf("CRUNCH"), tracker.state(0).observedChargedMoveIds)
+
+        tracker.onChargedMove(0, "ICE_BEAM")
+        assertEquals(listOf("ICE_BEAM", "CRUNCH"), tracker.state(0).selectedChargedMoveIds)
+        assertEquals(setOf("CRUNCH", "ICE_BEAM"), tracker.state(0).observedChargedMoveIds)
+    }
+
+    @Test
+    fun manualChargedButtonIsNeverOverwrittenByOcr() {
+        val rankings = """
+            league_cp\trank\tspecies_id\tfast_move\tcharged_moves\tscore
+            1500\t1\tferaligatr\tSHADOW_CLAW\tHYDRO_CANNON|ICE_BEAM\t100
+        """.trimIndent()
+        val rankedRepo = InMemoryPvpokeRepository.fromTsv(pokemonTsv, movesTsv, rankings)
+        val tracker = BattleEnergyTracker(rankedRepo, leagueCp = 1500)
+        tracker.identifyPokemon(0, "feraligatr")
+        tracker.setChargedMove(0, 1, "ICE_BEAM")
+        tracker.switchTo(0)
+
+        tracker.onChargedMove(0, "CRUNCH")
+
+        // Right side was manually pinned; OCR replaces the non-manual left default instead.
+        assertEquals(listOf("CRUNCH", "ICE_BEAM"), tracker.state(0).selectedChargedMoveIds)
     }
 
     @Test
