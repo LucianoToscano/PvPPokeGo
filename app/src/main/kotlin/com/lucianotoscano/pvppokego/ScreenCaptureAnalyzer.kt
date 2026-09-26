@@ -26,6 +26,7 @@ class ScreenCaptureAnalyzer(
     interface Callback {
         fun onOcr(
             fullText: String,
+            myHeaderText: String,
             enemyHeaderText: String,
             chargedBannerLines: List<String>,
             timestampMs: Long
@@ -110,10 +111,20 @@ class ScreenCaptureAnalyzer(
         ocrBusy = true
         recognizer.process(InputImage.fromBitmap(bitmap, 0))
             .addOnSuccessListener { result ->
-                val enemyHeader = result.textBlocks
+                val headerBlocks = result.textBlocks.filter { block ->
+                    val box = block.boundingBox ?: return@filter false
+                    box.top < bitmap.height * 0.18
+                }
+                val myHeader = headerBlocks
                     .filter { block ->
                         val box = block.boundingBox ?: return@filter false
-                        box.centerX() > bitmap.width * 0.48 && box.top < bitmap.height * 0.18
+                        box.centerX() < bitmap.width * 0.50
+                    }
+                    .joinToString(" ") { it.text }
+                val enemyHeader = headerBlocks
+                    .filter { block ->
+                        val box = block.boundingBox ?: return@filter false
+                        box.centerX() >= bitmap.width * 0.50
                     }
                     .joinToString(" ") { it.text }
 
@@ -128,6 +139,7 @@ class ScreenCaptureAnalyzer(
 
                 callback.onOcr(
                     fullText = result.text,
+                    myHeaderText = myHeader,
                     enemyHeaderText = enemyHeader,
                     chargedBannerLines = chargedLines,
                     timestampMs = timestampMs
