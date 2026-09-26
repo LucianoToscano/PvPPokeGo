@@ -41,7 +41,10 @@ object TypeColors {
     fun color(type: String?): Int = colors[type?.lowercase()] ?: Color.GRAY
 }
 
-/** Circle that fills from bottom to top as estimated energy approaches cost. */
+/**
+ * Pokemon-GO-like charge indicator: a neutral circular base fills from the
+ * bottom with the charged move type color as estimated energy accumulates.
+ */
 class ChargeProgressCircle(context: Context) : View(context) {
     var fraction: Float = 0f
         set(value) {
@@ -57,7 +60,7 @@ class ChargeProgressCircle(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = dp(1.5f)
+        strokeWidth = dp(1.6f)
         color = Color.WHITE
     }
 
@@ -65,8 +68,9 @@ class ChargeProgressCircle(context: Context) : View(context) {
         super.onDraw(canvas)
         val pad = dp(2f)
         val rect = RectF(pad, pad, width - pad, height - pad)
+
         paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(92, 96, 104)
+        paint.color = Color.argb(235, 103, 104, 108)
         canvas.drawOval(rect, paint)
 
         if (fraction > 0f) {
@@ -79,12 +83,14 @@ class ChargeProgressCircle(context: Context) : View(context) {
             canvas.drawOval(rect, paint)
             canvas.restoreToCount(save)
         }
+
         canvas.drawOval(rect, border)
     }
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
 }
 
+/** Compact clickable charged-move control used by the classic overlay. */
 class ChargedMoveChip(context: Context) : LinearLayout(context) {
     private val circleFrame = FrameLayout(context)
     private val progressCircle = ChargeProgressCircle(context)
@@ -98,30 +104,33 @@ class ChargedMoveChip(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER
-        setPadding(dp(4), dp(3), dp(4), dp(3))
+        setPadding(dp(2), dp(2), dp(2), dp(2))
+        minimumHeight = dp(44)
+        isClickable = true
 
-        circleFrame.addView(progressCircle, FrameLayout.LayoutParams(dp(66), dp(66), Gravity.CENTER))
-        circleFrame.addView(icon, FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER))
-        circleFrame.addView(countBadge, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.BOTTOM or Gravity.END).apply {
-            setMargins(0, 0, dp(1), dp(1))
-        })
-        addView(circleFrame, LayoutParams(dp(72), dp(72)))
+        circleFrame.addView(progressCircle, FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER))
+        circleFrame.addView(icon, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER))
+        circleFrame.addView(
+            countBadge,
+            FrameLayout.LayoutParams(dp(22), dp(22), Gravity.BOTTOM or Gravity.END).apply {
+                setMargins(0, 0, dp(1), dp(1))
+            }
+        )
+        addView(circleFrame, LayoutParams(dp(64), dp(64)))
 
         countBadge.gravity = Gravity.CENTER
-        countBadge.textSize = 13f
+        countBadge.textSize = 12f
         countBadge.setTextColor(Color.WHITE)
-        countBadge.background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.rgb(18, 152, 86))
-            setStroke(dp(1), Color.WHITE)
-        }
+        countBadge.setShadowLayer(2f, 0f, 1f, Color.BLACK)
+        countBadge.background = badgeBackground(false)
 
         moveLabel.gravity = Gravity.CENTER
-        moveLabel.textSize = 12f
+        moveLabel.textSize = 11f
         moveLabel.setTextColor(Color.WHITE)
+        moveLabel.setShadowLayer(3f, 0f, 1f, Color.BLACK)
         moveLabel.maxLines = 2
-        moveLabel.setPadding(dp(2), dp(1), dp(2), dp(1))
-        addView(moveLabel, LayoutParams(dp(100), ViewGroup.LayoutParams.WRAP_CONTENT))
+        moveLabel.setPadding(dp(1), 0, dp(1), 0)
+        addView(moveLabel, LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))
 
         setOnClickListener { onSelectRequested?.invoke(buttonIndex, this) }
     }
@@ -132,20 +141,20 @@ class ChargedMoveChip(context: Context) : LinearLayout(context) {
             progressCircle.type = "normal"
             icon.setTypeSymbol(null)
             countBadge.text = "?"
+            countBadge.background = badgeBackground(false)
             moveLabel.text = "Carregado ▼"
             return
         }
+
         val move = progress.move
-        val ratio = if (move.energyCost <= 0) 0f else progress.currentEnergy.toFloat() / move.energyCost.toFloat()
+        val ratio = if (move.energyCost <= 0) 0f
+        else progress.currentEnergy.toFloat() / move.energyCost.toFloat()
+
         progressCircle.type = move.type
         progressCircle.fraction = ratio.coerceIn(0f, 1f)
         icon.setTypeSymbol(move.type)
         countBadge.text = progress.fastMovesNeeded.toString()
-        countBadge.background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(if (progress.ready) Color.rgb(18, 170, 91) else Color.rgb(33, 121, 154))
-            setStroke(dp(1), Color.WHITE)
-        }
+        countBadge.background = badgeBackground(progress.ready)
         moveLabel.text = "${displayName ?: move.name} ▼"
     }
 
@@ -154,12 +163,20 @@ class ChargedMoveChip(context: Context) : LinearLayout(context) {
         progressCircle.type = move?.type ?: "normal"
         icon.setTypeSymbol(move?.type)
         countBadge.text = "?"
+        countBadge.background = badgeBackground(false)
         moveLabel.text = "${displayName ?: move?.name ?: "Carregado"} ▼"
+    }
+
+    private fun badgeBackground(ready: Boolean) = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(if (ready) Color.rgb(20, 170, 82) else Color.rgb(28, 124, 160))
+        setStroke(dp(1), Color.WHITE)
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
 
+/** Compact clickable fast-move control used by the classic overlay. */
 class FastMoveChip(context: Context) : LinearLayout(context) {
     private val icon = TypeIconView(context)
     private val label = TextView(context)
@@ -168,12 +185,16 @@ class FastMoveChip(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER
-        setPadding(dp(5), dp(4), dp(5), dp(4))
-        addView(icon, LayoutParams(dp(48), dp(48)))
-        addView(label, LayoutParams(dp(110), ViewGroup.LayoutParams.WRAP_CONTENT))
+        setPadding(dp(3), dp(2), dp(3), dp(2))
+        minimumHeight = dp(44)
+        isClickable = true
+
+        addView(icon, LayoutParams(dp(44), dp(44)))
+        addView(label, LayoutParams(dp(98), ViewGroup.LayoutParams.WRAP_CONTENT))
         label.gravity = Gravity.CENTER
-        label.textSize = 12f
+        label.textSize = 11f
         label.setTextColor(Color.WHITE)
+        label.setShadowLayer(3f, 0f, 1f, Color.BLACK)
         label.maxLines = 2
         setOnClickListener { onSelectRequested?.invoke(this) }
     }
