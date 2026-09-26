@@ -7,6 +7,7 @@ import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.ReserveState
+import java.text.Normalizer
 
 class BattleEngine(private val repo: GameDataRepository) {
     private val enemyStates = BattleStateStore()
@@ -20,6 +21,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var charge1: MoveDef? = null
     private var charge2: MoveDef? = null
     private var reserves: List<ReserveState> = emptyList()
+    private var lastChargedSignalAtMs = 0L
+    private var lastAutoEvent = "aguardando"
 
     fun resetBattle() {
         playerName = null; playerCp = null
@@ -27,6 +30,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         tracker.reset(); activeState = null
         fast = null; charge1 = null; charge2 = null
         reserves = emptyList(); enemyStates.clearBattle()
+        lastChargedSignalAtMs = 0L; lastAutoEvent = "reset"
     }
 
     fun onDetection(d: BattleDetection) {
@@ -36,6 +40,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             enemyCp = it.cp ?: enemyCp
             if (!canonical.equals(enemyName, ignoreCase = true)) onEnemyChanged(canonical)
         }
+        if (d.chargedIncoming) onChargedIncoming(d.battleText)
     }
 
     private fun onEnemyChanged(name: String) {
@@ -47,6 +52,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         charge1 = repo.move(saved.chargedMove1Id) ?: likely.second ?: repo.possibleChargedMoves(name).getOrNull(0)
         charge2 = repo.move(saved.chargedMove2Id) ?: likely.third ?: repo.possibleChargedMoves(name).getOrNull(1)
         tracker.restore(saved.estimatedEnergy, saved.fastMoveCount)
+        lastAutoEvent = "inimigo: $name"
     }
 
     fun selectFast(move: MoveDef) { fast = move; activeState?.fastMoveId = move.moveId; saveActiveState() }
@@ -60,15 +66,46 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveActiveState()
     }
 
+    fun onFastDetected() {
+        val f = fast ?: return
+        tracker.onFastMove(f)
+        lastAutoEvent = "+1 ${f.name}"
+        saveActiveState()
+    }
+
+    fun currentFastDurationMs(): Long? = fast?.cooldown?.toLong()?.coerceAtLeast(250L)
+
     fun chargedUsed(move: MoveDef): Boolean {
         val ok = tracker.onChargedMove(move)
-        if (ok) {
-            activeState?.lastChargedMoveId = move.moveId
-            if (move.moveId == charge1?.moveId) activeState?.charge1Confirmed = true
-            if (move.moveId == charge2?.moveId) activeState?.charge2Confirmed = true
-            saveActiveState()
-        }
+        if (ok) confirmCharged(move)
         return ok
+    }
+
+    private fun onChargedIncoming(rawText: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastChargedSignalAtMs < 5_000L) return
+        lastChargedSignalAtMs = now
+
+        val options = listOfNotNull(charge1, charge2).distinctBy { it.moveId }
+        if (options.isEmpty()) return
+        val folded = fold(rawText)
+        val named = options.firstOrNull { folded.contains(fold(it.name)) }
+        val affordable = options.filter { tracker.energy >= it.chargedCost }
+        val chosen = named
+            ?: affordable.minByOrNull { it.chargedCost }
+            ?: options.minByOrNull { it.chargedCost }
+            ?: return
+
+        tracker.onObservedChargedMove(chosen)
+        confirmCharged(chosen)
+        lastAutoEvent = "carregado: ${chosen.name}"
+    }
+
+    private fun confirmCharged(move: MoveDef) {
+        activeState?.lastChargedMoveId = move.moveId
+        if (move.moveId == charge1?.moveId) activeState?.charge1Confirmed = true
+        if (move.moveId == charge2?.moveId) activeState?.charge2Confirmed = true
+        saveActiveState()
     }
 
     fun possibleFastMoves(): List<MoveDef> = enemyName?.let(repo::possibleFastMoves).orEmpty()
@@ -93,7 +130,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount}")
                 appendLine("Energia estimada=${tracker.energy}/100")
                 appendLine("C1=${charge1?.name ?: "?"} | C2=${charge2?.name ?: "?"}")
-                append("Auto Fast: DESLIGADO (Fase 6)")
+                append("Auto: $lastAutoEvent")
             } else null
         )
     }
@@ -105,5 +142,11 @@ class BattleEngine(private val repo: GameDataRepository) {
             enemyStates.put(s)
         }
     }
+
+    private fun fold(s: String): String = Normalizer.normalize(s, Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
+        .uppercase()
+        .replace(Regex("[^A-Z0-9]+"), " ")
+
     private fun normalize(s: String) = s.lowercase().replace(Regex("[^a-z0-9]+"), "")
 }

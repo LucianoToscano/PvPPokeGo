@@ -57,7 +57,9 @@ data class DetectedPokemon(
 
 data class BattleDetection(
     val player: DetectedPokemon?,
-    val opponent: DetectedPokemon?
+    val opponent: DetectedPokemon?,
+    val battleText: String = "",
+    val chargedIncoming: Boolean = false
 )
 
 enum class MatchupState { FAVORABLE, NEUTRAL, UNFAVORABLE, UNKNOWN }

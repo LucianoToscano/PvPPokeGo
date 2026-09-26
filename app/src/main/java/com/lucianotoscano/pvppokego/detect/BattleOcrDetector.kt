@@ -10,6 +10,7 @@ import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.text.Normalizer
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.abs
@@ -21,12 +22,19 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         if (frame.isRecycled) return BattleDetection(null, null)
         val playerRoi = crop(frame, 0f, TOP_FRAC, PLAYER_RIGHT_FRAC, BOTTOM_FRAC)
         val opponentRoi = crop(frame, OPPONENT_LEFT_FRAC, TOP_FRAC, 1f, BOTTOM_FRAC)
+        val battleRoi = crop(frame, BATTLE_LEFT, BATTLE_TOP, BATTLE_RIGHT, BATTLE_BOTTOM)
         return try {
             val player = recognizeCard(playerRoi)
             val opponent = recognizeCard(opponentRoi)
-            BattleDetection(player, opponent)
+            val battleText = recognize(battleRoi)
+            BattleDetection(
+                player = player,
+                opponent = opponent,
+                battleText = battleText,
+                chargedIncoming = looksLikeEnemyChargedPrompt(battleText)
+            )
         } finally {
-            playerRoi.recycle(); opponentRoi.recycle()
+            playerRoi.recycle(); opponentRoi.recycle(); battleRoi.recycle()
         }
     }
 
@@ -48,6 +56,17 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         }
         return DetectedPokemon(canonical, cp, confidence, raw)
     }
+
+    private fun looksLikeEnemyChargedPrompt(raw: String): Boolean {
+        if (raw.isBlank()) return false
+        val t = fold(raw)
+        return CHARGED_PROMPTS.any(t::contains)
+    }
+
+    private fun fold(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
+        .uppercase()
+        .replace(Regex("\\s+"), " ")
 
     private suspend fun recognize(bitmap: Bitmap): String {
         val image = InputImage.fromBitmap(bitmap, 0)
@@ -92,8 +111,17 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private const val BOTTOM_FRAC = 0.15f
         private const val PLAYER_RIGHT_FRAC = 0.25f
         private const val OPPONENT_LEFT_FRAC = 0.75f
+        private const val BATTLE_LEFT = 0.05f
+        private const val BATTLE_TOP = 0.30f
+        private const val BATTLE_RIGHT = 0.95f
+        private const val BATTLE_BOTTOM = 0.57f
         private val TARGET_TEXT_COLOR = Color.parseColor("#2f5971")
         private const val COLOR_TOLERANCE = 30
         private val CP_REGEX = Regex("(?i)(?:PC|CP)\\s*[: ]?\\s*(\\d{2,5})")
+        private val CHARGED_PROMPTS = listOf(
+            "ATAQUE CHEGANDO", "ATAQUE CARREGADO", "USAR UM ESCUDO",
+            "ESCUDO PROTETOR", "ESCUDOS PROTETORES", "NAO TEM MAIS ESCUDOS",
+            "ATTACK INCOMING", "PROTECT SHIELD", "NO PROTECT SHIELDS"
+        )
     }
 }

@@ -33,6 +33,19 @@ class EnergyTracker(initialEnergy: Int = 0, private val maxEnergy: Int = 100) {
         energy = (energy - cost).coerceAtLeast(0)
         return true
     }
+
+    /**
+     * Used when the screen proves a Charged Move happened but some Fast Moves may have been
+     * missed visually. We never blindly zero energy: we subtract the real move cost and preserve
+     * any energy that had already been tracked. If tracking was below the cost, the minimum
+     * consistent energy is assumed and the result becomes zero.
+     */
+    fun onObservedChargedMove(charged: MoveDef) {
+        val cost = charged.chargedCost.coerceAtLeast(0)
+        if (energy < cost) energy = cost
+        energy = (energy - cost).coerceAtLeast(0)
+    }
+
     fun predict(charged: MoveDef, fast: MoveDef): ChargedPrediction {
         val cost = charged.chargedCost.coerceAtLeast(1)
         val gain = fast.energyGain.coerceAtLeast(1)
