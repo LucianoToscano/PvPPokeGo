@@ -50,17 +50,24 @@ O cluster deve ficar afastado do treinador humano inimigo e não cobrir HP, pers
 Para cada Pokémon reserva:
 
 - A caixa cinza nativa com a imagem do Pokémon permanece intacta.
-- Os ÍCONES DE TIPO da reserva ficam EMBAIXO da caixa cinza.
+- Os ÍCONES DE TIPO da reserva ficam IMEDIATAMENTE EMBAIXO da caixa cinza, mais altos e próximos da borda inferior da própria caixa; não devem ficar soltos mais abaixo na tela.
 - O INDICADOR DE MATCHUP (`verde`, `cinza` ou `vermelho`) fica DO LADO DIREITO da caixa, CENTRALIZADO verticalmente no meio dela.
 - Cada reserva possui seu próprio indicador.
 - Não colocar o indicador por cima da imagem do Pokémon.
 - Não colocar os tipos ao lado da imagem; tipos ficam abaixo da caixa.
+- A visibilidade dos elementos extras da reserva DEVE ESPELHAR a visibilidade da caixa nativa do Pokémon GO.
+- Quando um Pokémon da reserva desmaiar e a caixa/imagem dele desaparecer do HUD nativo, TODOS os elementos extras ligados a essa reserva também desaparecem imediatamente: tipos, indicador de matchup e qualquer outro ícone auxiliar.
+- Não reaproveitar a posição da reserva derrotada para outro conjunto de ícones soltos. Cada conjunto permanece vinculado ao card correspondente enquanto esse card existir.
 
 Estrutura visual:
 
 `[ caixa da reserva ]   [ indicador matchup ]`
 
 `      [ tipo 1 ] [ tipo 2 ]`
+
+Ao desmaiar:
+
+`[ card desaparece ] => [ indicador + tipos desaparecem juntos ]`
 
 ## 5. Parte inferior
 
