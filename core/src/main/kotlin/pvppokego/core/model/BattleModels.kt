@@ -55,8 +55,16 @@ data class EnemyPokemonState(
     /**
      * Ordered list matching the two charged-move controls in the overlay.
      * Index 0 is the left button and index 1 is the right button.
+     *
+     * Values may initially be predictions from the top-ranked PvPoke moveset.
      */
     val selectedChargedMoveIds: List<String> = emptyList(),
+    /**
+     * Charged moves actually observed in battle (for example from the localized
+     * "X usou Y" / "X used Y" banner). Confirmed moves must never be displaced
+     * by a later prediction or by a different observed move.
+     */
+    val confirmedChargedMoveIds: Set<String> = emptySet(),
     val energy: Int = 0,
     val fastMovesObserved: Int = 0,
     val chargedMovesUsed: Int = 0,
