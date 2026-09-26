@@ -52,11 +52,12 @@ data class EnemyPokemonState(
     val slot: Int,
     val speciesId: String? = null,
     val fastMoveId: String? = null,
-    /**
-     * Ordered list matching the two charged-move controls in the overlay.
-     * Index 0 is the left button and index 1 is the right button.
-     */
+    /** Ordered list: index 0 = left charged control, index 1 = right. */
     val selectedChargedMoveIds: List<String> = emptyList(),
+    /** True only when the user explicitly changed the fast move in the overlay. */
+    val fastMoveManuallyOverridden: Boolean = false,
+    /** Button indexes explicitly changed by the user. Automatic OCR never replaces them. */
+    val manualChargedMoveButtonIndexes: Set<Int> = emptySet(),
     val energy: Int = 0,
     val fastMovesObserved: Int = 0,
     val chargedMovesUsed: Int = 0,
