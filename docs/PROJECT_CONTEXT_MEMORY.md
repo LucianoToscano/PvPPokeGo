@@ -17,6 +17,8 @@ Foram usados como referência funcional e arquitetural os arquivos fornecidos pe
 - `Poke Genie -Remote Raid IV PvP v8.15.0 B404 (Premium) ... .apk`
 - `Poke Genie ... (1).apk` (duplicado idêntico)
 - `Pokémon GO_0.429.1(1).apk`
+- `pgtools-6.0.6-079d8b42e6c6cfaae64033341f861ac6 (1).apk`
+- `shungo1.7.0.apk`
 
 ## Descobertas que interessam ao PvPPokeGo
 
@@ -54,6 +56,24 @@ Para o PvPPokeGo, apenas conceitos relacionados a batalha/análise visual devem 
 ### Pokemod
 Foram observados componentes ligados a root/injeção, incluindo injector, busybox/sqlite e bibliotecas nativas de concealment. Isso serve apenas como referência de arquitetura externa e de funcionalidades. O PvPPokeGo não deve depender de injeção, concealment ou bypass.
 
+### PGTools 6.0.6
+Confirmou uma arquitetura modular de farm e batalha:
+
+- PaC: catch/spin e filtros;
+- PaG: Rocket/Grunt;
+- PaS: shiny hunter;
+- PaH: hatch;
+- PaR: raids;
+- filtros Hundo/Shundo/custom IV;
+- stats, logs e regras de transferência.
+
+Para o PvPPokeGo, aproveitar apenas conceitos genéricos como filtros, stats, modelos de configuração, dados de batalha e logging. Farm e execução automática ficam no Recovery.
+
+### Shungo 1.7.0
+Confirmou um fluxo de hunt por alvo/coordenada com `getPokemons`, latitude/longitude e `setLocation`, dependente de root/Magisk no APK original.
+
+Para o PvPPokeGo, aproveitar apenas a ideia genérica de prioridade/fila de alvos quando útil a análise. Localização, hunt e root ficam fora do core PvP.
+
 ## Funções prioritárias no PvPPokeGo
 
 1. OCR/visão por ROI para identificar Pokémon e elementos da batalha.
@@ -68,6 +88,7 @@ Foram observados componentes ligados a root/injeção, incluindo injector, busyb
 10. Simulador/counter engine e integração com dados PvPoke locais.
 11. Modo assist-only como padrão seguro; qualquer executor de gesto deve permanecer desacoplado da lógica central.
 12. Logs/debug de reconhecimento para melhorar precisão.
+13. Filtros e stats reutilizáveis do domínio Pokémon.
 
 ## Regra de implementação
 
@@ -87,6 +108,7 @@ O PvPPokeGo e o projeto de recuperação estilo PGSharp podem compartilhar compo
 - battle energy tracker;
 - reconhecimento visual genérico;
 - logging/diagnóstico;
-- modelos de configuração.
+- modelos de configuração;
+- filtros e stats.
 
-O código específico de localização, mapa, Virtual GO Plus e outras funções do projeto de recuperação não deve contaminar o core do PvPPokeGo.
+O código específico de localização, mapa, Virtual GO Plus, farm, hunter por coordenadas e outras funções do projeto de recuperação não deve contaminar o core do PvPPokeGo.
