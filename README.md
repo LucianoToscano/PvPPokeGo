@@ -48,6 +48,7 @@ core/
 data/pvpoke/
 docs/PVPOKE_INTEGRATION.md
 docs/APK_CROSS_REFERENCE_2026-09-25.md
+docs/PROJECT_CONTEXT_MEMORY.md
 tools/update_pvpoke_data.py
 THIRD_PARTY_NOTICES.md
 ```
@@ -66,6 +67,12 @@ A análise comparativa de Poke Genie, iPogo, Pokemod e Pokémon GO oficial está
 `docs/APK_CROSS_REFERENCE_2026-09-25.md`. O documento registra quais ideias
 arquiteturais podem ser reimplementadas no PvPPokeGo e quais devem permanecer
 isoladas no projeto de recuperação.
+
+## Memória técnica do projeto
+
+O contexto consolidado dos APKs analisados, funções candidatas, prioridades e
+regras de compartilhamento com o projeto de recuperação está em
+`docs/PROJECT_CONTEXT_MEMORY.md`.
 
 > O PvPPokeGo é uma ferramenta externa de assistência. O motor descrito aqui
 > não executa cliques, ataques, trocas ou injeção de código no Pokémon GO.
