@@ -96,6 +96,48 @@ class BattleEnergyTrackerTest {
     }
 
     @Test
+    fun firstObservedChargedMoveReplacesOnlyAnUnconfirmedPrediction() {
+        val tracker = BattleEnergyTracker(repo)
+        tracker.identifyPokemon(0, "feraligatr", "SHADOW_CLAW")
+        tracker.setChargedMoves(0, listOf("HYDRO_CANNON", "ICE_BEAM"))
+
+        tracker.onChargedMove(0, "CRUNCH")
+
+        assertEquals(
+            listOf("CRUNCH", "ICE_BEAM"),
+            tracker.state(0).selectedChargedMoveIds
+        )
+        assertEquals(setOf("CRUNCH"), tracker.state(0).confirmedChargedMoveIds)
+
+        // Seeing the same attack again must never overwrite the other slot.
+        tracker.onChargedMove(0, "CRUNCH")
+        assertEquals(
+            listOf("CRUNCH", "ICE_BEAM"),
+            tracker.state(0).selectedChargedMoveIds
+        )
+        assertEquals(setOf("CRUNCH"), tracker.state(0).confirmedChargedMoveIds)
+    }
+
+    @Test
+    fun secondDifferentObservedMoveUsesTheOtherUnconfirmedButton() {
+        val tracker = BattleEnergyTracker(repo)
+        tracker.identifyPokemon(0, "feraligatr", "SHADOW_CLAW")
+        tracker.setChargedMoves(0, listOf("HYDRO_CANNON", "ICE_BEAM"))
+
+        tracker.onChargedMove(0, "CRUNCH")
+        tracker.onChargedMove(0, "HYDRO_CANNON")
+
+        assertEquals(
+            listOf("CRUNCH", "HYDRO_CANNON"),
+            tracker.state(0).selectedChargedMoveIds
+        )
+        assertEquals(
+            setOf("CRUNCH", "HYDRO_CANNON"),
+            tracker.state(0).confirmedChargedMoveIds
+        )
+    }
+
+    @Test
     fun faintingClearsEnergyAndLocksSlot() {
         val tracker = BattleEnergyTracker(repo)
         tracker.identifyPokemon(0, "feraligatr", "SHADOW_CLAW")
