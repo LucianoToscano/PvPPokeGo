@@ -48,8 +48,8 @@ class EnergyTracker(
 
     /**
      * Visual confirmation means the move definitely happened. Preserve residual energy when our
-     * estimate is sufficient; if the visual counter missed Fast Moves, use 0 as the conservative
-     * residual instead of refusing to reset forever.
+     * estimate is sufficient; if visual counting missed Fast Moves, fall back to zero instead of
+     * leaving the HUD stuck at full charge forever.
      */
     fun onObservedChargedMove(charged: MoveDef): Boolean {
         val cost = charged.chargedCost.coerceAtLeast(0)
@@ -57,16 +57,31 @@ class EnergyTracker(
         return true
     }
 
+    /**
+     * Both Charged Moves read the same shared Pokemon GO PvP energy pool. Therefore both icons
+     * legitimately rise at the same time, but each fills at a different rate according to its
+     * own energy cost. If enough energy remains for another copy after one becomes ready, the
+     * main circle stays full and overflowProgress shows progress toward the following copy.
+     */
     fun predict(charged: MoveDef, fast: MoveDef): ChargedPrediction {
         val cost = charged.chargedCost.coerceAtLeast(1)
         val gain = fast.energyGain.coerceAtLeast(1)
         val missing = (cost - energy).coerceAtLeast(0)
         val remaining = if (missing == 0) 0 else ceil(missing.toDouble() / gain).toInt()
+        val progress = (energy.toFloat() / cost.toFloat()).coerceIn(0f, 1f)
+        val overflow = if (energy >= cost) {
+            ((energy - cost).toFloat() / cost.toFloat()).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
         return ChargedPrediction(
             move = charged,
             fastMovesRemaining = remaining,
-            progress = (energy.toFloat() / cost.toFloat()).coerceIn(0f, 1f),
-            ready = energy >= cost
+            progress = progress,
+            ready = energy >= cost,
+            currentEnergy = energy,
+            energyCost = cost,
+            overflowProgress = overflow
         )
     }
 }
