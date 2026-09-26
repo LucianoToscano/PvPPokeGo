@@ -24,7 +24,12 @@ class ScreenCaptureAnalyzer(
     private val callback: Callback
 ) {
     interface Callback {
-        fun onOcr(fullText: String, enemyHeaderText: String, timestampMs: Long)
+        fun onOcr(
+            fullText: String,
+            enemyHeaderText: String,
+            chargedBannerLines: List<String>,
+            timestampMs: Long
+        )
         fun onMotion(score: Double, timestampMs: Long)
     }
 
@@ -103,8 +108,7 @@ class ScreenCaptureAnalyzer(
 
     private fun analyzeOcr(bitmap: Bitmap, timestampMs: Long) {
         ocrBusy = true
-        val input = InputImage.fromBitmap(bitmap, 0)
-        recognizer.process(input)
+        recognizer.process(InputImage.fromBitmap(bitmap, 0))
             .addOnSuccessListener { result ->
                 val enemyHeader = result.textBlocks
                     .filter { block ->
@@ -112,7 +116,22 @@ class ScreenCaptureAnalyzer(
                         box.centerX() > bitmap.width * 0.48 && box.top < bitmap.height * 0.18
                     }
                     .joinToString(" ") { it.text }
-                callback.onOcr(result.text, enemyHeader, timestampMs)
+
+                val chargedLines = result.textBlocks
+                    .flatMap { it.lines }
+                    .map { it.text.trim() }
+                    .filter { line ->
+                        val lower = line.lowercase()
+                        " usou " in " $lower " || " used " in " $lower "
+                    }
+                    .distinct()
+
+                callback.onOcr(
+                    fullText = result.text,
+                    enemyHeaderText = enemyHeader,
+                    chargedBannerLines = chargedLines,
+                    timestampMs = timestampMs
+                )
             }
             .addOnCompleteListener {
                 ocrBusy = false
