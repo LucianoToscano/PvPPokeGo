@@ -4,13 +4,13 @@ import android.content.Context
 import android.graphics.drawable.PictureDrawable
 import android.util.AttributeSet
 import android.view.View
-import androidx.appcompat.widget.AppCompatImageView
+import android.widget.ImageView
 import com.caverock.androidsvg.SVG
 
 class TypeIconView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
-) : AppCompatImageView(context, attrs) {
+) : ImageView(context, attrs) {
 
     fun setType(type: String?) {
         if (type.isNullOrBlank()) {
@@ -20,6 +20,7 @@ class TypeIconView @JvmOverloads constructor(
         try {
             val svg = SVG.getFromAsset(context.assets, "type_icons/${type.lowercase()}.svg")
             setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            scaleType = ScaleType.CENTER_INSIDE
             setImageDrawable(PictureDrawable(svg.renderToPicture()))
         } catch (_: Exception) {
             setImageDrawable(null)
