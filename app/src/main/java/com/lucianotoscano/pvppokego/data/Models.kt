@@ -93,7 +93,13 @@ data class ChargedPrediction(
     val move: MoveDef,
     val fastMovesRemaining: Int,
     val progress: Float,
-    val ready: Boolean
+    val ready: Boolean,
+    /** Shared enemy PvP energy pool at the time of this prediction. */
+    val currentEnergy: Int = 0,
+    /** PvP cost of this specific Charged Move. */
+    val energyCost: Int = 1,
+    /** Progress toward a second copy once one copy is already ready. */
+    val overflowProgress: Float = 0f
 )
 
 data class BattleUiState(
