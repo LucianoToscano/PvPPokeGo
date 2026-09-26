@@ -7,6 +7,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.lucianotoscano.pvppokego.data.BattleDetection
+import com.lucianotoscano.pvppokego.data.BattleLeagueTextDetector
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -33,6 +34,20 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
             BattleDetection(player, opponent, battleText)
         } finally {
             playerRoi.recycle(); opponentRoi.recycle(); battleRoi.recycle()
+        }
+    }
+
+    /**
+     * Reads the lobby/rules area to determine Great/Ultra/Master. It is called slowly
+     * and only before an opponent is active, so it does not add continuous battle OCR cost.
+     */
+    suspend fun detectLeagueCp(frame: Bitmap): Int? {
+        if (frame.isRecycled) return null
+        val roi = crop(frame, LEAGUE_LEFT_FRAC, LEAGUE_TOP_FRAC, LEAGUE_RIGHT_FRAC, LEAGUE_BOTTOM_FRAC)
+        return try {
+            BattleLeagueTextDetector.detectCp(recognize(roi))
+        } finally {
+            roi.recycle()
         }
     }
 
@@ -116,7 +131,7 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
     }
 
     companion object {
-        // Card values recovered from the working base APK.
+        // Card values recovered from the working V03 base APK.
         private const val TOP_FRAC = 0.067f
         private const val BOTTOM_FRAC = 0.15f
         private const val PLAYER_RIGHT_FRAC = 0.43f
@@ -133,6 +148,12 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private const val TEAM_TOP_FRAC = 0.10f
         private const val TEAM_RIGHT_FRAC = 0.96f
         private const val TEAM_BOTTOM_FRAC = 0.93f
+
+        // Lobby/rules text can appear across a large central portion of the screen.
+        private const val LEAGUE_LEFT_FRAC = 0.04f
+        private const val LEAGUE_TOP_FRAC = 0.04f
+        private const val LEAGUE_RIGHT_FRAC = 0.96f
+        private const val LEAGUE_BOTTOM_FRAC = 0.82f
 
         private val TARGET_TEXT_COLOR = Color.parseColor("#2f5971")
         private const val COLOR_TOLERANCE = 34
