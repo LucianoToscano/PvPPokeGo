@@ -1,0 +1,72 @@
+package com.lucianotoscano.pvppokego.data
+
+import android.content.Context
+
+class SettingsRepository(context: Context) {
+    private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+    var overlayEnabled: Boolean
+        get() = prefs.getBoolean("overlay_enabled", true)
+        set(v) = prefs.edit().putBoolean("overlay_enabled", v).apply()
+
+    var autoRecognition: Boolean
+        get() = prefs.getBoolean("auto_recognition", true)
+        set(v) = prefs.edit().putBoolean("auto_recognition", v).apply()
+
+    var showStrongTypes: Boolean
+        get() = prefs.getBoolean("show_strong_types", true)
+        set(v) = prefs.edit().putBoolean("show_strong_types", v).apply()
+
+    var showCurrentIndicator: Boolean
+        get() = prefs.getBoolean("show_current_indicator", true)
+        set(v) = prefs.edit().putBoolean("show_current_indicator", v).apply()
+
+    var analyzeReserves: Boolean
+        get() = prefs.getBoolean("analyze_reserves", true)
+        set(v) = prefs.edit().putBoolean("analyze_reserves", v).apply()
+
+    var showReserveTypes: Boolean
+        get() = prefs.getBoolean("show_reserve_types", true)
+        set(v) = prefs.edit().putBoolean("show_reserve_types", v).apply()
+
+    var showEnemyMoves: Boolean
+        get() = prefs.getBoolean("show_enemy_moves", true)
+        set(v) = prefs.edit().putBoolean("show_enemy_moves", v).apply()
+
+    var showChargedCounter: Boolean
+        get() = prefs.getBoolean("show_charged_counter", true)
+        set(v) = prefs.edit().putBoolean("show_charged_counter", v).apply()
+
+    var showEnergyProgress: Boolean
+        get() = prefs.getBoolean("show_energy_progress", true)
+        set(v) = prefs.edit().putBoolean("show_energy_progress", v).apply()
+
+    var showSwitchTimer: Boolean
+        get() = prefs.getBoolean("show_switch_timer", false)
+        set(v) = prefs.edit().putBoolean("show_switch_timer", v).apply()
+
+    var debugMode: Boolean
+        get() = prefs.getBoolean("debug_mode", false)
+        set(v) = prefs.edit().putBoolean("debug_mode", v).apply()
+
+    var editMode: Boolean
+        get() = prefs.getBoolean("edit_mode", false)
+        set(v) = prefs.edit().putBoolean("edit_mode", v).apply()
+
+    var scale: Float
+        get() = prefs.getFloat("overlay_scale", 0.8f)
+        set(v) = prefs.edit().putFloat("overlay_scale", v.coerceIn(.5f, 1.2f)).apply()
+
+    var opacity: Float
+        get() = prefs.getFloat("overlay_opacity", .9f)
+        set(v) = prefs.edit().putFloat("overlay_opacity", v.coerceIn(.3f, 1f)).apply()
+
+    fun setPosition(block: String, x: Float, y: Float) {
+        prefs.edit().putFloat("${block}_x", x).putFloat("${block}_y", y).apply()
+    }
+
+    fun getPosition(block: String, defaultX: Float, defaultY: Float): Pair<Float, Float> =
+        prefs.getFloat("${block}_x", defaultX) to prefs.getFloat("${block}_y", defaultY)
+
+    companion object { private const val FILE = "pvppokego_prefs" }
+}
