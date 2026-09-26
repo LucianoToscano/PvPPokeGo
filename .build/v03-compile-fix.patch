@@ -1,0 +1,27 @@
+--- a/app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
++++ b/app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+@@ -261,15 +261,15 @@
+     }
+ 
+     private fun saveActiveState() {
+-        activeState?.let { s ->
+-            s.fastMoveId = fast?.moveId
+-            s.chargedMove1Id = charge1?.moveId
+-            s.chargedMove2Id = charge2?.moveId
+-            s.fastMoveCount = tracker.fastMoveCount
+-            s.estimatedEnergy = tracker.energy
+-            s.lastSeenAtMs = System.currentTimeMillis()
+-            enemyStates.put(s)
+-        }
++        val state = activeState ?: return
++        // BattleStateStore keeps the same mutable BattlePokemonState instance returned
++        // by getOrCreate(), so updating it in place is enough to persist this opponent.
++        state.fastMoveId = fast?.moveId
++        state.chargedMove1Id = charge1?.moveId
++        state.chargedMove2Id = charge2?.moveId
++        state.fastMoveCount = tracker.fastMoveCount
++        state.estimatedEnergy = tracker.energy
++        state.lastSeenAtMs = System.currentTimeMillis()
+     }
+ 
+     private fun normalize(s: String) = s.lowercase().replace(Regex("[^a-z0-9]+"), "")

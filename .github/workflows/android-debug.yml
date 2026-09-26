@@ -9,6 +9,7 @@ on:
       - 'settings.gradle.kts'
       - 'gradle.properties'
       - '.build/seed.part*'
+      - '.build/*.patch'
       - '.github/workflows/android-debug.yml'
   workflow_dispatch:
 
@@ -29,6 +30,9 @@ jobs:
             cat .build/seed.part* | base64 -d > /tmp/PVPPokeGo_V03_seed.zip
             unzip -t /tmp/PVPPokeGo_V03_seed.zip
             unzip -o /tmp/PVPPokeGo_V03_seed.zip -d .
+          fi
+          if [ -f .build/v03-compile-fix.patch ]; then
+            git apply .build/v03-compile-fix.patch
           fi
 
       - name: Java 17
@@ -79,7 +83,7 @@ jobs:
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add app build.gradle.kts settings.gradle.kts gradle.properties
-            git rm -f .build/PVPPokeGo_V03_seed.zip .build/seed.part* || true
+            git rm -f .build/PVPPokeGo_V03_seed.zip .build/seed.part* .build/v03-compile-fix.patch || true
             git commit -m 'Expand Android V03 source [skip ci]'
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
