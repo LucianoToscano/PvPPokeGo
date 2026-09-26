@@ -115,6 +115,27 @@ Exibir:
 - botão de correção manual rápida;
 - memória dos três Pokémon adversários.
 
+#### Requisito de UX — overlay não intrusivo
+
+O overlay nunca deve ficar ocupando a tela sem necessidade.
+
+Comportamento obrigatório:
+- botão **Ocultar** no painel completo;
+- ao ocultar manualmente, reduzir para uma **bolha mínima** reposicionável em vez de manter o painel grande;
+- tocar na bolha deve restaurar o painel imediatamente;
+- ação **Mostrar** e **Ocultar** também disponível pela notificação persistente, como rota de recuperação;
+- **auto-ocultar/minimizar** quando o app não detectar uma batalha ativa ou não houver informação útil para exibir por alguns segundos;
+- **auto-restaurar** quando uma batalha/estado relevante voltar a ser detectado, exceto quando o usuário tiver ocultado manualmente;
+- respeitar preferência do usuário: `overlayAutoHide`, `overlayManualHidden`, tamanho/posição da bolha e posição do painel;
+- fora da batalha, o estado preferido é minimizado/oculto;
+- durante menus, troca de aplicativo, lobby, tela inicial ou períodos sem leitura útil, não cobrir a interface desnecessariamente;
+- o estado de visibilidade deve ser separado do estado do `BattleSession`, para esconder UI sem perder energia/contagens já rastreadas.
+
+Estados sugeridos:
+`FULL -> COLLAPSED -> AUTO_HIDDEN`, com retorno para `FULL` quando apropriado.
+
+A ocultação deve afetar apenas a interface. `BattleEnergyTracker`, memória dos três adversários e sessão continuam preservados enquanto a batalha estiver ativa.
+
 ### 8. Collection PvP / Team Manager
 
 A partir de PGSStats:
@@ -158,7 +179,8 @@ Somente componentes genéricos próprios:
 - move data;
 - `StorageSearchGenerator`;
 - logs/stats genéricos;
-- ResourcePlanner base.
+- ResourcePlanner base;
+- padrão de estados de visibilidade do overlay, sem compartilhar lógica de localização/farm.
 
 ## Não entra no PvPPokeGo
 
@@ -187,19 +209,20 @@ Não trazer do PGSData/PGLOT:
 3. import de battle parties;
 4. `PvPIvRankEngine`;
 5. `MoveTimingEngine`;
-6. overlay com time próprio pré-carregado.
+6. overlay com time próprio pré-carregado;
+7. controles Ocultar/Mostrar + auto-hide do overlay.
 
 ### P1
-7. `BattleSimulator`;
-8. `CounterAdvisor`;
-9. `BreakpointEngine`;
-10. Collection PvP/Team Manager;
-11. ResourcePlanner.
+8. `BattleSimulator`;
+9. `CounterAdvisor`;
+10. `BreakpointEngine`;
+11. Collection PvP/Team Manager;
+12. ResourcePlanner.
 
 ### P2
-12. scanner de coleção por screenshot/vídeo;
-13. geração avançada de strings de busca;
-14. analytics/replay/debug de batalha.
+13. scanner de coleção por screenshot/vídeo;
+14. geração avançada de strings de busca;
+15. analytics/replay/debug de batalha.
 
 ## Regra
 
