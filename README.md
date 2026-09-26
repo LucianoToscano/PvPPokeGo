@@ -19,6 +19,8 @@ A integração usa o projeto PvPoke como fonte atualizável para:
 
 A batalha não depende de acesso ao site PvPoke. Os dados são convertidos antes da execução e usados localmente.
 
+O repositório oficial completo do PvPoke também está vinculado em `third_party/pvpoke` como submódulo Git, fixado em um commit revisado. Consulte `docs/PVPOKE_UPSTREAM_SOURCE.md` para inicialização, atualização e licença.
+
 ### Memória dos três Pokémon inimigos
 
 `BattleEnergyTracker` mantém três estados independentes.
@@ -75,13 +77,29 @@ core/
 data/pvpoke/
 data/localization/
 docs/PVPOKE_INTEGRATION.md
+docs/PVPOKE_UPSTREAM_SOURCE.md
 docs/APK_CROSS_REFERENCE_2026-09-25.md
 docs/APK_BASELINE_AND_IMPLEMENTATION_MAP_2026-09-26.md
 docs/BATTLE_OVERLAY_FIXES_2026-09-26.md
 docs/PROJECT_CONTEXT_MEMORY.md
+third_party/pvpoke/        # submódulo oficial PvPoke
 tools/update_pvpoke_data.py
 tools/sync_type_icons.py
 THIRD_PARTY_NOTICES.md
+```
+
+## Baixar/inicializar o PvPoke oficial
+
+Depois de clonar o PvPPokeGo:
+
+```bash
+git submodule update --init --recursive
+```
+
+Ou clone o projeto e o PvPoke em uma etapa:
+
+```bash
+git clone --recurse-submodules https://github.com/LucianoToscano/PvPPokeGo.git
 ```
 
 ## Atualizar dados PvPoke
@@ -90,7 +108,7 @@ THIRD_PARTY_NOTICES.md
 python tools/update_pvpoke_data.py
 ```
 
-Consulte `docs/PVPOKE_INTEGRATION.md` para o contrato completo de integração.
+Consulte `docs/PVPOKE_INTEGRATION.md` para o contrato completo de integração e `docs/PVPOKE_UPSTREAM_SOURCE.md` para o código-fonte upstream.
 
 ## Auditoria de APKs de referência
 
