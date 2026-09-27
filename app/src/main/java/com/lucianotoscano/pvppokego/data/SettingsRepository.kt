@@ -61,8 +61,9 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("show_hud_text", true)
         set(v) = prefs.edit().putBoolean("show_hud_text", v).apply()
 
+    /** Menu can switch between PGSharp-like icon+text rows and compact icons only. */
     var quickMenuShowLabels: Boolean
-        get() = prefs.getBoolean("quick_menu_show_labels", false)
+        get() = prefs.getBoolean("quick_menu_show_labels", true)
         set(v) = prefs.edit().putBoolean("quick_menu_show_labels", v).apply()
 
     var quickMenuIconsOnly: Boolean
@@ -77,6 +78,15 @@ class SettingsRepository(context: Context) {
         get() = prefs.getFloat("quick_menu_y_frac", 1f)
         set(v) = prefs.edit().putFloat("quick_menu_y_frac", v.coerceIn(0f, 1f)).apply()
 
+    /** Independent league badge position; it never follows the gear. */
+    var leagueBadgeXFraction: Float
+        get() = prefs.getFloat("league_badge_x_frac", .86f)
+        set(v) = prefs.edit().putFloat("league_badge_x_frac", v.coerceIn(0f, 1f)).apply()
+
+    var leagueBadgeYFraction: Float
+        get() = prefs.getFloat("league_badge_y_frac", .84f)
+        set(v) = prefs.edit().putFloat("league_badge_y_frac", v.coerceIn(0f, 1f)).apply()
+
     fun ensureQuickMenuBottomRightV2() {
         if (prefs.getInt("quick_menu_position_version", 0) >= 2) return
         prefs.edit()
@@ -86,25 +96,29 @@ class SettingsRepository(context: Context) {
             .apply()
     }
 
-    /** One-time migration to the compact icons-only quick menu. */
+    /** V4 restores icon+text as the default menu style; users can still switch to icons only. */
     fun ensureQuickMenuStyleV3() {
-        if (prefs.getInt("quick_menu_style_version", 0) >= 3) return
+        if (prefs.getInt("quick_menu_style_version", 0) >= 4) return
         prefs.edit()
-            .putBoolean("quick_menu_show_labels", false)
-            .putInt("quick_menu_style_version", 3)
+            .putBoolean("quick_menu_show_labels", true)
+            .putInt("quick_menu_style_version", 4)
             .apply()
     }
 
-    /** Move legacy/clipped top HUD positions into the safe strip below the status bar. */
+    /**
+     * Android keeps TYPE_APPLICATION_OVERLAY below the system status bar. Therefore the correct fix
+     * is to keep our top chips in Pokemon GO's free strip below the status bar, not try to cover it.
+     * Only legacy positions that are high enough to be clipped are migrated.
+     */
     fun ensureTopHudSafeV4() {
-        if (prefs.getInt("top_hud_position_version", 0) >= 4) return
+        if (prefs.getInt("top_hud_position_version", 0) >= 5) return
         val editor = prefs.edit()
         listOf("hud_player_matchup", "hud_strong_types", "hud_toggle").forEach { block ->
             val key = "${block}_y"
             val current = prefs.getFloat(key, Float.NaN)
-            if (current.isNaN() || current < 22f) editor.putFloat(key, 28f)
+            if (current.isNaN() || current < 54f) editor.putFloat(key, 66f)
         }
-        editor.putInt("top_hud_position_version", 4).apply()
+        editor.putInt("top_hud_position_version", 5).apply()
     }
 
     var showSwitchTimer: Boolean
@@ -156,6 +170,8 @@ class SettingsRepository(context: Context) {
         prefs.edit()
             .putFloat("quick_menu_x_frac", 1f)
             .putFloat("quick_menu_y_frac", 1f)
+            .putFloat("league_badge_x_frac", .86f)
+            .putFloat("league_badge_y_frac", .84f)
             .putInt("quick_menu_position_version", 2)
             .apply()
     }
