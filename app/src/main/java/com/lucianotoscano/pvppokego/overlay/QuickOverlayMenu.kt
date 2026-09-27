@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
-import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -22,7 +21,7 @@ import kotlin.math.min
  * Floating PGSharp-style quick menu for PvPPokeGo.
  *
  * It only changes PvPPokeGo overlay preferences. It never sends input to Pokemon GO.
- * The gear itself can be long-pressed and dragged anywhere on screen.
+ * The gear can be dragged directly to any screen edge/corner and its position is persisted.
  */
 class QuickOverlayMenu(
     private val context: Context,
@@ -35,10 +34,13 @@ class QuickOverlayMenu(
         fun onToggleHud()
         fun isHudCollapsed(): Boolean
         fun onResetHudPositions()
+        fun currentBattleModeLabel(): String
     }
 
     private var gearView: TextView? = null
     private var gearParams: WindowManager.LayoutParams? = null
+    private var statusBadgeView: TextView? = null
+    private var statusBadgeParams: WindowManager.LayoutParams? = null
     private var panelView: View? = null
     private var externallyVisible = false
 
@@ -48,6 +50,7 @@ class QuickOverlayMenu(
 
     fun attach() {
         if (gearView != null) return
+        settings.ensureQuickMenuBottomRightV2()
 
         val gear = TextView(context).apply {
             text = "⚙"
@@ -70,12 +73,55 @@ class QuickOverlayMenu(
         installDragAndTap(gear, params)
         gearView = gear
         windowManager.addView(gear, params)
+
+        val badge = TextView(context).apply {
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            textSize = 9.5f
+            maxLines = 1
+            setPadding(dp(5), 0, dp(5), 0)
+            setShadowLayer(2f, 0f, 1f, Color.BLACK)
+            background = roundedBackground(
+                Color.argb(180, 25, 29, 35),
+                Color.argb(175, 238, 241, 246),
+                dp(9).toFloat(),
+                dp(1)
+            )
+            visibility = View.GONE
+        }
+        val badgeParams = badgeLayoutParams(params)
+        statusBadgeView = badge
+        statusBadgeParams = badgeParams
+        windowManager.addView(badge, badgeParams)
+        refreshStatusBadge()
     }
 
     fun setVisible(visible: Boolean) {
         externallyVisible = visible
         gearView?.visibility = if (visible) View.VISIBLE else View.GONE
+        statusBadgeView?.visibility = if (visible) View.VISIBLE else View.GONE
         if (!visible) dismissPanel()
+        if (visible) refreshStatusBadge()
+    }
+
+    fun refreshStatusBadge() {
+        statusBadgeView?.text = callbacks.currentBattleModeLabel()
+        updateBadgePosition()
+    }
+
+    /** Put the gear above a newly attached full-screen edit touch layer. */
+    fun bringToFront() {
+        val gear = gearView ?: return
+        val gp = gearParams ?: return
+        runCatching { windowManager.removeView(gear) }
+        runCatching { windowManager.addView(gear, gp) }
+
+        val badge = statusBadgeView
+        val bp = statusBadgeParams
+        if (badge != null && bp != null) {
+            runCatching { windowManager.removeView(badge) }
+            runCatching { windowManager.addView(badge, bp) }
+        }
     }
 
     fun dismissPanel() {
@@ -85,7 +131,10 @@ class QuickOverlayMenu(
 
     fun destroy() {
         dismissPanel()
+        statusBadgeView?.let { runCatching { windowManager.removeView(it) } }
         gearView?.let { runCatching { windowManager.removeView(it) } }
+        statusBadgeView = null
+        statusBadgeParams = null
         gearView = null
         gearParams = null
     }
@@ -109,6 +158,19 @@ class QuickOverlayMenu(
                 dp(12).toFloat(),
                 dp(1)
             )
+        }
+
+        if (settings.editMode) {
+            addAction(content, "✓", "SALVAR EDIÇÃO", labels) {
+                settings.editMode = false
+                callbacks.onSettingsChanged(true)
+                dismissPanel()
+            }
+            addAction(content, "↺", "RESETAR POSIÇÕES DO HUD", labels) {
+                callbacks.onResetHudPositions()
+                callbacks.onSettingsChanged(true)
+                refreshPanel()
+            }
         }
 
         addToggle(content, "◉", "HUD", !callbacks.isHudCollapsed(), labels) {
@@ -168,6 +230,7 @@ class QuickOverlayMenu(
         addAction(content, "L", "Liga: ${leagueShort(settings.leagueMode)}", labels) {
             settings.leagueMode = nextLeague(settings.leagueMode)
             callbacks.onSettingsChanged(false)
+            refreshStatusBadge()
             refreshPanel()
         }
         addAction(content, "S", "Escala: ${(settings.scale * 100).toInt()}%", labels) {
@@ -184,7 +247,7 @@ class QuickOverlayMenu(
             settings.quickMenuShowLabels = !settings.quickMenuShowLabels
             refreshPanel()
         }
-        addAction(content, "↺", "Restaurar posições", labels) {
+        addAction(content, "↺", "Restaurar tudo", labels) {
             settings.resetQuickMenuPosition()
             callbacks.onResetHudPositions()
             moveGearToStoredPosition()
@@ -300,11 +363,12 @@ class QuickOverlayMenu(
 
     private fun changed(rebuildTouches: Boolean = false) {
         callbacks.onSettingsChanged(rebuildTouches)
+        refreshStatusBadge()
         refreshPanel()
     }
 
     private fun refreshPanel() {
-        if (panelView != null && externallyVisible && !settings.editMode) showPanel()
+        if (panelView != null && externallyVisible) showPanel()
     }
 
     private fun nextLeague(mode: BattleLeagueMode): BattleLeagueMode = when (mode) {
@@ -342,6 +406,43 @@ class QuickOverlayMenu(
         }
     }
 
+    private fun badgeLayoutParams(gear: WindowManager.LayoutParams): WindowManager.LayoutParams {
+        val width = min(dp(122), (metrics.widthPixels * .36f).toInt()).coerceAtLeast(dp(82))
+        val height = dp(23).coerceAtLeast(24)
+        return WindowManager.LayoutParams(
+            width,
+            height,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }.also {
+            positionBadge(it, gear)
+        }
+    }
+
+    private fun positionBadge(badge: WindowManager.LayoutParams, gear: WindowManager.LayoutParams) {
+        val margin = dp(5)
+        val screenW = metrics.widthPixels
+        val screenH = metrics.heightPixels
+        val left = gear.x - badge.width - margin
+        badge.x = if (left >= 0) left else (gear.x + gear.width + margin).coerceAtMost((screenW - badge.width).coerceAtLeast(0))
+        badge.y = (gear.y + (gear.height - badge.height) / 2).coerceIn(0, (screenH - badge.height).coerceAtLeast(0))
+    }
+
+    private fun updateBadgePosition() {
+        val badge = statusBadgeView ?: return
+        val bp = statusBadgeParams ?: return
+        val gp = gearParams ?: return
+        positionBadge(bp, gp)
+        runCatching { windowManager.updateViewLayout(badge, bp) }
+    }
+
     private fun moveGearToStoredPosition() {
         val gear = gearView ?: return
         val params = gearParams ?: return
@@ -353,6 +454,7 @@ class QuickOverlayMenu(
         params.y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(0, maxY)
         syncLegacyTogglePosition(params)
         runCatching { windowManager.updateViewLayout(gear, params) }
+        updateBadgePosition()
     }
 
     /** Keep the old painted eye directly underneath the gear so only one control is visible. */
@@ -369,12 +471,12 @@ class QuickOverlayMenu(
         )
     }
 
+    /** Drag starts as soon as the finger actually moves; a stationary touch remains a tap. */
     private fun installDragAndTap(view: View, params: WindowManager.LayoutParams) {
         var downRawX = 0f
         var downRawY = 0f
         var startX = 0
         var startY = 0
-        var downAt = 0L
         var dragging = false
 
         view.setOnTouchListener { _, event ->
@@ -384,23 +486,23 @@ class QuickOverlayMenu(
                     downRawY = event.rawY
                     startX = params.x
                     startY = params.y
-                    downAt = SystemClock.uptimeMillis()
                     dragging = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    val held = SystemClock.uptimeMillis() - downAt >= 180L
-                    val moved = abs(dx) + abs(dy) >= 10f
-                    if (held && moved) {
+                    if (!dragging && abs(dx) + abs(dy) >= 8f) {
                         dragging = true
                         dismissPanel()
+                    }
+                    if (dragging) {
                         val maxX = (metrics.widthPixels - params.width).coerceAtLeast(0)
                         val maxY = (metrics.heightPixels - params.height).coerceAtLeast(0)
                         params.x = (startX + dx).toInt().coerceIn(0, maxX)
                         params.y = (startY + dy).toInt().coerceIn(0, maxY)
                         runCatching { windowManager.updateViewLayout(view, params) }
+                        updateBadgePosition()
                     }
                     true
                 }
