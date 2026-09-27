@@ -1,0 +1,36 @@
+name: Apply V05 copilot UI
+
+on:
+  push:
+    branches: [v04-v03-stable-base]
+    paths:
+      - '.github/scripts/apply_v05_ui.py'
+      - '.github/workflows/apply-v05-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v04-v03-stable-base
+      - name: Apply V05 UI patch
+        run: python .github/scripts/apply_v05_ui.py
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/QuickOverlayMenu.kt
+          if git diff --cached --quiet; then
+            echo 'No changes needed.'
+            exit 0
+          fi
+          git commit -m 'feat: integrate V05 confidence HUD, editor and quick menu'
+          git push origin HEAD:v04-v03-stable-base
