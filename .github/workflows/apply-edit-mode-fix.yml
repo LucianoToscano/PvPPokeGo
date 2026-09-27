@@ -17,8 +17,9 @@ jobs:
         with:
           ref: v04-v03-stable-base
       - name: Patch BattleOverlayService
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
           import re
 
@@ -209,6 +210,7 @@ jobs:
               s = s.replace(marker, helper + marker)
 
           p.write_text(s)
+          PY
       - name: Commit patch
         shell: bash
         run: |
