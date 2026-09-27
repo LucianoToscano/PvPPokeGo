@@ -2,9 +2,10 @@ name: Apply edit mode control fix
 
 on:
   push:
-    branches: [v04-v03-stable-base]
+    branches:
+      - v04-v03-stable-base
     paths:
-      - '.github/workflows/apply-edit-mode-fix.yml'
+      - .github/workflows/apply-edit-mode-fix.yml
 
 permissions:
   contents: write
@@ -13,213 +14,22 @@ jobs:
   patch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           ref: v04-v03-stable-base
+
       - name: Patch BattleOverlayService
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
+        run: python .github/scripts/patch_edit_mode.py
 
-          p = Path('app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt')
-          s = p.read_text()
-
-          s = s.replace('import android.os.SystemClock\n', '')
-          if 'import kotlin.math.abs\n' not in s:
-              s = s.replace('import kotlin.math.min\n', 'import kotlin.math.abs\nimport kotlin.math.min\n')
-
-          s = s.replace(
-              '    private var editTouchLayer: View? = null\n    private var moveMenuView: View? = null',
-              '    private var editTouchLayer: View? = null\n    private var editToolbarView: View? = null\n    private var moveMenuView: View? = null'
-          )
-
-          s = s.replace(
-              '                override fun onResetHudPositions() {\n                    settingsRepo.clearHudPositions()\n                    rebuildTouchableZones()\n                    redraw()\n                }\n',
-              '                override fun onResetHudPositions() {\n                    settingsRepo.clearHudPositions()\n                    rebuildTouchableZones()\n                    redraw()\n                }\n\n                override fun currentBattleModeLabel(): String = currentBattleModeLabelText()\n'
-          )
-
-          start = s.index('    /** Full-screen touch layer exists ONLY in explicit edit mode.')
-          end = s.index('    private fun syncEditTouchLayer', start)
-          replacement = '''    /** Full-screen touch layer exists ONLY in explicit edit mode. Battle input is blocked while editing. */
-    private fun attachEditTouchLayer() {
-        val wm = windowManager ?: return
-        if (editTouchLayer != null) return
-
-        var candidate: String? = null
-        var downX = 0f
-        var downY = 0f
-        var dragging = false
-
-        val layer = View(this).apply {
-            setBackgroundColor(Color.TRANSPARENT)
-            isClickable = true
-            setOnTouchListener { _, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        candidate = overlayView?.dragTargetAt(event.x, event.y)
-                        overlayView?.setEditTarget(candidate)
-                        downX = event.x
-                        downY = event.y
-                        dragging = false
-                        true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val block = candidate
-                        if (block != null) {
-                            val moved = abs(event.x - downX) + abs(event.y - downY) >= 6f
-                            if (moved) dragging = true
-                            if (dragging) overlayView?.moveDragTarget(block, event.x, event.y)
-                        }
-                        true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        val block = candidate
-                        if (block != null) {
-                            if (dragging) {
-                                overlayView?.moveDragTarget(block, event.x, event.y)
-                                rebuildTouchableZones()
-                            } else {
-                                overlayView?.setEditTarget(block)
-                            }
-                        }
-                        candidate = null
-                        dragging = false
-                        true
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        candidate = null
-                        dragging = false
-                        overlayView?.setEditTarget(null)
-                        true
-                    }
-                    else -> true
-                }
-            }
-        }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START }
-
-        editTouchLayer = layer
-        wm.addView(layer, params)
-        attachEditToolbar()
-        quickMenu?.bringToFront()
-    }
-
-    /** Always-on edit controls above the full-screen drag layer, so edit mode can be saved/reset. */
-    private fun attachEditToolbar() {
-        val wm = windowManager ?: return
-        if (editToolbarView != null) return
-        val d = resources.displayMetrics.density
-        fun dp(v: Int): Int = (v * d).toInt()
-
-        fun actionButton(textValue: String, color: Int, action: () -> Unit) = TextView(this).apply {
-            text = textValue
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            textSize = 12f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setShadowLayer(2f, 0f, 1f, Color.BLACK)
-            background = roundedBackground(Color.argb(225, Color.red(color), Color.green(color), Color.blue(color)), Color.WHITE, dp(10).toFloat(), dp(1))
-            isClickable = true
-            setOnClickListener { action() }
-        }
-
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-            background = roundedBackground(Color.argb(205, 20, 24, 31), Color.argb(190, 255, 255, 255), dp(12).toFloat(), dp(1))
-        }
-
-        bar.addView(actionButton("✓ SALVAR", Color.rgb(39, 156, 86)) {
-            settingsRepo.editMode = false
-            overlayView?.setEditTarget(null)
-            rebuildTouchableZones()
-            redraw()
-        }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(4) })
-
-        bar.addView(actionButton("↺ RESET", Color.rgb(191, 72, 62)) {
-            settingsRepo.clearHudPositions()
-            overlayView?.setEditTarget(null)
-            rebuildTouchableZones()
-            redraw()
-        }, LinearLayout.LayoutParams(0, dp(38), 1f))
-
-        val screenW = resources.displayMetrics.widthPixels
-        val screenH = resources.displayMetrics.heightPixels
-        val width = min((screenW * .68f).toInt(), dp(300))
-        val height = dp(48)
-        val params = smallTouchableParams(width, height).apply {
-            x = (screenW - width) / 2
-            y = (screenH - height - dp(78)).coerceAtLeast(0)
-        }
-        editToolbarView = bar
-        wm.addView(bar, params)
-    }
-
-    private fun removeEditToolbar() {
-        val bar = editToolbarView ?: return
-        runCatching { windowManager?.removeView(bar) }
-        editToolbarView = null
-    }
-
-    private fun removeEditTouchLayer() {
-        val layer = editTouchLayer
-        if (layer != null) runCatching { windowManager?.removeView(layer) }
-        editTouchLayer = null
-        removeEditToolbar()
-        overlayView?.setEditTarget(null)
-    }
-
-'''
-          s = s[:start] + replacement + s[end:]
-
-          s = s.replace(
-              '        quickMenu?.setVisible(enabled && !settingsRepo.editMode)\n        if (!selectorsEnabled) dismissMoveMenu()',
-              '        quickMenu?.setVisible(enabled)\n        quickMenu?.refreshStatusBadge()\n        if (!selectorsEnabled) dismissMoveMenu()'
-          )
-
-          marker = '    private fun notification(text: String): Notification {'
-          helper = '''    private fun currentBattleModeLabelText(): String {
-        val league = when (settingsRepo.leagueMode) {
-            BattleLeagueMode.AUTO -> when (currentLeagueCp) {
-                2500 -> "AUTO-U"
-                10000 -> "AUTO-M"
-                else -> "AUTO-G"
-            }
-            BattleLeagueMode.GREAT -> "GRANDE"
-            BattleLeagueMode.ULTRA -> "ULTRA"
-            BattleLeagueMode.MASTER -> "MESTRA"
-        }
-        return if (settingsRepo.battleAssistEnabled) "$league • ASSIST" else league
-    }
-
-'''
-          if helper not in s:
-              s = s.replace(marker, helper + marker)
-
-          p.write_text(s)
-          PY
       - name: Commit patch
-        shell: bash
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
           if git diff --cached --quiet; then
-            echo 'No changes needed.'
+            echo "No changes needed."
             exit 0
           fi
-          git commit -m 'fix: make edit mode controllable and show active battle mode'
+          git commit -m "fix: make edit mode controllable and show active battle mode"
           git push origin HEAD:v04-v03-stable-base
