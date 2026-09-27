@@ -177,9 +177,21 @@ fun SettingsScreen(
                     timer = it
                     repository.showSwitchTimer = it
                 }
-                Toggle("Modo edição", edit) {
+                Toggle("Modo edição — segure e arraste", edit) {
                     edit = it
                     repository.editMode = it
+                }
+                if (edit) {
+                    Text(
+                        "Na batalha, segure um bloco do HUD por um instante e arraste. " +
+                            "As posições são salvas automaticamente e as áreas nativas do jogo continuam protegidas."
+                    )
+                    OutlinedButton(
+                        onClick = { repository.clearHudPositions() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Restaurar posições padrão do HUD")
+                    }
                 }
                 Toggle("DEBUG", debug) {
                     debug = it
@@ -212,9 +224,8 @@ fun SettingsScreen(
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
                 Text(
-                    "Base visual V03 preservada. O HUD usa apenas um indicador no topo esquerdo, " +
-                        "fraquezas sem duplicar os tipos nativos do jogo, carregamento visual e botão " +
-                        "de olho inferior para ocultar/restaurar."
+                    "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
+                        "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
                 )
                 Spacer(Modifier.height(24.dp))
             }
