@@ -1,0 +1,29 @@
+name: Apply free-drag lock and league fixes
+on:
+  push:
+    branches: [v04-v03-stable-base]
+    paths:
+      - '.github/scripts/apply_free_drag_lock_league.py'
+      - '.github/workflows/apply-free-drag-lock-league.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v04-v03-stable-base
+      - run: python .github/scripts/apply_free_drag_lock_league.py
+      - shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/data/BattleLeague.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/QuickOverlayMenu.kt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'feat: free-drag HUD lock, hide-all eye and league badges'
+          git push origin HEAD:v04-v03-stable-base
