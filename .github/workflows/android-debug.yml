@@ -1,6 +1,6 @@
 name: Build Android V05 audited controls
 
-# build trigger: V05 FIX2 audited controls + lint/tests
+# build trigger: V05 FIX2 final audited controls + manual move menu + lint/tests
 on:
   push:
     branches: [v04-v03-stable-base]
