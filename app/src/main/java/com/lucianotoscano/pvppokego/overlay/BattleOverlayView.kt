@@ -338,7 +338,7 @@ class BattleOverlayView(
 
     private fun drawReserves(canvas: Canvas) {
         state.reserves.take(2).forEachIndexed { index,reserve ->
-            if (!reserve.visible) return@forEachIndexed
+            if (reserve.name.isNullOrBlank()) return@forEachIndexed
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
             val (indicatorRefX, cardRefY) = reservePos(index)
             val indicatorX = rx(indicatorRefX)
@@ -468,11 +468,11 @@ class BattleOverlayView(
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
         const val BLOCK_BATTLE_ASSIST = "hud_battle_assist"
 
-        const val TOP_ICON_Y=12f
+        const val TOP_ICON_Y=28f
         const val PLAYER_MATCHUP_X=136f
         const val STRONG_TYPES_RIGHT_X=688f
         const val HUD_TOGGLE_CENTER_X=432f
-        const val HUD_TOGGLE_CENTER_Y=12f
+        const val HUD_TOGGLE_CENTER_Y=28f
         const val ENEMY_MOVE_CENTER_X=558f
         const val ENEMY_MOVE_FAST_Y=355f
         const val RESERVE_INDICATOR_X=692f

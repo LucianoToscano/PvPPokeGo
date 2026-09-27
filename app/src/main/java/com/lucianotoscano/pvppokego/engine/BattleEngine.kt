@@ -36,6 +36,9 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private val ownTeam = linkedMapOf<String, Int?>()
     private val reserveSlotVisible = arrayOfNulls<Boolean>(2)
+    private val reserveMissingStreak = IntArray(2)
+    private var ownSwitchReadyAtMs: Long = 0L
+    private var opponentSwitchReadyAtMs: Long = 0L
     private var chargedPendingSinceMs: Long? = null
     private var lastChargedConfirmedAtMs: Long = 0L
     private var ignoreFastUntilMs: Long = 0L
@@ -56,6 +59,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         charge2 = null
         ownTeam.clear()
         reserveSlotVisible.fill(null)
+        reserveMissingStreak.fill(0)
+        ownSwitchReadyAtMs = 0L
+        opponentSwitchReadyAtMs = 0L
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = 0L
         ignoreFastUntilMs = 0L
@@ -83,11 +89,18 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
 
         val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
-        if (playerChanged) reserveSlotVisible.fill(null)
+        val enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
+        val now = System.currentTimeMillis()
+        if (playerChanged) {
+            reserveSlotVisible.fill(null)
+            reserveMissingStreak.fill(0)
+            ownSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
+        }
+        if (enemyChanged) opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
 
         return DetectionChanges(
             playerChanged = playerChanged,
-            enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
+            enemyChanged = enemyChanged
         )
     }
 
@@ -100,8 +113,18 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     /** Native reserve card visibility comes from their own small HP bars on the right side. */
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
-        if (firstVisible != null) reserveSlotVisible[0] = firstVisible
-        if (secondVisible != null) reserveSlotVisible[1] = secondVisible
+        fun update(index: Int, value: Boolean?) {
+            when (value) {
+                true -> { reserveMissingStreak[index] = 0; reserveSlotVisible[index] = true }
+                false -> {
+                    reserveMissingStreak[index]++
+                    if (reserveMissingStreak[index] >= RESERVE_MISSING_CONFIRM_FRAMES) reserveSlotVisible[index] = false
+                }
+                null -> Unit
+            }
+        }
+        update(0, firstVisible)
+        update(1, secondVisible)
     }
 
     fun needsOwnTeamScan(): Boolean = ownTeam.size < 3
@@ -343,6 +366,12 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun possibleFastMoves(): List<MoveDef> = enemyName?.let(repo::possibleFastMoves).orEmpty()
     fun possibleChargedMoves(): List<MoveDef> = enemyName?.let(repo::possibleChargedMoves).orEmpty()
 
+    private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {
+        val remaining = readyAtMs - nowMs
+        if (remaining <= 0L) return null
+        return ((remaining + 999L) / 1000L).toInt()
+    }
+
     fun uiState(debug: Boolean = false): BattleUiState {
         val pTypes = repo.pokemon(playerName)?.types.orEmpty()
         val eTypes = repo.pokemon(enemyName)?.types.orEmpty()
@@ -375,6 +404,8 @@ class BattleEngine(private val repo: GameDataRepository) {
             fastMove = f,
             charged1 = if (f != null && charge1 != null) tracker.predict(charge1!!, f) else null,
             charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f) else null,
+            ownSwitchSeconds = switchSeconds(ownSwitchReadyAtMs),
+            opponentSwitchSeconds = switchSeconds(opponentSwitchReadyAtMs),
             chargedIncoming = chargedPendingSinceMs != null,
             detectorConfidence = lastDetectorConfidence,
             debugText = if (debug) buildString {
@@ -425,6 +456,8 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     companion object {
         private const val CHARGED_DEBOUNCE_MS = 4_200L
+        private const val SWITCH_COOLDOWN_MS = 50_000L
+        private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
         private const val CHARGED_FAST_GUARD_MS = 2_200L
         private const val PENDING_CONFIRM_DELAY_MS = 2_400L
 

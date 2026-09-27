@@ -77,6 +77,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onCreate() {
         super.onCreate()
         settingsRepo = SettingsRepository(this)
+        settingsRepo.ensureTopHudSafeV4()
         settingsRepo.overlayServiceRunning = true
         gameRepo = GameDataRepository(this)
         startForeground(NOTIFICATION_ID, notification("Aguardando captura de tela"))
@@ -178,6 +179,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
 
         attachMoveTouchZones()
+        attachHudToggleTouch()
         quickMenu = QuickOverlayMenu(
             this,
             windowManager!!,
@@ -449,6 +451,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         charged2Touch = null
         hudToggleTouch = null
         attachMoveTouchZones()
+        attachHudToggleTouch()
     }
 
     /** Compact type-colored submenu. Individual rows carry the color; there is no black panel behind them. */
@@ -813,7 +816,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
-        hudToggleTouch?.visibility = View.GONE
+        hudToggleTouch?.visibility = if (enabled && !settingsRepo.editMode) View.VISIBLE else View.GONE
         quickMenu?.setVisible(enabled)
         quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()

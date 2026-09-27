@@ -95,6 +95,18 @@ class SettingsRepository(context: Context) {
             .apply()
     }
 
+    /** Move legacy/clipped top HUD positions into the safe strip below the status bar. */
+    fun ensureTopHudSafeV4() {
+        if (prefs.getInt("top_hud_position_version", 0) >= 4) return
+        val editor = prefs.edit()
+        listOf("hud_player_matchup", "hud_strong_types", "hud_toggle").forEach { block ->
+            val key = "${block}_y"
+            val current = prefs.getFloat(key, Float.NaN)
+            if (current.isNaN() || current < 22f) editor.putFloat(key, 28f)
+        }
+        editor.putInt("top_hud_position_version", 4).apply()
+    }
+
     var showSwitchTimer: Boolean
         get() = prefs.getBoolean("show_switch_timer", false)
         set(v) = prefs.edit().putBoolean("show_switch_timer", v).apply()
