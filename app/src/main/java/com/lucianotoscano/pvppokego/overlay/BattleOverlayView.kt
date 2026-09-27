@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Region
 import android.graphics.Typeface
 import android.view.View
 import com.lucianotoscano.pvppokego.data.BattleUiState
@@ -76,14 +77,20 @@ class BattleOverlayView(
         stroke.alpha = 255
         stroke.color = hudColor(Color.WHITE)
 
+        // Hard rule from the clean Pokemon GO battle reference: PvPPokeGo may use the free
+        // space around the game HUD, but it may never draw over native cards, status/type chips,
+        // HP bars, reserve cards, switch control or the player's charged-move controls.
+        val nativeSafeSave = canvas.save()
+        clipOutNativePokemonGoUi(canvas)
+
         if (collapsed) {
             drawVisibilityToggle(canvas, true)
+            canvas.restoreToCount(nativeSafeSave)
             return
         }
 
         if (settings.showCurrentIndicator) {
-            // Small independent status chip in the free strip above the player's native card.
-            // It deliberately stays left of the game's own type/status chips.
+            // Above the player's white card, to the right of GO's native top-left button.
             drawMatchupIndicator(canvas, rx(PLAYER_MATCHUP_X), ry(TOP_ICON_Y), state.playerMatchup, 14f*u())
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
@@ -94,10 +101,32 @@ class BattleOverlayView(
         if (settings.editMode) drawResetAndCorrection(canvas)
         if (settings.debugMode) drawDebug(canvas)
         drawVisibilityToggle(canvas, false)
+
+        canvas.restoreToCount(nativeSafeSave)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun clipOutNativePokemonGoUi(canvas: Canvas) {
+        // Coordinates are normalized to the 864x1536 design space and scale with the device.
+        // The rectangles intentionally include a small safety margin around native controls.
+        val protected = listOf(
+            RectF(0f, 0f, width.toFloat(), ry(56f)),                       // Android/status area
+            RectF(rx(0f), ry(55f), rx(64f), ry(96f)),                     // GO top-left native button
+            RectF(rx(772f), ry(55f), width.toFloat(), ry(96f)),           // GO top-right native type/status chips
+            RectF(rx(14f), ry(93f), rx(354f), ry(176f)),                  // player's white name/CP card
+            RectF(rx(510f), ry(93f), rx(852f), ry(176f)),                 // opponent white name/CP card
+            RectF(rx(12f), ry(180f), rx(116f), ry(286f)),                 // switch button
+            RectF(rx(35f), ry(620f), rx(304f), ry(704f)),                 // player's native HP/effectiveness area
+            RectF(rx(425f), ry(620f), rx(724f), ry(704f)),                // opponent native HP area
+            RectF(rx(716f), ry(846f), width.toFloat(), ry(988f)),         // reserve card 1
+            RectF(rx(716f), ry(996f), width.toFloat(), ry(1122f)),        // reserve card 2
+            RectF(rx(78f), ry(1260f), rx(786f), height.toFloat())         // native charged-move buttons/text
+        )
+        protected.forEach { canvas.clipRect(it, Region.Op.DIFFERENCE) }
     }
 
     private fun drawVisibilityToggle(canvas: Canvas, hidden: Boolean) {
-        val cx = rx(HUD_TOGGLE_CENTER_X); val cy = ry(HUD_TOGGLE_CENTER_Y); val radius = 19f*u()
+        val cx = rx(HUD_TOGGLE_CENTER_X); val cy = ry(HUD_TOGGLE_CENTER_Y); val radius = 16f*u()
         paint.style = Paint.Style.FILL
         paint.color = hudColor(Color.rgb(72,76,82), .88f)
         canvas.drawCircle(cx, cy, radius, paint)
@@ -105,13 +134,13 @@ class BattleOverlayView(
         stroke.strokeWidth = 1.5f*u()
         stroke.color = hudColor(Color.WHITE, .68f)
         canvas.drawCircle(cx, cy, radius, stroke)
-        val eye = RectF(cx-9.8f*u(), cy-5.6f*u(), cx+9.8f*u(), cy+5.6f*u())
-        stroke.color = hudColor(Color.WHITE); stroke.strokeWidth = 2.0f*u()
+        val eye = RectF(cx-8.2f*u(), cy-4.7f*u(), cx+8.2f*u(), cy+4.7f*u())
+        stroke.color = hudColor(Color.WHITE); stroke.strokeWidth = 1.8f*u()
         canvas.drawOval(eye, stroke)
-        paint.color = hudColor(Color.WHITE); canvas.drawCircle(cx,cy,3f*u(),paint)
+        paint.color = hudColor(Color.WHITE); canvas.drawCircle(cx,cy,2.6f*u(),paint)
         if (!hidden) {
-            stroke.strokeWidth = 2.4f*u()
-            canvas.drawLine(cx-10.5f*u(),cy+9f*u(),cx+10.5f*u(),cy-9f*u(),stroke)
+            stroke.strokeWidth = 2.1f*u()
+            canvas.drawLine(cx-9f*u(),cy+7.7f*u(),cx+9f*u(),cy-7.7f*u(),stroke)
         }
     }
 
@@ -138,13 +167,13 @@ class BattleOverlayView(
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isEmpty()) return
 
-        // Reserve the far-right top strip for Pokemon GO's own native icons. Our weakness chips
-        // are packed immediately to the LEFT of that reserved strip, with a visible gap.
+        // The clean game reference leaves a safe lane above the opponent card. PvPPokeGo uses
+        // the LEFT portion of that lane and leaves the far-right portion untouched for GO.
         val radius = 14f*u()
         val y = ry(TOP_ICON_Y)
         val spacing = rx(35f)
-        val strongRight = rx(686f)
-        val arrowX = rx(722f)
+        val strongRight = rx(704f)
+        val arrowX = rx(742f)
         val firstStrong = strongRight - spacing*(strong.size-1).coerceAtLeast(0)
         strong.forEachIndexed { i,type -> drawTypeChip(canvas,firstStrong+spacing*i,y,type,radius) }
         paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=18f*u(); paint.typeface=Typeface.DEFAULT_BOLD
@@ -309,13 +338,14 @@ class BattleOverlayView(
     }
 
     private fun drawReserves(canvas: Canvas) {
-        val indicatorX=rx(827f); val firstY=ry(905f); val secondY=ry(1052f); val typeYDelta=ry(65f)
+        // Keep reserve extras completely outside Pokemon GO's gray reserve cards.
+        val indicatorX=rx(692f); val firstY=ry(918f); val secondY=ry(1058f); val typeYDelta=ry(82f)
         state.reserves.take(2).forEachIndexed { index,reserve ->
             if (!reserve.visible) return@forEachIndexed
             val cardCenterY=if(index==0) firstY else secondY
-            drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,14.5f*u())
+            drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u())
             if (settings.showReserveTypes && reserve.types.isNotEmpty()) {
-                val typeRadius=12.5f*u(); val spacing=rx(33f); val centerX=rx(782f)
+                val typeRadius=12f*u(); val spacing=rx(31f); val centerX=rx(790f)
                 var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
                 reserve.types.take(2).forEach { type -> drawTypeChip(canvas,x,cardCenterY+typeYDelta,type,typeRadius); x+=spacing }
             }
@@ -362,12 +392,12 @@ class BattleOverlayView(
     }
 
     companion object {
-        // Keep PvPPokeGo top chips inside the free strip above the white cards while reserving
-        // the far-right lane for Pokémon GO's native type/status icons.
-        private const val TOP_ICON_Y=20f
-        private const val PLAYER_MATCHUP_X=26f
+        // Measured from the user's clean 709x1536 Pokemon GO battle reference. This row sits
+        // between the Android status bar and the native white Pokemon cards.
+        private const val TOP_ICON_Y=76f
+        private const val PLAYER_MATCHUP_X=88f
         const val HUD_TOGGLE_CENTER_X=432f
-        const val HUD_TOGGLE_CENTER_Y=44f
+        const val HUD_TOGGLE_CENTER_Y=76f
         const val ENEMY_MOVE_CENTER_X=558f
     }
 }
