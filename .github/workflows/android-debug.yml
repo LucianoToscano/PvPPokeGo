@@ -1,6 +1,6 @@
 name: Build Android V04 from V03 stable base
 
-# build trigger: compact menu + HUD reliability polish
+# build trigger: PGSharp-style menu + GO-like enemy moves
 on:
   push:
     branches: [v04-v03-stable-base]
