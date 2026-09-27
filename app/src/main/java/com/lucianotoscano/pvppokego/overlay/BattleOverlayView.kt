@@ -11,6 +11,7 @@ import android.view.View
 import com.lucianotoscano.pvppokego.data.BattleUiState
 import com.lucianotoscano.pvppokego.data.ChargedPrediction
 import com.lucianotoscano.pvppokego.data.GameDataRepository
+import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
@@ -19,6 +20,7 @@ import com.lucianotoscano.pvppokego.engine.TypeChart
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.min
+import kotlin.math.max
 
 /** Canonical PvPPokeGo HUD anchored around Pokemon GO's native battle layout. */
 class BattleOverlayView(
@@ -53,6 +55,8 @@ class BattleOverlayView(
     private var collapsed = false
     private var editTarget: String? = null
     private var switchChoicePromptVisible = false
+    private var nativeTopCardYpx: Int? = null
+    private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
 
     fun render(newState: BattleUiState) {
@@ -75,6 +79,19 @@ class BattleOverlayView(
             invalidate()
         }
     }
+    fun setNativeTopCardY(y: Int?) { if (y != null) nativeTopCardYpx = y; invalidate() }
+    fun selectedEditTarget(): String? = editTarget
+    fun blockPosition(block: String): Pair<Float, Float>? = when (block) {
+        BLOCK_PLAYER_MATCHUP -> topPos(block, PLAYER_MATCHUP_X)
+        BLOCK_STRONG_TYPES -> topPos(block, STRONG_TYPES_RIGHT_X)
+        BLOCK_RESERVE_1 -> reservePos(0)
+        BLOCK_RESERVE_2 -> reservePos(1)
+        BLOCK_ENEMY_MOVES -> pos(block, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
+        BLOCK_BATTLE_ASSIST -> pos(block, BATTLE_ASSIST_X, BATTLE_ASSIST_Y)
+        BLOCK_HUD_TOGGLE -> pos(block, HUD_TOGGLE_CENTER_X, HUD_TOGGLE_CENTER_Y)
+        BLOCK_ENEMY_HISTORY -> pos(block, ENEMY_HISTORY_X, ENEMY_HISTORY_Y)
+        else -> null
+    }
     fun showMoveMenu(kind: MoveKind, options: List<MoveDef>) = Unit
     fun dismissMenu() = Unit
 
@@ -88,6 +105,28 @@ class BattleOverlayView(
 
     private fun pos(block: String, defaultX: Float, defaultY: Float): Pair<Float, Float> =
         settings.getPosition(block, defaultX, defaultY)
+
+
+    private fun dynamicTopIconRefY(): Float {
+        val cardTop = nativeTopCardYpx ?: return TOP_ICON_Y
+        val statusId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        val statusPx = if (statusId > 0) resources.getDimensionPixelSize(statusId) else (24f * resources.displayMetrics.density).toInt()
+        val radiusPx = 15f * u()
+        val preferred = cardTop.toFloat() - radiusPx - 5f * u()
+        val safe = max(statusPx + radiusPx + 2f * u(), preferred)
+        return refY(safe)
+    }
+
+    private fun topPos(block: String, defaultX: Float): Pair<Float, Float> =
+        if (settings.hasPosition(block)) settings.getPosition(block, defaultX, TOP_ICON_Y)
+        else defaultX to dynamicTopIconRefY()
+
+    private inline fun withBlockAlpha(block: String, draw: () -> Unit) {
+        if (settings.isBlockHidden(block)) return
+        val old = blockAlphaMultiplier
+        blockAlphaMultiplier = settings.blockOpacity(block)
+        try { draw() } finally { blockAlphaMultiplier = old }
+    }
 
     /** Backward-compatible defaults: an old combined reserve position becomes the base for both slots. */
     private fun reservePos(index: Int): Pair<Float, Float> {
@@ -103,7 +142,8 @@ class BattleOverlayView(
         val y = refY(screenY)
 
         fun near(block: String, dx: Float, dy: Float, halfW: Float, halfH: Float): Boolean {
-            val (cx, cy) = pos(block, dx, dy)
+            if (settings.isBlockLocked(block) || settings.isBlockHidden(block)) return false
+            val (cx, cy) = if (block == BLOCK_PLAYER_MATCHUP || block == BLOCK_STRONG_TYPES) topPos(block, dx) else pos(block, dx, dy)
             return x in (cx-halfW)..(cx+halfW) && y in (cy-halfH)..(cy+halfH)
         }
 
@@ -113,7 +153,7 @@ class BattleOverlayView(
 
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isNotEmpty()) {
-            val (right, cy) = pos(BLOCK_STRONG_TYPES, STRONG_TYPES_RIGHT_X, TOP_ICON_Y)
+            val (right, cy) = topPos(BLOCK_STRONG_TYPES, STRONG_TYPES_RIGHT_X)
             val left = right - 35f * (strong.size - 1).coerceAtLeast(0) - 28f
             if (x in left..(right + 48f) && y in (cy-30f)..(cy+30f)) return BLOCK_STRONG_TYPES
         }
@@ -136,6 +176,7 @@ class BattleOverlayView(
     /** Persists exactly where the user drags the block. No positional restrictions are applied. */
     fun moveDragTarget(block: String, screenX: Float, screenY: Float) {
         if (!settings.editMode || width <= 0 || height <= 0) return
+        if (settings.isBlockLocked(block)) return
         settings.setPosition(block, refX(screenX), refY(screenY))
         editTarget = block
         invalidate()
@@ -153,17 +194,18 @@ class BattleOverlayView(
             return
         }
 
-        if (settings.showCurrentIndicator) {
-            val (x, y) = pos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X, TOP_ICON_Y)
-            drawMatchupIndicator(canvas, rx(x), ry(y), state.playerMatchup, 14f*u())
+        if (settings.showCurrentIndicator) withBlockAlpha(BLOCK_PLAYER_MATCHUP) {
+            val (x, y) = topPos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X)
+            drawMatchupIndicator(canvas, rx(x), ry(y), state.playerMatchup, 14f*u()*settings.blockScale(BLOCK_PLAYER_MATCHUP))
         }
-        if (settings.showStrongTypes) drawStrongTypes(canvas)
-        if (settings.showEnemyMoves) drawMoveTriangle(canvas)
+        if (settings.showStrongTypes) withBlockAlpha(BLOCK_STRONG_TYPES) { drawStrongTypes(canvas) }
+        if (settings.showEnemyMoves) withBlockAlpha(BLOCK_ENEMY_MOVES) { drawMoveTriangle(canvas) }
         if (state.chargedIncoming && settings.showEnemyMoves && !settings.battleAssistEnabled) drawShieldAdvice(canvas)
         if (settings.analyzeReserves) {
             if (switchChoicePromptVisible) drawSwitchChoiceIndicators(canvas) else drawReserves(canvas)
         }
-        if (settings.battleAssistEnabled) drawBattleAssist(canvas)
+        if (settings.battleAssistEnabled) withBlockAlpha(BLOCK_BATTLE_ASSIST) { drawBattleAssist(canvas) }
+        if (settings.showEnemyHistory) withBlockAlpha(BLOCK_ENEMY_HISTORY) { drawEnemyHistory(canvas) }
         if (settings.showSwitchTimer) drawTimers(canvas)
         if (settings.editMode) {
             drawResetAndCorrection(canvas)
@@ -212,7 +254,7 @@ class BattleOverlayView(
             MatchupState.UNKNOWN -> { paint.textSize=13f*u(); canvas.drawText("?",cx,cy+4.5f*u(),paint) }
         }
         if (settings.editMode) {
-            val (mx, my) = pos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X, TOP_ICON_Y)
+            val (mx, my) = topPos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X)
             if (kotlin.math.abs(cx-rx(mx)) < 2f && kotlin.math.abs(cy-ry(my)) < 2f) {
                 drawEditSelection(canvas, BLOCK_PLAYER_MATCHUP, cx, cy, 24f*u(), 24f*u())
             }
@@ -222,10 +264,11 @@ class BattleOverlayView(
     private fun drawStrongTypes(canvas: Canvas) {
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isEmpty()) return
-        val radius = 14f*u()
-        val (rightRef, yRef) = pos(BLOCK_STRONG_TYPES, STRONG_TYPES_RIGHT_X, TOP_ICON_Y)
+        val bs = settings.blockScale(BLOCK_STRONG_TYPES)
+        val radius = 14f*u()*bs
+        val (rightRef, yRef) = topPos(BLOCK_STRONG_TYPES, STRONG_TYPES_RIGHT_X)
         val y = ry(yRef)
-        val spacing = rx(35f)
+        val spacing = rx(35f) * bs
         val strongRight = rx(rightRef)
         val arrowX = strongRight + rx(36f)
         val firstStrong = strongRight - spacing*(strong.size-1).coerceAtLeast(0)
@@ -239,8 +282,9 @@ class BattleOverlayView(
 
     private fun drawMoveTriangle(canvas: Canvas) {
         val (centerRefX, fastRefY) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
-        val centerX=rx(centerRefX); val fastY=ry(fastRefY); val chargedY=ry(fastRefY+123f)
-        val spread=rx(74f); val fastRadius=31f*u(); val chargedRadius=41f*u()
+        val bs = settings.blockScale(BLOCK_ENEMY_MOVES)
+        val centerX=rx(centerRefX); val fastY=ry(fastRefY); val chargedY=fastY+ry(123f)*bs
+        val spread=rx(74f)*bs; val fastRadius=31f*u()*bs; val chargedRadius=41f*u()*bs
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)
             drawMoveLabel(canvas,centerX,fastY+fastRadius+20f*u(),shortMoveName(m.name)+" ▼")
@@ -259,7 +303,19 @@ class BattleOverlayView(
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
-        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 132f*u(), 116f*u())
+        if (settings.showHudText) {
+            val p = state.charged1 ?: state.charged2
+            if (p != null) {
+                val energyText = when (p.confidence) {
+                    EnergyConfidence.CONFIRMED -> "ENERGIA ${p.currentEnergy} • CONFIRMADA"
+                    EnergyConfidence.ESTIMATED -> "ENERGIA ~${p.currentEnergy} • ESTIMADA"
+                    EnergyConfidence.RANGE -> "ENERGIA ${p.minEnergy}-${p.maxEnergy} • FAIXA"
+                }
+                paint.color=hudColor(Color.WHITE,.82f); paint.textAlign=Paint.Align.CENTER; paint.textSize=9.5f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint); paint.clearShadowLayer()
+            }
+        }
+        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 138f*u()*bs, 122f*u()*bs)
     }
 
     private fun drawEnemySuperEffectiveText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
@@ -375,16 +431,26 @@ class BattleOverlayView(
         state.reserves.take(2).forEachIndexed { index,reserve ->
             if (reserve.name.isNullOrBlank()) return@forEachIndexed
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
+            if (settings.isBlockHidden(block)) return@forEachIndexed
+            val bs = settings.blockScale(block)
+            val oldAlpha = blockAlphaMultiplier
+            blockAlphaMultiplier = settings.blockOpacity(block)
             val (indicatorRefX, cardRefY) = reservePos(index)
             val indicatorX = rx(indicatorRefX)
             val cardCenterY = ry(cardRefY)
-            drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u())
+            drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u()*bs)
             if(settings.showReserveTypes && reserve.types.isNotEmpty()){
-                val typeRadius=12f*u(); val spacing=rx(31f); val centerX=rx(indicatorRefX+98f)
+                val typeRadius=12f*u()*bs; val spacing=rx(31f)*bs; val centerX=rx(indicatorRefX+98f)
                 var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
                 reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+ry(82f),type,typeRadius);x+=spacing}
             }
-            drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u(), 72f*u())
+            if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
+                paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
+                paint.textAlign=Paint.Align.CENTER; paint.textSize=9.2f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,indicatorX,cardCenterY+27f*u()*bs,paint); paint.clearShadowLayer()
+            }
+            drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
+            blockAlphaMultiplier = oldAlpha
         }
     }
 
@@ -402,6 +468,11 @@ class BattleOverlayView(
         }
         candidates.take(xs.size).forEachIndexed { index, reserve ->
             drawMatchupIndicator(canvas, xs[index], y, reserve.matchup, 16f*u())
+            if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
+                paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
+                paint.textAlign=Paint.Align.CENTER; paint.textSize=10f*u(); paint.typeface=Typeface.DEFAULT_BOLD
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,xs[index],y+30f*u(),paint); paint.clearShadowLayer()
+            }
         }
     }
 
@@ -411,8 +482,9 @@ class BattleOverlayView(
         val (refCx, refCy) = pos(BLOCK_BATTLE_ASSIST, BATTLE_ASSIST_X, BATTLE_ASSIST_Y)
         val cx = rx(refCx)
         val cy = ry(refCy)
-        val halfW = 176f*u()
-        val halfH = 30f*u()
+        val bs = settings.blockScale(BLOCK_BATTLE_ASSIST)
+        val halfW = 176f*u()*bs
+        val halfH = 30f*u()*bs
         val box = RectF(cx-halfW, cy-halfH, cx+halfW, cy+halfH)
 
         paint.style = Paint.Style.FILL
@@ -435,6 +507,20 @@ class BattleOverlayView(
         paint.clearShadowLayer()
 
         drawEditSelection(canvas, BLOCK_BATTLE_ASSIST, cx, cy, halfW+5f*u(), halfH+5f*u())
+    }
+
+    private fun drawEnemyHistory(canvas: Canvas) {
+        if (state.enemyHistory.isEmpty()) return
+        val (refX, refY) = pos(BLOCK_ENEMY_HISTORY, ENEMY_HISTORY_X, ENEMY_HISTORY_Y)
+        val bs = settings.blockScale(BLOCK_ENEMY_HISTORY)
+        val x = rx(refX); val y = ry(refY)
+        paint.textAlign=Paint.Align.RIGHT; paint.typeface=Typeface.DEFAULT_BOLD; paint.textSize=9.4f*u()*bs
+        state.enemyHistory.take(3).forEachIndexed { i, line ->
+            paint.color=hudColor(Color.WHITE,.86f); paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+            canvas.drawText(line,x,y+i*14f*u()*bs,paint)
+        }
+        paint.clearShadowLayer()
+        drawEditSelection(canvas,BLOCK_ENEMY_HISTORY,x-rx(85f)*bs,y+12f*u()*bs,rx(95f)*bs,28f*u()*bs)
     }
 
     private fun drawTimers(canvas: Canvas) {
@@ -488,7 +574,7 @@ class BattleOverlayView(
     private fun currentPlayerTypes(): List<String> = gameRepo.pokemon(state.playerName)?.types.orEmpty()
     private data class ShieldAdvice(val title:String,val detail:String,val color:Int)
     private fun shortMoveName(name:String)=if(name.length<=19) name else name.take(18)+"…"
-    private fun hudColor(color:Int,multiplier:Float=1f):Int{val a=(hudAlpha*multiplier).toInt().coerceIn(0,255);return Color.argb(a,Color.red(color),Color.green(color),Color.blue(color))}
+    private fun hudColor(color:Int,multiplier:Float=1f):Int{val a=(hudAlpha*multiplier*blockAlphaMultiplier).toInt().coerceIn(0,255);return Color.argb(a,Color.red(color),Color.green(color),Color.blue(color))}
     private fun typeColor(type:String):Int=when(type.lowercase()){
         "fairy"->Color.rgb(239,153,230);"psychic"->Color.rgb(250,137,131);"fighting"->Color.rgb(219,66,86);"rock"->Color.rgb(206,193,141);"fire"->Color.rgb(251,165,75);"steel"->Color.rgb(85,151,164);"water"->Color.rgb(91,166,224);"flying"->Color.rgb(155,180,229);"ghost"->Color.rgb(99,111,191);"grass"->Color.rgb(93,190,101);"bug"->Color.rgb(161,194,49);"ground"->Color.rgb(214,133,85);"ice"->Color.rgb(125,212,200);"dark"->Color.rgb(113,121,140);"dragon"->Color.rgb(7,115,200);"normal"->Color.rgb(153,156,161);"electric"->Color.rgb(243,219,85);"poison"->Color.rgb(178,98,204);else->Color.rgb(153,156,161)
     }
@@ -502,6 +588,7 @@ class BattleOverlayView(
         const val BLOCK_RESERVES_LEGACY = "hud_reserves"
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
         const val BLOCK_BATTLE_ASSIST = "hud_battle_assist"
+        const val BLOCK_ENEMY_HISTORY = "hud_enemy_history"
 
         const val TOP_ICON_Y=66f
         const val PLAYER_MATCHUP_X=136f
@@ -518,5 +605,7 @@ class BattleOverlayView(
         const val SWITCH_CHOICE_INDICATOR_Y=1444f
         const val BATTLE_ASSIST_X=432f
         const val BATTLE_ASSIST_Y=770f
+        const val ENEMY_HISTORY_X=846f
+        const val ENEMY_HISTORY_Y=650f
     }
 }

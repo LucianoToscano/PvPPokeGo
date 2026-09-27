@@ -2,6 +2,9 @@ package com.lucianotoscano.pvppokego.overlay
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -34,7 +37,7 @@ class QuickOverlayMenu(
 
     private var gearView: TextView? = null
     private var gearParams: WindowManager.LayoutParams? = null
-    private var leagueView: TextView? = null
+    private var leagueView: LeagueBadgeView? = null
     private var leagueParams: WindowManager.LayoutParams? = null
     private var panelView: ScrollView? = null
     private var externallyVisible = false
@@ -65,12 +68,7 @@ class QuickOverlayMenu(
         gearView = gear
         windowManager.addView(gear, gp)
 
-        val league = TextView(context).apply {
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            textSize = 17f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setShadowLayer(2f, 0f, 1f, Color.BLACK)
+        val league = LeagueBadgeView(context).apply {
             contentDescription = "Liga atual"
             visibility = View.GONE
         }
@@ -104,15 +102,7 @@ class QuickOverlayMenu(
                 BattleLeagueMode.AUTO -> LeagueKind.AUTO
             }
         }
-        leagueView?.apply {
-            text = when (kind) {
-                LeagueKind.GREAT -> "◇"
-                LeagueKind.ULTRA -> "◆"
-                LeagueKind.MASTER -> "♛"
-                LeagueKind.AUTO -> "◎"
-            }
-            background = leagueBackground(kind)
-        }
+        leagueView?.setKind(kind)
     }
 
     fun bringToFront() {
@@ -197,75 +187,83 @@ class QuickOverlayMenu(
 
     private fun buildIconMenu(parent: LinearLayout) {
         fun row(vararg items: IconItem) {
-            val line = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.START
-            }
-            items.forEach { addIconCell(line, it) }
-            while (line.childCount < 4) line.addView(View(context), LinearLayout.LayoutParams(0, dp(43), 1f))
-            parent.addView(line, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(47)))
+            val line = LinearLayout(context).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.START }
+            items.forEach { addIconCell(line,it) }
+            while(line.childCount<4) line.addView(View(context),LinearLayout.LayoutParams(0,dp(43),1f))
+            parent.addView(line,LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(47)))
         }
-
-        if (settings.editMode) row(
-            IconItem("✓", "Salvar edição", true) { settings.editMode = false; callbacks.onSettingsChanged(true); dismissPanel() },
-            IconItem("↺", "Resetar posições", null) { callbacks.onResetHudPositions(); callbacks.onSettingsChanged(true); refreshPanel() }
-        )
-        row(
-            IconItem("◉", "HUD", !callbacks.isHudCollapsed()) { callbacks.onToggleHud(); refreshPanel() },
-            IconItem("A", "Reconhecimento", settings.autoRecognition) { settings.autoRecognition = !settings.autoRecognition; changed() },
-            IconItem("★", "Assistido", settings.battleAssistEnabled) { settings.battleAssistEnabled = !settings.battleAssistEnabled; changed() },
-            IconItem("♜", "Liga", null) { cycleLeague() }
-        )
-        row(
-            IconItem("◇", "Fraquezas", settings.showStrongTypes) { settings.showStrongTypes = !settings.showStrongTypes; changed() },
-            IconItem("✓", "Matchup atual", settings.showCurrentIndicator) { settings.showCurrentIndicator = !settings.showCurrentIndicator; changed() },
-            IconItem("2", "Reservas", settings.analyzeReserves) { settings.analyzeReserves = !settings.analyzeReserves; changed() },
-            IconItem("T", "Tipos reservas", settings.showReserveTypes) { settings.showReserveTypes = !settings.showReserveTypes; changed() }
-        )
-        row(
-            IconItem("⚔", "Ataques inimigos", settings.showEnemyMoves) { settings.showEnemyMoves = !settings.showEnemyMoves; changed() },
-            IconItem("••", "Contagem", settings.showChargedCounter) { settings.showChargedCounter = !settings.showChargedCounter; changed() },
-            IconItem("⚡", "Energia", settings.showEnergyProgress) { settings.showEnergyProgress = !settings.showEnergyProgress; changed() },
-            IconItem("↻", "Timer troca", settings.showSwitchTimer) { settings.showSwitchTimer = !settings.showSwitchTimer; changed() }
-        )
-        row(
-            IconItem("↔", "Editar HUD", settings.editMode) { settings.editMode = !settings.editMode; callbacks.onSettingsChanged(true); if (settings.editMode) dismissPanel() else refreshPanel() },
-            IconItem("S", "Escala", null) { settings.scale = if (settings.scale >= 1.19f) .5f else settings.scale + .1f; callbacks.onSettingsChanged(true); refreshPanel() },
-            IconItem("◐", "Opacidade", null) { settings.opacity = if (settings.opacity >= .99f) .3f else settings.opacity + .1f; callbacks.onSettingsChanged(false); refreshPanel() },
-            IconItem("D", "Debug", settings.debugMode) { settings.debugMode = !settings.debugMode; changed() }
-        )
-        row(
-            IconItem("≡", "Mostrar textos", null) { settings.quickMenuShowLabels = true; refreshPanel() },
-            IconItem("↺", "Restaurar tudo", null) { resetPositions() },
-            IconItem("×", "Fechar", null) { dismissPanel() }
-        )
+        if (!settings.quickMenuAdvanced) {
+            row(
+                IconItem("◉","HUD",!callbacks.isHudCollapsed()){callbacks.onToggleHud();refreshPanel()},
+                IconItem("★","Assistido",settings.battleAssistEnabled){settings.battleAssistEnabled=!settings.battleAssistEnabled;changed()},
+                IconItem("△","Liga",null){cycleLeague()},
+                IconItem("↔","Editar HUD",settings.editMode){settings.editMode=!settings.editMode;callbacks.onSettingsChanged(true);if(settings.editMode)dismissPanel()else refreshPanel()}
+            )
+            row(
+                IconItem("T","Textos HUD",settings.showHudText){settings.showHudText=!settings.showHudText;changed()},
+                IconItem("…","Avançado",null){settings.quickMenuAdvanced=true;refreshPanel()},
+                IconItem("≡","Mostrar textos",null){settings.quickMenuShowLabels=true;refreshPanel()},
+                IconItem("×","Fechar",null){dismissPanel()}
+            )
+        } else {
+            row(
+                IconItem("A","Reconhecimento",settings.autoRecognition){settings.autoRecognition=!settings.autoRecognition;changed()},
+                IconItem("◇","Fraquezas",settings.showStrongTypes){settings.showStrongTypes=!settings.showStrongTypes;changed()},
+                IconItem("✓","Matchup",settings.showCurrentIndicator){settings.showCurrentIndicator=!settings.showCurrentIndicator;changed()},
+                IconItem("2","Reservas",settings.analyzeReserves){settings.analyzeReserves=!settings.analyzeReserves;changed()}
+            )
+            row(
+                IconItem("T","Tipos reservas",settings.showReserveTypes){settings.showReserveTypes=!settings.showReserveTypes;changed()},
+                IconItem("⚔","Ataques",settings.showEnemyMoves){settings.showEnemyMoves=!settings.showEnemyMoves;changed()},
+                IconItem("••","Contagem",settings.showChargedCounter){settings.showChargedCounter=!settings.showChargedCounter;changed()},
+                IconItem("⚡","Energia",settings.showEnergyProgress){settings.showEnergyProgress=!settings.showEnergyProgress;changed()}
+            )
+            row(
+                IconItem("↻","Timer",settings.showSwitchTimer){settings.showSwitchTimer=!settings.showSwitchTimer;changed()},
+                IconItem("H","Histórico",settings.showEnemyHistory){settings.showEnemyHistory=!settings.showEnemyHistory;changed()},
+                IconItem("◐","Opacidade",null){settings.opacity=if(settings.opacity>=.99f).3f else settings.opacity+.1f;callbacks.onSettingsChanged(false);refreshPanel()},
+                IconItem("D","Debug",settings.debugMode){settings.debugMode=!settings.debugMode;changed()}
+            )
+            row(
+                IconItem("‹","Básico",null){settings.quickMenuAdvanced=false;refreshPanel()},
+                IconItem("↺","Restaurar",null){resetPositions()},
+                IconItem("▦","Textos",null){settings.quickMenuShowLabels=true;refreshPanel()},
+                IconItem("×","Fechar",null){dismissPanel()}
+            )
+        }
     }
 
-    /** PGSharp-like list: square icon cell at left, plain text at right, no large rounded panel. */
+    /** PGSharp-like list: compact icon cell at left and text at right. */
     private fun buildLabeledMenu(parent: LinearLayout) {
-        if (settings.editMode) {
-            addRow(parent, "✓", "SALVAR EDIÇÃO", true) { settings.editMode = false; callbacks.onSettingsChanged(true); dismissPanel() }
-            addRow(parent, "↺", "RESETAR POSIÇÕES", null) { callbacks.onResetHudPositions(); callbacks.onSettingsChanged(true); refreshPanel() }
+        if (!settings.quickMenuAdvanced) {
+            addRow(parent,"◉","HUD",!callbacks.isHudCollapsed()){callbacks.onToggleHud();refreshPanel()}
+            addRow(parent,"★","Modo Batalha Assistido",settings.battleAssistEnabled){settings.battleAssistEnabled=!settings.battleAssistEnabled;changed()}
+            addRow(parent,"△","Liga: ${leagueShort(settings.leagueMode)}",null){cycleLeague()}
+            addRow(parent,"↔","Modo edição",settings.editMode){settings.editMode=!settings.editMode;callbacks.onSettingsChanged(true);if(settings.editMode)dismissPanel()else refreshPanel()}
+            addRow(parent,"T","Textos do HUD",settings.showHudText){settings.showHudText=!settings.showHudText;changed()}
+            addRow(parent,"…","Configurações avançadas",null){settings.quickMenuAdvanced=true;refreshPanel()}
+            addRow(parent,"▦","Somente ícones",null){settings.quickMenuShowLabels=false;refreshPanel()}
+            addRow(parent,"×","Fechar",null){dismissPanel()}
+        } else {
+            addRow(parent,"A","Reconhecimento automático",settings.autoRecognition){settings.autoRecognition=!settings.autoRecognition;changed()}
+            addRow(parent,"◇","Fraquezas do inimigo",settings.showStrongTypes){settings.showStrongTypes=!settings.showStrongTypes;changed()}
+            addRow(parent,"✓","Indicador Pokémon atual",settings.showCurrentIndicator){settings.showCurrentIndicator=!settings.showCurrentIndicator;changed()}
+            addRow(parent,"2","Analisar reservas",settings.analyzeReserves){settings.analyzeReserves=!settings.analyzeReserves;changed()}
+            addRow(parent,"T","Tipos das reservas",settings.showReserveTypes){settings.showReserveTypes=!settings.showReserveTypes;changed()}
+            addRow(parent,"⚔","Ataques do inimigo",settings.showEnemyMoves){settings.showEnemyMoves=!settings.showEnemyMoves;changed()}
+            addRow(parent,"••","Pontos de carregamento",settings.showChargedCounter){settings.showChargedCounter=!settings.showChargedCounter;changed()}
+            addRow(parent,"⚡","Progresso de energia",settings.showEnergyProgress){settings.showEnergyProgress=!settings.showEnergyProgress;changed()}
+            addRow(parent,"↻","Timer de troca",settings.showSwitchTimer){settings.showSwitchTimer=!settings.showSwitchTimer;changed()}
+            addRow(parent,"H","Histórico do inimigo",settings.showEnemyHistory){settings.showEnemyHistory=!settings.showEnemyHistory;changed()}
+            addRow(parent,"S","Escala ${(settings.scale*100).toInt()}%",null){settings.scale=if(settings.scale>=1.19f).5f else settings.scale+.1f;callbacks.onSettingsChanged(true);refreshPanel()}
+            addRow(parent,"◐","Opacidade ${(settings.opacity*100).toInt()}%",null){settings.opacity=if(settings.opacity>=.99f).3f else settings.opacity+.1f;callbacks.onSettingsChanged(false);refreshPanel()}
+            addRow(parent,"D","DEBUG",settings.debugMode){settings.debugMode=!settings.debugMode;changed()}
+            addRow(parent,"U","Mostrar todos os blocos",null){SettingsRepository.HUD_BLOCKS.forEach{settings.setBlockHidden(it,false)};changed(true)}
+            addRow(parent,"‹","Voltar ao menu básico",null){settings.quickMenuAdvanced=false;refreshPanel()}
+            addRow(parent,"↺","Restaurar posições/layout",null){settings.resetHudCustomization();resetPositions()}
+            addRow(parent,"▦","Somente ícones",null){settings.quickMenuShowLabels=false;refreshPanel()}
+            addRow(parent,"×","Fechar",null){dismissPanel()}
         }
-        addRow(parent, "◉", "HUD", !callbacks.isHudCollapsed()) { callbacks.onToggleHud(); refreshPanel() }
-        addRow(parent, "A", "Reconhecimento automático", settings.autoRecognition) { settings.autoRecognition = !settings.autoRecognition; changed() }
-        addRow(parent, "★", "Modo Batalha Assistido", settings.battleAssistEnabled) { settings.battleAssistEnabled = !settings.battleAssistEnabled; changed() }
-        addRow(parent, "♜", "Liga: ${leagueShort(settings.leagueMode)}", null) { cycleLeague() }
-        addRow(parent, "◇", "Fraquezas do inimigo", settings.showStrongTypes) { settings.showStrongTypes = !settings.showStrongTypes; changed() }
-        addRow(parent, "✓", "Indicador do Pokémon atual", settings.showCurrentIndicator) { settings.showCurrentIndicator = !settings.showCurrentIndicator; changed() }
-        addRow(parent, "2", "Analisar reservas", settings.analyzeReserves) { settings.analyzeReserves = !settings.analyzeReserves; changed() }
-        addRow(parent, "T", "Tipos das reservas", settings.showReserveTypes) { settings.showReserveTypes = !settings.showReserveTypes; changed() }
-        addRow(parent, "⚔", "Ataques do inimigo", settings.showEnemyMoves) { settings.showEnemyMoves = !settings.showEnemyMoves; changed() }
-        addRow(parent, "••", "Pontos de carregamento", settings.showChargedCounter) { settings.showChargedCounter = !settings.showChargedCounter; changed() }
-        addRow(parent, "⚡", "Progresso de energia", settings.showEnergyProgress) { settings.showEnergyProgress = !settings.showEnergyProgress; changed() }
-        addRow(parent, "↻", "Timer de troca", settings.showSwitchTimer) { settings.showSwitchTimer = !settings.showSwitchTimer; changed() }
-        addRow(parent, "↔", "Modo edição", settings.editMode) { settings.editMode = !settings.editMode; callbacks.onSettingsChanged(true); if (settings.editMode) dismissPanel() else refreshPanel() }
-        addRow(parent, "S", "Escala ${(settings.scale * 100).toInt()}%", null) { settings.scale = if (settings.scale >= 1.19f) .5f else settings.scale + .1f; callbacks.onSettingsChanged(true); refreshPanel() }
-        addRow(parent, "◐", "Opacidade ${(settings.opacity * 100).toInt()}%", null) { settings.opacity = if (settings.opacity >= .99f) .3f else settings.opacity + .1f; callbacks.onSettingsChanged(false); refreshPanel() }
-        addRow(parent, "D", "DEBUG", settings.debugMode) { settings.debugMode = !settings.debugMode; changed() }
-        addRow(parent, "▦", "Somente ícones", null) { settings.quickMenuShowLabels = false; refreshPanel() }
-        addRow(parent, "↺", "Restaurar posições", null) { resetPositions() }
-        addRow(parent, "×", "Fechar", null) { dismissPanel() }
     }
 
     private fun addIconCell(parent: LinearLayout, item: IconItem) {
@@ -480,6 +478,36 @@ class QuickOverlayMenu(
             LeagueKind.AUTO -> Color.argb(195, 73, 80, 91)
         })
         setStroke(dp(1), Color.argb(235, 245, 247, 250))
+    }
+
+
+    private inner class LeagueBadgeView(ctx: Context) : View(ctx) {
+        private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style=Paint.Style.STROKE; strokeWidth=dp(2).toFloat(); color=Color.argb(235,240,240,240) }
+        private var kind: LeagueKind = LeagueKind.AUTO
+        fun setKind(value: LeagueKind) { kind=value; invalidate() }
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val w=width.toFloat(); val h=height.toFloat(); val pad=3f*density
+            val tri=Path().apply { moveTo(pad,pad); lineTo(w-pad,pad); lineTo(w/2f,h-pad); close() }
+            fill.style=Paint.Style.FILL
+            fill.color=when(kind){
+                LeagueKind.GREAT->Color.rgb(45,99,190)
+                LeagueKind.ULTRA->Color.rgb(58,72,78)
+                LeagueKind.MASTER->Color.rgb(82,37,145)
+                LeagueKind.AUTO->Color.rgb(66,72,84)
+            }
+            canvas.drawPath(tri,fill)
+            canvas.drawPath(tri,strokePaint)
+            fill.color=when(kind){LeagueKind.GREAT->Color.rgb(235,55,62);LeagueKind.ULTRA->Color.rgb(245,202,34);LeagueKind.MASTER->Color.rgb(237,66,183);LeagueKind.AUTO->Color.rgb(120,190,240)}
+            fill.strokeWidth=dp(2).toFloat(); fill.style=Paint.Style.STROKE
+            canvas.drawLine(w*.28f,h*.35f,w*.73f,h*.22f,fill)
+            canvas.drawLine(w*.34f,h*.52f,w*.79f,h*.36f,fill)
+            fill.style=Paint.Style.FILL; fill.color=Color.WHITE
+            canvas.drawCircle(w*.35f,h*.25f,w*.085f,fill)
+            strokePaint.strokeWidth=dp(1).toFloat(); strokePaint.color=Color.rgb(40,45,55)
+            canvas.drawCircle(w*.35f,h*.25f,w*.032f,strokePaint)
+        }
     }
 
     private enum class LeagueKind { AUTO, GREAT, ULTRA, MASTER }

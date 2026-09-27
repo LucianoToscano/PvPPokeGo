@@ -30,6 +30,7 @@ import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.detect.BattleFrameEventDetector
 import com.lucianotoscano.pvppokego.detect.BattleOcrDetector
+import com.lucianotoscano.pvppokego.detect.BattlePresenceTracker
 import com.lucianotoscano.pvppokego.engine.BattleEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +53,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var engine: BattleEngine? = null
     private var detector: BattleOcrDetector? = null
     private var frameDetector: BattleFrameEventDetector? = null
+    private val presenceTracker = BattlePresenceTracker()
+    private var lastNativeTopCardY: Int? = null
+    private var lastEditSnapshot: Triple<String, Float, Float>? = null
     private var projection: MediaProjection? = null
     private var capture: ScreenCapture? = null
     private var windowManager: WindowManager? = null
@@ -90,6 +94,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 engine?.resetBattle()
                 frameDetector?.reset()
                 battleActive = false
+                presenceTracker.reset()
+                lastNativeTopCardY = null
                 lastBattleEvidenceAtMs = 0L
                 switchChoicePromptUntilMs = 0L
                 dismissMoveMenu()
@@ -141,6 +147,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 engine = BattleEngine(gameRepo)
                 detector = BattleOcrDetector(gameRepo)
                 frameDetector = BattleFrameEventDetector()
+                presenceTracker.reset()
 
                 val pm = getSystemService(MediaProjectionManager::class.java)
                 projection = pm.getMediaProjection(resultCode, resultData).also { mp ->
@@ -314,6 +321,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     MotionEvent.ACTION_DOWN -> {
                         candidate = overlayView?.dragTargetAt(event.x, event.y)
                         overlayView?.setEditTarget(candidate)
+                        candidate?.let { block ->
+                            overlayView?.blockPosition(block)?.let { pos ->
+                                lastEditSnapshot = Triple(block, pos.first, pos.second)
+                            }
+                        }
                         downX = event.x
                         downY = event.y
                         dragging = false
@@ -370,21 +382,21 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         quickMenu?.bringToFront()
     }
 
-    /** Always-on edit controls above the full-screen drag layer, so edit mode can be saved/reset. */
+    /** Compact edit controls. Select a HUD block, then resize/fade/lock/hide/undo or save. */
     private fun attachEditToolbar() {
         val wm = windowManager ?: return
         if (editToolbarView != null) return
         val d = resources.displayMetrics.density
         fun dp(v: Int): Int = (v * d).toInt()
 
-        fun actionButton(textValue: String, color: Int, action: () -> Unit) = TextView(this).apply {
+        fun button(textValue: String, action: () -> Unit) = TextView(this).apply {
             text = textValue
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = 12f
+            textSize = 13f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             setShadowLayer(2f, 0f, 1f, Color.BLACK)
-            background = roundedBackground(Color.argb(225, Color.red(color), Color.green(color), Color.blue(color)), Color.WHITE, dp(10).toFloat(), dp(1))
+            background = roundedBackground(Color.argb(210, 24, 29, 37), Color.argb(210, 238, 241, 246), dp(8).toFloat(), dp(1))
             isClickable = true
             setOnClickListener { action() }
         }
@@ -392,31 +404,34 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-            background = roundedBackground(Color.argb(205, 20, 24, 31), Color.argb(190, 255, 255, 255), dp(12).toFloat(), dp(1))
+            setPadding(dp(3), dp(3), dp(3), dp(3))
+            background = roundedBackground(Color.argb(170, 15, 18, 24), Color.argb(150, 255, 255, 255), dp(10).toFloat(), dp(1))
         }
 
-        bar.addView(actionButton("✓ SALVAR", Color.rgb(39, 156, 86)) {
-            settingsRepo.editMode = false
-            overlayView?.setEditTarget(null)
-            rebuildTouchableZones()
-            redraw()
-        }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(4) })
+        fun selected(): String? = overlayView?.selectedEditTarget()
+        fun refresh() { redraw() }
 
-        bar.addView(actionButton("↺ RESET", Color.rgb(191, 72, 62)) {
-            settingsRepo.clearHudPositions()
-            overlayView?.setEditTarget(null)
-            rebuildTouchableZones()
-            redraw()
-        }, LinearLayout.LayoutParams(0, dp(38), 1f))
+        val actions = listOf<Pair<String, () -> Unit>>(
+            "−" to { selected()?.let { settingsRepo.setBlockScale(it, settingsRepo.blockScale(it) - .10f); refresh() } },
+            "+" to { selected()?.let { settingsRepo.setBlockScale(it, settingsRepo.blockScale(it) + .10f); refresh() } },
+            "◐" to { selected()?.let { val o=settingsRepo.blockOpacity(it); settingsRepo.setBlockOpacity(it, if (o <= .36f) 1f else o - .25f); refresh() } },
+            "L" to { selected()?.let { settingsRepo.setBlockLocked(it, !settingsRepo.isBlockLocked(it)); refresh() } },
+            "H" to { selected()?.let { settingsRepo.setBlockHidden(it, !settingsRepo.isBlockHidden(it)); refresh() } },
+            "↶" to { lastEditSnapshot?.let { (block,x,y) -> settingsRepo.setPosition(block,x,y); overlayView?.setEditTarget(block); rebuildTouchableZones(); refresh() } },
+            "✓" to { settingsRepo.editMode=false; overlayView?.setEditTarget(null); rebuildTouchableZones(); redraw() },
+            "↺" to { settingsRepo.resetHudCustomization(); overlayView?.setEditTarget(null); rebuildTouchableZones(); redraw() }
+        )
+        actions.forEach { (label, action) ->
+            bar.addView(button(label, action), LinearLayout.LayoutParams(0, dp(34), 1f).apply { marginStart=dp(2); marginEnd=dp(2) })
+        }
 
         val screenW = resources.displayMetrics.widthPixels
         val screenH = resources.displayMetrics.heightPixels
-        val width = min((screenW * .68f).toInt(), dp(300))
-        val height = dp(48)
+        val width = min((screenW * .92f).toInt(), dp(390))
+        val height = dp(42)
         val params = smallTouchableParams(width, height).apply {
             x = (screenW - width) / 2
-            y = (screenH - height - dp(78)).coerceAtLeast(0)
+            y = (screenH - height - dp(62)).coerceAtLeast(0)
         }
         editToolbarView = bar
         wm.addView(bar, params)
@@ -718,14 +733,28 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
                         var e = engine
                         if (settingsRepo.autoRecognition && e != null) {
-                            val event = frameDetector?.analyze(frame, e.currentFastDurationMs(), now)
+                            val event = frameDetector?.analyze(
+                                frame,
+                                e.currentFastDurationMs(),
+                                e.currentOwnFastDurationMs(),
+                                now
+                            )
                             if (event != null) {
+                                lastNativeTopCardY = event.nativeTopCardY ?: lastNativeTopCardY
+                                battleActive = presenceTracker.update(
+                                    visualConfidence = event.battleConfidence,
+                                    nowMs = now
+                                )
+                                e.onBattleConfidence(presenceTracker.confidence)
                                 if (event.battleUiVisible) markBattleEvidence(now)
                                 if (battleActive || event.battleUiVisible) {
                                     e.onReserveSlotsDetected(event.reserve1Visible, event.reserve2Visible)
                                 }
                                 if (event.fastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
                                     e.onFastDetected(event.fastMoveCount, event.confidence, event.source, event.hpRatio, event.motion)
+                                }
+                                if (event.ownFastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
+                                    e.onOwnFastDetected(event.ownFastMoveCount, event.confidence, event.source, event.opponentHpRatio)
                                 }
                             }
                         }
@@ -734,12 +763,21 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             val d = detector?.detect(frame)
                             e = engine
                             if (d != null && e != null) {
-                                if ((d.player != null && d.opponent != null) || battleTextLooksActive(d.battleText)) {
+                                val pairedCards = d.player != null && d.opponent != null
+                                val textEvidence = battleTextLooksActive(d.battleText)
+                                val switchPrompt = switchChoicePromptDetected(d.battleText)
+                                if (pairedCards || textEvidence || switchPrompt) {
+                                    battleActive = presenceTracker.update(
+                                        pairedPokemonCards = pairedCards,
+                                        battleTextEvidence = textEvidence,
+                                        switchPrompt = switchPrompt,
+                                        nowMs = now
+                                    )
+                                    e.onBattleConfidence(presenceTracker.confidence)
                                     markBattleEvidence(now)
                                 }
-                                if (switchChoicePromptDetected(d.battleText)) {
+                                if (switchPrompt) {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
-                                    markBattleEvidence(now)
                                 }
                                 val changes = e.onDetection(d)
                                 if (changes.playerChanged || changes.enemyChanged) frameDetector?.reset()
@@ -767,10 +805,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             frameDetector?.freezeForCharged(now, 1_800L)
                         }
 
-                        if (battleActive && now - lastBattleEvidenceAtMs > BATTLE_VISIBILITY_GRACE_MS) {
-                            battleActive = false
-                            switchChoicePromptUntilMs = 0L
-                        }
+                        battleActive = presenceTracker.tick(now)
+                        engine?.onBattleConfidence(presenceTracker.confidence)
+                        if (!battleActive) switchChoicePromptUntilMs = 0L
 
                         consecutiveErrors = 0
                         withContext(Dispatchers.Main) { redraw() }
@@ -793,6 +830,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         currentLeagueCp = cp
         engine = BattleEngine(gameRepo)
         frameDetector?.reset()
+        presenceTracker.reset()
+        lastNativeTopCardY = null
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
@@ -806,6 +845,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val enabled = settingsRepo.overlayEnabled && !appUiVisible && battleActive
         view.visibility = if (enabled) View.VISIBLE else View.GONE
         view.setCollapsed(hudCollapsed)
+        view.setNativeTopCardY(lastNativeTopCardY)
         view.setSwitchChoicePromptVisible(enabled && System.currentTimeMillis() <= switchChoicePromptUntilMs)
 
         val ui = engine?.uiState(settingsRepo.debugMode)
@@ -828,6 +868,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onResetTapped() {
         engine?.resetBattle()
         frameDetector?.reset()
+        presenceTracker.reset()
+        lastNativeTopCardY = null
         battleActive = false
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
