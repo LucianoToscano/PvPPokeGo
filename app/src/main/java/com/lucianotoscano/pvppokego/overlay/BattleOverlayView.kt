@@ -240,7 +240,7 @@ class BattleOverlayView(
     private fun drawMoveTriangle(canvas: Canvas) {
         val (centerRefX, fastRefY) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
         val centerX=rx(centerRefX); val fastY=ry(fastRefY); val chargedY=ry(fastRefY+123f)
-        val spread=rx(72f); val fastRadius=31f*u(); val chargedRadius=38f*u()
+        val spread=rx(74f); val fastRadius=31f*u(); val chargedRadius=41f*u()
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)
             drawMoveLabel(canvas,centerX,fastY+fastRadius+20f*u(),shortMoveName(m.name)+" ▼")
@@ -303,16 +303,30 @@ class BattleOverlayView(
     private fun drawCharged(canvas: Canvas,cx: Float,cy: Float,radius: Float,prediction: ChargedPrediction) {
         val circle=Path().apply { addCircle(cx,cy,radius,Path.Direction.CW) }
         canvas.save(); canvas.clipPath(circle)
-        paint.style=Paint.Style.FILL; paint.color=hudColor(Color.rgb(49,55,69)); canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
+        paint.style=Paint.Style.FILL
+        paint.color=hudColor(Color.rgb(22,26,34),.84f)
+        canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
         if (settings.showEnergyProgress) {
-            val progress=prediction.progress.coerceIn(0f,1f); val fillTop=cy+radius-2f*radius*progress
-            paint.color=hudColor(typeColor(prediction.move.type)); canvas.drawRect(cx-radius,fillTop,cx+radius,cy+radius,paint)
-            if (progress>.02f && progress<.98f) { paint.color=hudColor(Color.WHITE,.84f); canvas.drawRect(cx-radius,fillTop-1f*u(),cx+radius,fillTop+1f*u(),paint) }
+            val progress=prediction.progress.coerceIn(0f,1f)
+            val fillTop=cy+radius-2f*radius*progress
+            paint.color=hudColor(typeColor(prediction.move.type),.92f)
+            canvas.drawRect(cx-radius,fillTop,cx+radius,cy+radius,paint)
+            if (progress>.02f && progress<.98f) {
+                paint.color=hudColor(Color.WHITE,.62f)
+                canvas.drawRect(cx-radius,fillTop-1.1f*u(),cx+radius,fillTop+1.1f*u(),paint)
+            }
         } else {
-            paint.color=hudColor(typeColor(prediction.move.type)); canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
+            paint.color=hudColor(typeColor(prediction.move.type),.90f)
+            canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
         }
         canvas.restore()
-        stroke.color=hudColor(Color.WHITE); stroke.strokeWidth=2.2f*u(); canvas.drawCircle(cx,cy,radius,stroke)
+        stroke.style=Paint.Style.STROKE
+        stroke.color=hudColor(Color.rgb(10,13,18),.82f)
+        stroke.strokeWidth=5.2f*u()
+        canvas.drawCircle(cx,cy,radius,stroke)
+        stroke.color=hudColor(Color.WHITE,.68f)
+        stroke.strokeWidth=1.5f*u()
+        canvas.drawCircle(cx,cy,radius-1.2f*u(),stroke)
         drawTypeGlyph(canvas,cx,cy,prediction.move.type,23f*u())
         if (settings.showChargedCounter) drawChargeProgressDots(canvas,cx,cy,radius,prediction)
     }
@@ -326,14 +340,35 @@ class BattleOverlayView(
     }
 
     private fun drawMoveCircle(canvas: Canvas,cx: Float,cy: Float,radius: Float,move: MoveDef) {
-        paint.style=Paint.Style.FILL; paint.color=hudColor(Color.rgb(35,40,52),.72f); canvas.drawCircle(cx,cy+2f*u(),radius+3f*u(),paint)
-        paint.color=hudColor(typeColor(move.type)); canvas.drawCircle(cx,cy,radius,paint)
-        stroke.color=hudColor(Color.WHITE); stroke.strokeWidth=2.2f*u(); canvas.drawCircle(cx,cy,radius,stroke); drawTypeGlyph(canvas,cx,cy,move.type,20f*u())
+        val circle=Path().apply { addCircle(cx,cy,radius,Path.Direction.CW) }
+        canvas.save(); canvas.clipPath(circle)
+        paint.style=Paint.Style.FILL
+        paint.color=hudColor(Color.rgb(22,26,34),.84f)
+        canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
+        paint.color=hudColor(typeColor(move.type),.88f)
+        val fillTop=cy+radius*.05f
+        canvas.drawRect(cx-radius,fillTop,cx+radius,cy+radius,paint)
+        paint.color=hudColor(Color.WHITE,.48f)
+        canvas.drawRect(cx-radius,fillTop-1f*u(),cx+radius,fillTop+1f*u(),paint)
+        canvas.restore()
+        stroke.style=Paint.Style.STROKE
+        stroke.color=hudColor(Color.rgb(10,13,18),.82f)
+        stroke.strokeWidth=4.7f*u()
+        canvas.drawCircle(cx,cy,radius,stroke)
+        stroke.color=hudColor(Color.WHITE,.66f)
+        stroke.strokeWidth=1.4f*u()
+        canvas.drawCircle(cx,cy,radius-1.1f*u(),stroke)
+        drawTypeGlyph(canvas,cx,cy,move.type,20f*u())
     }
 
     private fun drawMoveLabel(canvas: Canvas,x: Float,y: Float,text: String) {
-        paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=13.5f*u(); paint.typeface=Typeface.DEFAULT_BOLD
-        paint.setShadowLayer(3f,0f,1f,Color.BLACK); canvas.drawText(text,x,y,paint); paint.clearShadowLayer()
+        paint.color=hudColor(Color.WHITE,.88f)
+        paint.textAlign=Paint.Align.CENTER
+        paint.textSize=12.5f*u()
+        paint.typeface=Typeface.DEFAULT_BOLD
+        paint.setShadowLayer(3f,0f,1f,Color.BLACK)
+        canvas.drawText(text,x,y,paint)
+        paint.clearShadowLayer()
     }
 
     private fun drawReserves(canvas: Canvas) {
@@ -468,11 +503,11 @@ class BattleOverlayView(
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
         const val BLOCK_BATTLE_ASSIST = "hud_battle_assist"
 
-        const val TOP_ICON_Y=28f
+        const val TOP_ICON_Y=66f
         const val PLAYER_MATCHUP_X=136f
         const val STRONG_TYPES_RIGHT_X=688f
         const val HUD_TOGGLE_CENTER_X=432f
-        const val HUD_TOGGLE_CENTER_Y=28f
+        const val HUD_TOGGLE_CENTER_Y=66f
         const val ENEMY_MOVE_CENTER_X=558f
         const val ENEMY_MOVE_FAST_Y=355f
         const val RESERVE_INDICATOR_X=692f
