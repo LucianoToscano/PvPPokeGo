@@ -195,6 +195,11 @@ class SettingsRepository(context: Context) {
                     editor.remove("${block}_$suffix")
                 }
             }
+            // Full reset must also leave the overlay in a safe, non-editing state.
+            editor.putBoolean("edit_mode", false)
+            editor.putBoolean("layout_locked", true)
+            editor.putFloat("overlay_scale", 0.8f)
+            editor.putFloat("overlay_opacity", 0.9f)
         }.apply()
     }
 

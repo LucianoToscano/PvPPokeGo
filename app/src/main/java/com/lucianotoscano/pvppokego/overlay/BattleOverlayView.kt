@@ -157,19 +157,26 @@ class BattleOverlayView(
         if (near(BLOCK_BATTLE_ASSIST, BATTLE_ASSIST_X, BATTLE_ASSIST_Y, 190f, 45f)) return BLOCK_BATTLE_ASSIST
 
         val strong = state.strongTypesAgainstOpponent.take(4)
-        if (strong.isNotEmpty()) {
+        if (strong.isNotEmpty() && !settings.isBlockHidden(BLOCK_STRONG_TYPES) &&
+            !(settings.isBlockLocked(BLOCK_STRONG_TYPES) && settings.layoutLocked)) {
             val (right, cy) = topPos(BLOCK_STRONG_TYPES, STRONG_TYPES_RIGHT_X)
             val left = right - 35f * (strong.size - 1).coerceAtLeast(0) - 28f
             if (x in left..(right + 48f) && y in (cy-30f)..(cy+30f)) return BLOCK_STRONG_TYPES
         }
 
         val (mx, my) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
-        if (x in (mx-150f)..(mx+150f) && y in (my-55f)..(my+205f)) return BLOCK_ENEMY_MOVES
+        if (!settings.isBlockHidden(BLOCK_ENEMY_MOVES) &&
+            !(settings.isBlockLocked(BLOCK_ENEMY_MOVES) && settings.layoutLocked) &&
+            x in (mx-150f)..(mx+150f) && y in (my-55f)..(my+205f)) return BLOCK_ENEMY_MOVES
 
         val (r1x, r1y) = reservePos(0)
-        if (x in (r1x-65f)..(r1x+175f) && y in (r1y-55f)..(r1y+125f)) return BLOCK_RESERVE_1
+        if (!settings.isBlockHidden(BLOCK_RESERVE_1) &&
+            !(settings.isBlockLocked(BLOCK_RESERVE_1) && settings.layoutLocked) &&
+            x in (r1x-65f)..(r1x+175f) && y in (r1y-55f)..(r1y+125f)) return BLOCK_RESERVE_1
         val (r2x, r2y) = reservePos(1)
-        if (x in (r2x-65f)..(r2x+175f) && y in (r2y-55f)..(r2y+125f)) return BLOCK_RESERVE_2
+        if (!settings.isBlockHidden(BLOCK_RESERVE_2) &&
+            !(settings.isBlockLocked(BLOCK_RESERVE_2) && settings.layoutLocked) &&
+            x in (r2x-65f)..(r2x+175f) && y in (r2y-55f)..(r2y+125f)) return BLOCK_RESERVE_2
         if (near(BLOCK_ENEMY_HISTORY, ENEMY_HISTORY_X, ENEMY_HISTORY_Y, 180f, 80f)) return BLOCK_ENEMY_HISTORY
         return null
     }

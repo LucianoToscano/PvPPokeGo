@@ -84,6 +84,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         super.onCreate()
         settingsRepo = SettingsRepository(this)
         settingsRepo.ensureTopHudSafeV4()
+        // Never revive a stale edit/free-drag session after a service restart. A stale
+        // fullscreen drag layer can otherwise consume battle input unexpectedly.
+        settingsRepo.editMode = false
+        settingsRepo.layoutLocked = true
         settingsRepo.overlayServiceRunning = true
         gameRepo = GameDataRepository(this)
         startForeground(NOTIFICATION_ID, notification("Aguardando captura de tela"))
@@ -162,7 +166,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                startForeground(NOTIFICATION_ID, notification("V05 FIX • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -371,7 +375,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START }
 
-    /** Full-screen touch layer exists ONLY in explicit edit mode. Battle input is blocked while editing. */
+    /** Full-screen touch layer is temporary while editing/free-drag is active. Lock again before battling. */
     private fun attachEditTouchLayer() {
         val wm = windowManager ?: return
         if (editTouchLayer != null) return
@@ -947,14 +951,17 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            startForeground(NOTIFICATION_ID, notification("V05 FIX • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
 
     private fun redraw() {
         val view = overlayView ?: return
-        val enabled = settingsRepo.overlayEnabled && !appUiVisible && battleActive
+        // With automatic recognition disabled, keep the HUD available as a manual
+        // overlay instead of making every control disappear because battleActive can no
+        // longer receive visual/OCR evidence.
+        val enabled = settingsRepo.overlayEnabled && !appUiVisible && (battleActive || !settingsRepo.autoRecognition)
         view.visibility = if (enabled) View.VISIBLE else View.GONE
         view.setCollapsed(hudCollapsed)
         view.setNativeTopCardY(lastNativeTopCardY)

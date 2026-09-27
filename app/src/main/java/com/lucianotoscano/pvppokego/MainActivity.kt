@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
             val service = Intent(this, BattleOverlayService::class.java).apply {
                 putExtra(BattleOverlayService.EXTRA_RESULT_CODE, result.resultCode)
                 putExtra(BattleOverlayService.EXTRA_RESULT_DATA, data)
-                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, true)
+                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, false)
             }
             ContextCompat.startForegroundService(this, service)
         }

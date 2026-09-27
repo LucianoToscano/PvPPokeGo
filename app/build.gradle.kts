@@ -13,8 +13,8 @@ android {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0-copilot-hardening"
+        versionCode = 6
+        versionName = "0.5.1-overlay-controls-fix"
     }
 
     buildFeatures { compose = true }
