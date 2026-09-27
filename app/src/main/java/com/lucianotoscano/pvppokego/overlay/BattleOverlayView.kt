@@ -82,8 +82,9 @@ class BattleOverlayView(
         }
 
         if (settings.showCurrentIndicator) {
-            // Keep our current-Pokemon indicator above, never over, GO's native info card.
-            drawMatchupIndicator(canvas, rx(PLAYER_MATCHUP_X), ry(TOP_ICON_Y), state.playerMatchup, 17.5f*u())
+            // Small independent status chip in the free strip above the player's native card.
+            // It deliberately stays left of the game's own type/status chips.
+            drawMatchupIndicator(canvas, rx(PLAYER_MATCHUP_X), ry(TOP_ICON_Y), state.playerMatchup, 14f*u())
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
         if (settings.showEnemyMoves) drawMoveTriangle(canvas)
@@ -136,12 +137,18 @@ class BattleOverlayView(
     private fun drawStrongTypes(canvas: Canvas) {
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isEmpty()) return
-        val radius = 16.5f*u(); val y = ry(TOP_ICON_Y); val spacing = rx(39f)
-        val strongRight = rx(712f); val arrowX = rx(750f)
+
+        // Reserve the far-right top strip for Pokemon GO's own native icons. Our weakness chips
+        // are packed immediately to the LEFT of that reserved strip, with a visible gap.
+        val radius = 14f*u()
+        val y = ry(TOP_ICON_Y)
+        val spacing = rx(35f)
+        val strongRight = rx(686f)
+        val arrowX = rx(722f)
         val firstStrong = strongRight - spacing*(strong.size-1).coerceAtLeast(0)
         strong.forEachIndexed { i,type -> drawTypeChip(canvas,firstStrong+spacing*i,y,type,radius) }
-        paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=21f*u(); paint.typeface=Typeface.DEFAULT_BOLD
-        paint.setShadowLayer(2.5f,0f,1f,Color.BLACK); canvas.drawText("›",arrowX,y+6.5f*u(),paint); paint.clearShadowLayer()
+        paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=18f*u(); paint.typeface=Typeface.DEFAULT_BOLD
+        paint.setShadowLayer(2.5f,0f,1f,Color.BLACK); canvas.drawText("›",arrowX,y+5.8f*u(),paint); paint.clearShadowLayer()
     }
 
     private fun drawMoveTriangle(canvas: Canvas) {
@@ -355,9 +362,10 @@ class BattleOverlayView(
     }
 
     companion object {
-        // Type/matchup chips sit in the thin strip above Pokémon GO's white player/opponent cards.
-        private const val TOP_ICON_Y=18f
-        private const val PLAYER_MATCHUP_X=30f
+        // Keep PvPPokeGo top chips inside the free strip above the white cards while reserving
+        // the far-right lane for Pokémon GO's native type/status icons.
+        private const val TOP_ICON_Y=20f
+        private const val PLAYER_MATCHUP_X=26f
         const val HUD_TOGGLE_CENTER_X=432f
         const val HUD_TOGGLE_CENTER_Y=44f
         const val ENEMY_MOVE_CENTER_X=558f
