@@ -16,35 +16,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: v04-v03-stable-base
-
       - name: Patch overlay polish
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          # ---------- SettingsRepository: migrate old saved top positions ----------
           p = Path('app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt')
           s = p.read_text()
-          marker = '    var showSwitchTimer: Boolean\n'
-          helper = '''    /** Move only legacy/clipped top HUD positions into the safe strip below the status bar. */
-    fun ensureTopHudSafeV4() {
-        if (prefs.getInt("top_hud_position_version", 0) >= 4) return
-        val editor = prefs.edit()
-        listOf("hud_player_matchup", "hud_strong_types", "hud_toggle").forEach { block ->
-            val key = "${block}_y"
-            val current = prefs.getFloat(key, Float.NaN)
-            if (current.isNaN() || current < 22f) editor.putFloat(key, 28f)
-        }
-        editor.putInt("top_hud_position_version", 4).apply()
-    }
-
-'''
           if 'fun ensureTopHudSafeV4()' not in s:
-              s = s.replace(marker, helper + marker)
+              helper = (
+                  '    /** Move legacy/clipped top HUD positions into the safe strip below the status bar. */\n'
+                  '    fun ensureTopHudSafeV4() {\n'
+                  '        if (prefs.getInt("top_hud_position_version", 0) >= 4) return\n'
+                  '        val editor = prefs.edit()\n'
+                  '        listOf("hud_player_matchup", "hud_strong_types", "hud_toggle").forEach { block ->\n'
+                  '            val key = "${block}_y"\n'
+                  '            val current = prefs.getFloat(key, Float.NaN)\n'
+                  '            if (current.isNaN() || current < 22f) editor.putFloat(key, 28f)\n'
+                  '        }\n'
+                  '        editor.putInt("top_hud_position_version", 4).apply()\n'
+                  '    }\n\n'
+              )
+              s = s.replace('    var showSwitchTimer: Boolean\n', helper + '    var showSwitchTimer: Boolean\n')
           p.write_text(s)
 
-          # ---------- BattleOverlayView: safe top strip + persistent reserve UI ----------
           p = Path('app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt')
           s = p.read_text()
           s = s.replace('            if (!reserve.visible) return@forEachIndexed', '            if (reserve.name.isNullOrBlank()) return@forEachIndexed')
@@ -52,7 +48,6 @@ jobs:
           s = s.replace('        const val HUD_TOGGLE_CENTER_Y=12f', '        const val HUD_TOGGLE_CENTER_Y=28f')
           p.write_text(s)
 
-          # ---------- BattleEngine: real switch countdown + reserve debouncing ----------
           p = Path('app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt')
           s = p.read_text()
           s = s.replace(
@@ -63,82 +58,78 @@ jobs:
               '        reserveSlotVisible.fill(null)\n        chargedPendingSinceMs = null',
               '        reserveSlotVisible.fill(null)\n        reserveMissingStreak.fill(0)\n        ownSwitchReadyAtMs = 0L\n        opponentSwitchReadyAtMs = 0L\n        chargedPendingSinceMs = null'
           )
-          old = '''        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
-        if (playerChanged) reserveSlotVisible.fill(null)
-
-        return DetectionChanges(
-            playerChanged = playerChanged,
-            enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
-        )'''
-          new = '''        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
-        val enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
-        val now = System.currentTimeMillis()
-        if (playerChanged) {
-            reserveSlotVisible.fill(null)
-            reserveMissingStreak.fill(0)
-            ownSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
-        }
-        if (enemyChanged) opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
-
-        return DetectionChanges(
-            playerChanged = playerChanged,
-            enemyChanged = enemyChanged
-        )'''
+          old = (
+              '        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)\n'
+              '        if (playerChanged) reserveSlotVisible.fill(null)\n\n'
+              '        return DetectionChanges(\n'
+              '            playerChanged = playerChanged,\n'
+              '            enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)\n'
+              '        )'
+          )
+          new = (
+              '        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)\n'
+              '        val enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)\n'
+              '        val now = System.currentTimeMillis()\n'
+              '        if (playerChanged) {\n'
+              '            reserveSlotVisible.fill(null)\n'
+              '            reserveMissingStreak.fill(0)\n'
+              '            ownSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS\n'
+              '        }\n'
+              '        if (enemyChanged) opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS\n\n'
+              '        return DetectionChanges(\n'
+              '            playerChanged = playerChanged,\n'
+              '            enemyChanged = enemyChanged\n'
+              '        )'
+          )
           if old not in s:
-              raise SystemExit('BattleEngine onDetection block not found')
+              raise SystemExit('onDetection block not found')
           s = s.replace(old, new)
-
-          old = '''    fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
-        if (firstVisible != null) reserveSlotVisible[0] = firstVisible
-        if (secondVisible != null) reserveSlotVisible[1] = secondVisible
-    }'''
-          new = '''    fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
-        fun update(index: Int, value: Boolean?) {
-            when (value) {
-                true -> {
-                    reserveMissingStreak[index] = 0
-                    reserveSlotVisible[index] = true
-                }
-                false -> {
-                    reserveMissingStreak[index]++
-                    if (reserveMissingStreak[index] >= RESERVE_MISSING_CONFIRM_FRAMES) {
-                        reserveSlotVisible[index] = false
-                    }
-                }
-                null -> Unit
-            }
-        }
-        update(0, firstVisible)
-        update(1, secondVisible)
-    }'''
+          old = (
+              '    fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {\n'
+              '        if (firstVisible != null) reserveSlotVisible[0] = firstVisible\n'
+              '        if (secondVisible != null) reserveSlotVisible[1] = secondVisible\n'
+              '    }'
+          )
+          new = (
+              '    fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {\n'
+              '        fun update(index: Int, value: Boolean?) {\n'
+              '            when (value) {\n'
+              '                true -> { reserveMissingStreak[index] = 0; reserveSlotVisible[index] = true }\n'
+              '                false -> {\n'
+              '                    reserveMissingStreak[index]++\n'
+              '                    if (reserveMissingStreak[index] >= RESERVE_MISSING_CONFIRM_FRAMES) reserveSlotVisible[index] = false\n'
+              '                }\n'
+              '                null -> Unit\n'
+              '            }\n'
+              '        }\n'
+              '        update(0, firstVisible)\n'
+              '        update(1, secondVisible)\n'
+              '    }'
+          )
           if old not in s:
-              raise SystemExit('BattleEngine reserve detector block not found')
+              raise SystemExit('reserve detector block not found')
           s = s.replace(old, new)
-
-          needle = '    fun uiState(debug: Boolean = false): BattleUiState {\n'
-          helper = '''    private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {
-        val remaining = readyAtMs - nowMs
-        if (remaining <= 0L) return null
-        return ((remaining + 999L) / 1000L).toInt()
-    }
-
-'''
           if 'private fun switchSeconds(' not in s:
-              s = s.replace(needle, helper + needle)
-
+              helper = (
+                  '    private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {\n'
+                  '        val remaining = readyAtMs - nowMs\n'
+                  '        if (remaining <= 0L) return null\n'
+                  '        return ((remaining + 999L) / 1000L).toInt()\n'
+                  '    }\n\n'
+              )
+              s = s.replace('    fun uiState(debug: Boolean = false): BattleUiState {\n', helper + '    fun uiState(debug: Boolean = false): BattleUiState {\n')
           s = s.replace(
               '            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f) else null,\n            chargedIncoming = chargedPendingSinceMs != null,',
               '            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f) else null,\n            ownSwitchSeconds = switchSeconds(ownSwitchReadyAtMs),\n            opponentSwitchSeconds = switchSeconds(opponentSwitchReadyAtMs),\n            chargedIncoming = chargedPendingSinceMs != null,'
           )
-
-          if 'SWITCH_COOLDOWN_MS' not in s.split('companion object', 1)[-1]:
+          tail = s.split('companion object', 1)[-1]
+          if 'SWITCH_COOLDOWN_MS' not in tail:
               s = s.replace(
                   '        private const val CHARGED_FAST_GUARD_MS',
                   '        private const val SWITCH_COOLDOWN_MS = 50_000L\n        private const val RESERVE_MISSING_CONFIRM_FRAMES = 12\n        private const val CHARGED_FAST_GUARD_MS'
               )
           p.write_text(s)
 
-          # ---------- Service: eye is separate/clickable and top-position migration ----------
           p = Path('app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt')
           s = p.read_text()
           s = s.replace(
@@ -153,25 +144,15 @@ jobs:
               '        attachMoveTouchZones()\n    }\n\n    /** Compact type-colored submenu.',
               '        attachMoveTouchZones()\n        attachHudToggleTouch()\n    }\n\n    /** Compact type-colored submenu.'
           )
-          s = s.replace(
-              '        hudToggleTouch?.visibility = View.GONE',
-              '        hudToggleTouch?.visibility = if (enabled && !settingsRepo.editMode) View.VISIBLE else View.GONE'
-          )
+          s = s.replace('        hudToggleTouch?.visibility = View.GONE', '        hudToggleTouch?.visibility = if (enabled && !settingsRepo.editMode) View.VISIBLE else View.GONE')
           p.write_text(s)
           PY
-
       - name: Commit patch
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt \
-                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt \
-                  app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt \
-                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          if git diff --cached --quiet; then
-            echo 'No changes needed.'
-            exit 0
-          fi
-          git commit -m 'fix: polish overlay menu top HUD reserves and switch timer'
+          git add app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix: polish top HUD reserves eye and switch timer'
           git push origin HEAD:v04-v03-stable-base
