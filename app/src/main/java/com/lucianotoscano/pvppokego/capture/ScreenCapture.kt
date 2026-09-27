@@ -7,8 +7,10 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import android.util.DisplayMetrics
 import android.view.WindowManager
 import java.util.concurrent.atomic.AtomicReference
 
@@ -30,9 +32,18 @@ class ScreenCapture(
 
     fun start() {
         val wm = context.getSystemService(WindowManager::class.java)
-        val bounds = wm.currentWindowMetrics.bounds
-        width = bounds.width()
-        height = bounds.height()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = wm.currentWindowMetrics.bounds
+            width = bounds.width()
+            height = bounds.height()
+        } else {
+            // minSdk is 29: currentWindowMetrics does not exist on Android 10.
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(metrics)
+            width = metrics.widthPixels
+            height = metrics.heightPixels
+        }
         val density = context.resources.displayMetrics.densityDpi
 
         thread = HandlerThread("pvppokego-capture").also { it.start() }
