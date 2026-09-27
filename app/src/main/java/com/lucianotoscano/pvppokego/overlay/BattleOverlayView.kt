@@ -143,7 +143,10 @@ class BattleOverlayView(
         val y = refY(screenY)
 
         fun near(block: String, dx: Float, dy: Float, halfW: Float, halfH: Float): Boolean {
-            if (settings.isBlockLocked(block) || settings.isBlockHidden(block)) return false
+            // When the global padlock is open, ALL HUD blocks must be movable.
+            // Per-block locks only apply inside the legacy fine-edit mode while the
+            // global layout itself is locked.
+            if ((settings.isBlockLocked(block) && settings.layoutLocked) || settings.isBlockHidden(block)) return false
             val (cx, cy) = if (block == BLOCK_PLAYER_MATCHUP || block == BLOCK_STRONG_TYPES) topPos(block, dx) else pos(block, dx, dy)
             return x in (cx-halfW)..(cx+halfW) && y in (cy-halfH)..(cy+halfH)
         }
@@ -179,7 +182,7 @@ class BattleOverlayView(
     /** Persists exactly where the user drags the block. No positional restrictions are applied. */
     fun moveDragTarget(block: String, screenX: Float, screenY: Float) {
         if ((settings.layoutLocked && !settings.editMode) || width <= 0 || height <= 0) return
-        if (settings.isBlockLocked(block)) return
+        if (settings.isBlockLocked(block) && settings.layoutLocked) return
         settings.setPosition(block, refX(screenX), refY(screenY))
         editTarget = block
         invalidate()

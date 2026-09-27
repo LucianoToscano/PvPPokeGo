@@ -291,8 +291,16 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             isClickable = true
             installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
                 settingsRepo.layoutLocked = !settingsRepo.layoutLocked
-                if (settingsRepo.layoutLocked) overlayView?.setEditTarget(null)
-                redraw()
+                // Global padlock is the single source of truth for free dragging.
+                // Rebuild the drag layer on the next UI turn so unlocking immediately
+                // makes every HUD block draggable without opening the legacy edit mode.
+                if (settingsRepo.layoutLocked) {
+                    overlayView?.setEditTarget(null)
+                    removeEditTouchLayer()
+                } else {
+                    dismissMoveMenu()
+                }
+                hudLockTouch?.post { redraw() }
             }
         }.also { wm.addView(it, params) }
     }
