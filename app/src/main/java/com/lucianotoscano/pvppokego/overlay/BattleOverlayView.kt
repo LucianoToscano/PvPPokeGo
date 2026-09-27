@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Region
 import android.graphics.Typeface
 import android.view.View
 import com.lucianotoscano.pvppokego.data.BattleUiState
@@ -76,6 +75,13 @@ class BattleOverlayView(
     private fun pos(block: String, defaultX: Float, defaultY: Float): Pair<Float, Float> =
         settings.getPosition(block, defaultX, defaultY)
 
+    /** Backward-compatible defaults: an old combined reserve position becomes the base for both slots. */
+    private fun reservePos(index: Int): Pair<Float, Float> {
+        val legacy = pos(BLOCK_RESERVES_LEGACY, RESERVE_INDICATOR_X, RESERVE_FIRST_Y)
+        val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
+        return pos(block, legacy.first, legacy.second + index * RESERVE_SPACING_Y)
+    }
+
     /** Returns the draggable HUD block under a screen coordinate while edit mode is active. */
     fun dragTargetAt(screenX: Float, screenY: Float): String? {
         if (!settings.editMode || collapsed || width <= 0 || height <= 0) return null
@@ -100,8 +106,10 @@ class BattleOverlayView(
         val (mx, my) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
         if (x in (mx-150f)..(mx+150f) && y in (my-55f)..(my+205f)) return BLOCK_ENEMY_MOVES
 
-        val (rx, ry) = pos(BLOCK_RESERVES, RESERVE_INDICATOR_X, RESERVE_FIRST_Y)
-        if (x in (rx-65f)..(rx+175f) && y in (ry-55f)..(ry+255f)) return BLOCK_RESERVES
+        val (r1x, r1y) = reservePos(0)
+        if (x in (r1x-65f)..(r1x+175f) && y in (r1y-55f)..(r1y+125f)) return BLOCK_RESERVE_1
+        val (r2x, r2y) = reservePos(1)
+        if (x in (r2x-65f)..(r2x+175f) && y in (r2y-55f)..(r2y+125f)) return BLOCK_RESERVE_2
         return null
     }
 
@@ -110,28 +118,12 @@ class BattleOverlayView(
         invalidate()
     }
 
-    /** Persists a dragged position in normalized 864x1536 coordinates. */
+    /** Persists exactly where the user drags the block. No positional restrictions are applied. */
     fun moveDragTarget(block: String, screenX: Float, screenY: Float) {
         if (!settings.editMode || width <= 0 || height <= 0) return
-        val x = refX(screenX)
-        val y = refY(screenY)
-        val safe = safeDragPosition(block, x, y)
-        settings.setPosition(block, safe.first, safe.second)
+        settings.setPosition(block, refX(screenX), refY(screenY))
         editTarget = block
         invalidate()
-    }
-
-    private fun safeDragPosition(block: String, x: Float, y: Float): Pair<Float, Float> = when (block) {
-        // On this overlay window Android already offsets us below the system status bar. Therefore
-        // the visual free strip above Pokemon GO's white cards lives close to local Y=0..30.
-        BLOCK_PLAYER_MATCHUP -> x.coerceIn(124f, 352f) to y.coerceIn(4f, 30f)
-        BLOCK_STRONG_TYPES -> x.coerceIn(520f, 688f) to y.coerceIn(4f, 30f)
-        BLOCK_HUD_TOGGLE -> x.coerceIn(382f, 482f) to y.coerceIn(4f, 30f)
-        // Main move cluster can be moved broadly, while native HUD clipping remains authoritative.
-        BLOCK_ENEMY_MOVES -> x.coerceIn(330f, 680f) to y.coerceIn(250f, 520f)
-        // Reserve annotations move as one group and remain near the right-side reserve lane.
-        BLOCK_RESERVES -> x.coerceIn(620f, 710f) to y.coerceIn(820f, 1010f)
-        else -> x.coerceIn(24f, 840f) to y.coerceIn(4f, 1470f)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -141,14 +133,10 @@ class BattleOverlayView(
         stroke.alpha = 255
         stroke.color = hudColor(Color.WHITE)
 
-        // Mandatory rule: PvPPokeGo may only use free regions around Pokemon GO's native HUD.
-        // The clean battle screenshots supplied by the project are the canonical reference.
-        val nativeSafeSave = canvas.save()
-        clipOutNativePokemonGoUi(canvas)
-
+        // Safe defaults remain outside the native Pokemon GO HUD, but manual edit mode is sovereign:
+        // once the user chooses a position we never clip or constrain that element.
         if (collapsed) {
             drawVisibilityToggle(canvas, true)
-            canvas.restoreToCount(nativeSafeSave)
             return
         }
 
@@ -167,28 +155,6 @@ class BattleOverlayView(
         }
         if (settings.debugMode) drawDebug(canvas)
         drawVisibilityToggle(canvas, false)
-
-        canvas.restoreToCount(nativeSafeSave)
-    }
-
-    @Suppress("DEPRECATION")
-    private fun clipOutNativePokemonGoUi(canvas: Canvas) {
-        // Do not clip the whole local top strip: TYPE_APPLICATION_OVERLAY is already laid out below
-        // the Android status-bar inset on the tested device. Keeping that blanket clip was exactly
-        // what forced our chips downward onto Pokemon GO's white cards.
-        val protected = listOf(
-            RectF(rx(0f), ry(52f), rx(112f), ry(92f)),
-            RectF(rx(744f), ry(52f), width.toFloat(), ry(92f)),
-            RectF(rx(14f), ry(93f), rx(354f), ry(176f)),
-            RectF(rx(510f), ry(93f), rx(852f), ry(176f)),
-            RectF(rx(12f), ry(180f), rx(116f), ry(286f)),
-            RectF(rx(35f), ry(620f), rx(304f), ry(704f)),
-            RectF(rx(425f), ry(620f), rx(724f), ry(704f)),
-            RectF(rx(716f), ry(846f), width.toFloat(), ry(988f)),
-            RectF(rx(716f), ry(996f), width.toFloat(), ry(1122f)),
-            RectF(rx(78f), ry(1260f), rx(786f), height.toFloat())
-        )
-        protected.forEach { canvas.clipRect(it, Region.Op.DIFFERENCE) }
     }
 
     private fun drawVisibilityToggle(canvas: Canvas, hidden: Boolean) {
@@ -355,19 +321,21 @@ class BattleOverlayView(
     }
 
     private fun drawReserves(canvas: Canvas) {
-        val (indicatorRefX, firstRefY) = pos(BLOCK_RESERVES, RESERVE_INDICATOR_X, RESERVE_FIRST_Y)
-        val indicatorX=rx(indicatorRefX); val firstY=ry(firstRefY); val secondY=ry(firstRefY+140f); val typeYDelta=ry(82f)
         state.reserves.take(2).forEachIndexed { index,reserve ->
             if (!reserve.visible) return@forEachIndexed
-            val cardCenterY=if(index==0) firstY else secondY
+            val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
+            val (indicatorRefX, cardRefY) = reservePos(index)
+            val indicatorX = rx(indicatorRefX)
+            val cardCenterY = ry(cardRefY)
             drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u())
             if(settings.showReserveTypes && reserve.types.isNotEmpty()){
                 val typeRadius=12f*u(); val spacing=rx(31f); val centerX=rx(indicatorRefX+98f)
                 var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
-                reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+typeYDelta,type,typeRadius);x+=spacing}
+                reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+ry(82f),type,typeRadius);x+=spacing}
             }
+            // One edit frame per reserve Pokemon, never a combined frame.
+            drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u(), 72f*u())
         }
-        drawEditSelection(canvas, BLOCK_RESERVES, indicatorX+rx(49f), (firstY+secondY)/2f, 112f*u(), 132f*u())
     }
 
     private fun drawTimers(canvas: Canvas) {
@@ -386,13 +354,13 @@ class BattleOverlayView(
     private fun drawEditModeGuide(canvas: Canvas) {
         paint.style = Paint.Style.FILL
         paint.color = hudColor(Color.rgb(18,22,28), .72f)
-        val cx = rx(432f); val cy = ry(302f); val box = RectF(cx-rx(145f),cy-ry(18f),cx+rx(145f),cy+ry(18f))
+        val cx = rx(432f); val cy = ry(302f); val box = RectF(cx-rx(175f),cy-ry(18f),cx+rx(175f),cy+ry(18f))
         canvas.drawRoundRect(box,12f*u(),12f*u(),paint)
         paint.color = hudColor(Color.WHITE)
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = 11.5f*u()
         paint.typeface = Typeface.DEFAULT_BOLD
-        canvas.drawText("MODO EDIÇÃO • SEGURE E ARRASTE",cx,cy+4f*u(),paint)
+        canvas.drawText("MODO EDIÇÃO • ARRASTE LIVRE • RESERVAS SEPARADAS",cx,cy+4f*u(),paint)
     }
 
     private fun drawEditSelection(canvas: Canvas, block: String, cx: Float, cy: Float, halfW: Float, halfH: Float) {
@@ -430,10 +398,12 @@ class BattleOverlayView(
         const val BLOCK_PLAYER_MATCHUP = "hud_player_matchup"
         const val BLOCK_STRONG_TYPES = "hud_strong_types"
         const val BLOCK_ENEMY_MOVES = "hud_enemy_moves"
-        const val BLOCK_RESERVES = "hud_reserves"
+        const val BLOCK_RESERVE_1 = "hud_reserve_1"
+        const val BLOCK_RESERVE_2 = "hud_reserve_2"
+        const val BLOCK_RESERVES_LEGACY = "hud_reserves"
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
 
-        // Local overlay Y: this window begins below the Android status area on the tested device.
+        // Safe defaults only. Edit mode may move every block anywhere on screen without limits.
         const val TOP_ICON_Y=12f
         const val PLAYER_MATCHUP_X=136f
         const val STRONG_TYPES_RIGHT_X=688f
@@ -443,5 +413,6 @@ class BattleOverlayView(
         const val ENEMY_MOVE_FAST_Y=355f
         const val RESERVE_INDICATOR_X=692f
         const val RESERVE_FIRST_Y=918f
+        const val RESERVE_SPACING_Y=140f
     }
 }
