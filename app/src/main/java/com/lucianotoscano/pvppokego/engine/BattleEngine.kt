@@ -511,7 +511,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun ownEnergyConfidence(): EnergyConfidence = when {
         ownTracker.isRange -> EnergyConfidence.RANGE
-        playerName?.let(repo::possibleFastMoves)?.size ?: 0 <= 1 -> EnergyConfidence.CONFIRMED
+        (playerName?.let(repo::possibleFastMoves)?.size ?: 0) <= 1 -> EnergyConfidence.CONFIRMED
         else -> EnergyConfidence.ESTIMATED
     }
 
