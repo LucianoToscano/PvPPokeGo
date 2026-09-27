@@ -56,8 +56,8 @@ class QuickOverlayMenu(
             textSize = 23f
             setShadowLayer(3f, 0f, 1f, Color.BLACK)
             background = roundedBackground(
-                Color.argb(205, 40, 44, 52),
-                Color.argb(225, 238, 241, 246),
+                Color.argb(215, 40, 44, 52),
+                Color.argb(230, 238, 241, 246),
                 dp(28).toFloat(),
                 dp(1)
             )
@@ -65,6 +65,7 @@ class QuickOverlayMenu(
 
         val params = gearLayoutParams()
         gearParams = params
+        syncLegacyTogglePosition(params)
         gear.visibility = View.GONE
         installDragAndTap(gear, params)
         gearView = gear
@@ -154,10 +155,6 @@ class QuickOverlayMenu(
             settings.showSwitchTimer = !settings.showSwitchTimer
             changed()
         }
-        addToggle(content, "Aa", "Textos do HUD", settings.showHudText, labels) {
-            settings.showHudText = !settings.showHudText
-            changed()
-        }
         addToggle(content, "↔", "Modo edição", settings.editMode, labels) {
             settings.editMode = !settings.editMode
             callbacks.onSettingsChanged(true)
@@ -183,7 +180,7 @@ class QuickOverlayMenu(
             callbacks.onSettingsChanged(false)
             refreshPanel()
         }
-        addToggle(content, "≡", "Mostrar nomes neste menu", settings.quickMenuShowLabels, labels) {
+        addToggle(content, "≡", "Mostrar textos do menu", settings.quickMenuShowLabels, labels) {
             settings.quickMenuShowLabels = !settings.quickMenuShowLabels
             refreshPanel()
         }
@@ -354,7 +351,22 @@ class QuickOverlayMenu(
         val maxY = (screenH - params.height).coerceAtLeast(0)
         params.x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(0, maxX)
         params.y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(0, maxY)
+        syncLegacyTogglePosition(params)
         runCatching { windowManager.updateViewLayout(gear, params) }
+    }
+
+    /** Keep the old painted eye directly underneath the gear so only one control is visible. */
+    private fun syncLegacyTogglePosition(params: WindowManager.LayoutParams) {
+        val sx = metrics.widthPixels / 864f
+        val sy = metrics.heightPixels / 1536f
+        if (sx <= 0f || sy <= 0f) return
+        val centerX = params.x + params.width / 2f
+        val centerY = params.y + params.height / 2f
+        settings.setPosition(
+            BattleOverlayView.BLOCK_HUD_TOGGLE,
+            centerX / sx,
+            centerY / sy
+        )
     }
 
     private fun installDragAndTap(view: View, params: WindowManager.LayoutParams) {
@@ -398,6 +410,8 @@ class QuickOverlayMenu(
                         val maxY = (metrics.heightPixels - params.height).coerceAtLeast(1)
                         settings.quickMenuXFraction = params.x.toFloat() / maxX.toFloat()
                         settings.quickMenuYFraction = params.y.toFloat() / maxY.toFloat()
+                        syncLegacyTogglePosition(params)
+                        callbacks.onSettingsChanged(false)
                     } else {
                         togglePanel()
                     }
