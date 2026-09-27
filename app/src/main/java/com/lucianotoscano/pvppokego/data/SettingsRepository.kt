@@ -76,12 +76,25 @@ class SettingsRepository(context: Context) {
 
     /** Normalized screen position for the floating gear, so it survives resolution changes. */
     var quickMenuXFraction: Float
-        get() = prefs.getFloat("quick_menu_x_frac", .5f)
+        get() = prefs.getFloat("quick_menu_x_frac", 1f)
         set(v) = prefs.edit().putFloat("quick_menu_x_frac", v.coerceIn(0f, 1f)).apply()
 
     var quickMenuYFraction: Float
-        get() = prefs.getFloat("quick_menu_y_frac", 0f)
+        get() = prefs.getFloat("quick_menu_y_frac", 1f)
         set(v) = prefs.edit().putFloat("quick_menu_y_frac", v.coerceIn(0f, 1f)).apply()
+
+    /**
+     * V2 changes the initial gear anchor from the top/center to the bottom/right.
+     * Apply exactly once so existing installs get the new requested default, then preserve every drag.
+     */
+    fun ensureQuickMenuBottomRightV2() {
+        if (prefs.getInt("quick_menu_position_version", 0) >= 2) return
+        prefs.edit()
+            .putFloat("quick_menu_x_frac", 1f)
+            .putFloat("quick_menu_y_frac", 1f)
+            .putInt("quick_menu_position_version", 2)
+            .apply()
+    }
 
     var showSwitchTimer: Boolean
         get() = prefs.getBoolean("show_switch_timer", false)
@@ -143,8 +156,9 @@ class SettingsRepository(context: Context) {
 
     fun resetQuickMenuPosition() {
         prefs.edit()
-            .remove("quick_menu_x_frac")
-            .remove("quick_menu_y_frac")
+            .putFloat("quick_menu_x_frac", 1f)
+            .putFloat("quick_menu_y_frac", 1f)
+            .putInt("quick_menu_position_version", 2)
             .apply()
     }
 
