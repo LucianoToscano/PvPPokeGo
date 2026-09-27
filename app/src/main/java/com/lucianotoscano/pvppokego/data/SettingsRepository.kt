@@ -99,6 +99,8 @@ class SettingsRepository(context: Context) {
             "hud_player_matchup",
             "hud_strong_types",
             "hud_enemy_moves",
+            "hud_reserve_1",
+            "hud_reserve_2",
             "hud_reserves",
             "hud_toggle"
         )
