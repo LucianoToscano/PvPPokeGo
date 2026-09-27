@@ -1,0 +1,177 @@
+name: Apply UI polish v2
+
+on:
+  push:
+    branches: [v04-v03-stable-base]
+    paths:
+      - '.github/workflows/apply-ui-polish-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v04-v03-stable-base
+
+      - name: Patch overlay polish
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # ---------- SettingsRepository: migrate old saved top positions ----------
+          p = Path('app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt')
+          s = p.read_text()
+          marker = '    var showSwitchTimer: Boolean\n'
+          helper = '''    /** Move only legacy/clipped top HUD positions into the safe strip below the status bar. */
+    fun ensureTopHudSafeV4() {
+        if (prefs.getInt("top_hud_position_version", 0) >= 4) return
+        val editor = prefs.edit()
+        listOf("hud_player_matchup", "hud_strong_types", "hud_toggle").forEach { block ->
+            val key = "${block}_y"
+            val current = prefs.getFloat(key, Float.NaN)
+            if (current.isNaN() || current < 22f) editor.putFloat(key, 28f)
+        }
+        editor.putInt("top_hud_position_version", 4).apply()
+    }
+
+'''
+          if 'fun ensureTopHudSafeV4()' not in s:
+              s = s.replace(marker, helper + marker)
+          p.write_text(s)
+
+          # ---------- BattleOverlayView: safe top strip + persistent reserve UI ----------
+          p = Path('app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt')
+          s = p.read_text()
+          s = s.replace('            if (!reserve.visible) return@forEachIndexed', '            if (reserve.name.isNullOrBlank()) return@forEachIndexed')
+          s = s.replace('        const val TOP_ICON_Y=12f', '        const val TOP_ICON_Y=28f')
+          s = s.replace('        const val HUD_TOGGLE_CENTER_Y=12f', '        const val HUD_TOGGLE_CENTER_Y=28f')
+          p.write_text(s)
+
+          # ---------- BattleEngine: real switch countdown + reserve debouncing ----------
+          p = Path('app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt')
+          s = p.read_text()
+          s = s.replace(
+              '    private val reserveSlotVisible = arrayOfNulls<Boolean>(2)\n    private var chargedPendingSinceMs: Long? = null',
+              '    private val reserveSlotVisible = arrayOfNulls<Boolean>(2)\n    private val reserveMissingStreak = IntArray(2)\n    private var ownSwitchReadyAtMs: Long = 0L\n    private var opponentSwitchReadyAtMs: Long = 0L\n    private var chargedPendingSinceMs: Long? = null'
+          )
+          s = s.replace(
+              '        reserveSlotVisible.fill(null)\n        chargedPendingSinceMs = null',
+              '        reserveSlotVisible.fill(null)\n        reserveMissingStreak.fill(0)\n        ownSwitchReadyAtMs = 0L\n        opponentSwitchReadyAtMs = 0L\n        chargedPendingSinceMs = null'
+          )
+          old = '''        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
+        if (playerChanged) reserveSlotVisible.fill(null)
+
+        return DetectionChanges(
+            playerChanged = playerChanged,
+            enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
+        )'''
+          new = '''        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
+        val enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
+        val now = System.currentTimeMillis()
+        if (playerChanged) {
+            reserveSlotVisible.fill(null)
+            reserveMissingStreak.fill(0)
+            ownSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
+        }
+        if (enemyChanged) opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
+
+        return DetectionChanges(
+            playerChanged = playerChanged,
+            enemyChanged = enemyChanged
+        )'''
+          if old not in s:
+              raise SystemExit('BattleEngine onDetection block not found')
+          s = s.replace(old, new)
+
+          old = '''    fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
+        if (firstVisible != null) reserveSlotVisible[0] = firstVisible
+        if (secondVisible != null) reserveSlotVisible[1] = secondVisible
+    }'''
+          new = '''    fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
+        fun update(index: Int, value: Boolean?) {
+            when (value) {
+                true -> {
+                    reserveMissingStreak[index] = 0
+                    reserveSlotVisible[index] = true
+                }
+                false -> {
+                    reserveMissingStreak[index]++
+                    if (reserveMissingStreak[index] >= RESERVE_MISSING_CONFIRM_FRAMES) {
+                        reserveSlotVisible[index] = false
+                    }
+                }
+                null -> Unit
+            }
+        }
+        update(0, firstVisible)
+        update(1, secondVisible)
+    }'''
+          if old not in s:
+              raise SystemExit('BattleEngine reserve detector block not found')
+          s = s.replace(old, new)
+
+          needle = '    fun uiState(debug: Boolean = false): BattleUiState {\n'
+          helper = '''    private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {
+        val remaining = readyAtMs - nowMs
+        if (remaining <= 0L) return null
+        return ((remaining + 999L) / 1000L).toInt()
+    }
+
+'''
+          if 'private fun switchSeconds(' not in s:
+              s = s.replace(needle, helper + needle)
+
+          s = s.replace(
+              '            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f) else null,\n            chargedIncoming = chargedPendingSinceMs != null,',
+              '            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f) else null,\n            ownSwitchSeconds = switchSeconds(ownSwitchReadyAtMs),\n            opponentSwitchSeconds = switchSeconds(opponentSwitchReadyAtMs),\n            chargedIncoming = chargedPendingSinceMs != null,'
+          )
+
+          if 'SWITCH_COOLDOWN_MS' not in s.split('companion object', 1)[-1]:
+              s = s.replace(
+                  '        private const val CHARGED_FAST_GUARD_MS',
+                  '        private const val SWITCH_COOLDOWN_MS = 50_000L\n        private const val RESERVE_MISSING_CONFIRM_FRAMES = 12\n        private const val CHARGED_FAST_GUARD_MS'
+              )
+          p.write_text(s)
+
+          # ---------- Service: eye is separate/clickable and top-position migration ----------
+          p = Path('app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt')
+          s = p.read_text()
+          s = s.replace(
+              '        settingsRepo = SettingsRepository(this)\n        settingsRepo.overlayServiceRunning = true',
+              '        settingsRepo = SettingsRepository(this)\n        settingsRepo.ensureTopHudSafeV4()\n        settingsRepo.overlayServiceRunning = true'
+          )
+          s = s.replace(
+              '        attachMoveTouchZones()\n        quickMenu = QuickOverlayMenu(',
+              '        attachMoveTouchZones()\n        attachHudToggleTouch()\n        quickMenu = QuickOverlayMenu('
+          )
+          s = s.replace(
+              '        attachMoveTouchZones()\n    }\n\n    /** Compact type-colored submenu.',
+              '        attachMoveTouchZones()\n        attachHudToggleTouch()\n    }\n\n    /** Compact type-colored submenu.'
+          )
+          s = s.replace(
+              '        hudToggleTouch?.visibility = View.GONE',
+              '        hudToggleTouch?.visibility = if (enabled && !settingsRepo.editMode) View.VISIBLE else View.GONE'
+          )
+          p.write_text(s)
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt \
+                  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          if git diff --cached --quiet; then
+            echo 'No changes needed.'
+            exit 0
+          fi
+          git commit -m 'fix: polish overlay menu top HUD reserves and switch timer'
+          git push origin HEAD:v04-v03-stable-base
