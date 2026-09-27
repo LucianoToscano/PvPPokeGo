@@ -22,6 +22,8 @@ import com.lucianotoscano.pvppokego.ui.SettingsScreen
 class MainActivity : ComponentActivity() {
     private lateinit var settingsRepo: SettingsRepository
     private var overlayGranted by mutableStateOf(false)
+    /** True after capture permission succeeds until the service-running flag catches up. */
+    private var overlayStarting = false
     private val projectionManager by lazy {
         getSystemService(MediaProjectionManager::class.java)
     }
@@ -34,10 +36,13 @@ class MainActivity : ComponentActivity() {
             val data = result.data ?: return@registerForActivityResult
             if (result.resultCode != RESULT_OK) return@registerForActivityResult
 
+            overlayStarting = true
             val service = Intent(this, BattleOverlayService::class.java).apply {
                 putExtra(BattleOverlayService.EXTRA_RESULT_CODE, result.resultCode)
                 putExtra(BattleOverlayService.EXTRA_RESULT_DATA, data)
-                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, false)
+                // The permission result returns to this Activity. Keep the overlay hidden here;
+                // onPause below will reliably notify the service when the user goes back to GO.
+                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, true)
             }
             ContextCompat.startForegroundService(this, service)
         }
@@ -67,6 +72,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         overlayGranted = Settings.canDrawOverlays(this)
         if (::settingsRepo.isInitialized && settingsRepo.overlayServiceRunning) {
+            overlayStarting = false
             startService(
                 Intent(this, BattleOverlayService::class.java)
                     .setAction(BattleOverlayService.ACTION_APP_FOREGROUND)
@@ -75,7 +81,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        if (::settingsRepo.isInitialized && settingsRepo.overlayServiceRunning) {
+        // Do not rely only on the SharedPreferences running flag: on a fresh start the
+        // service may not have reached onCreate yet when this Activity is backgrounded.
+        if (::settingsRepo.isInitialized && (settingsRepo.overlayServiceRunning || overlayStarting)) {
             startService(
                 Intent(this, BattleOverlayService::class.java)
                     .setAction(BattleOverlayService.ACTION_APP_BACKGROUND)
@@ -102,6 +110,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopOverlay() {
+        overlayStarting = false
         startService(
             Intent(this, BattleOverlayService::class.java)
                 .setAction(BattleOverlayService.ACTION_STOP)
