@@ -19,9 +19,7 @@ class SettingsRepository(context: Context) {
 
     var leagueMode: BattleLeagueMode
         get() = runCatching {
-            BattleLeagueMode.valueOf(
-                prefs.getString("league_mode", BattleLeagueMode.AUTO.name)!!
-            )
+            BattleLeagueMode.valueOf(prefs.getString("league_mode", BattleLeagueMode.AUTO.name)!!)
         }.getOrDefault(BattleLeagueMode.AUTO)
         set(v) = prefs.edit().putString("league_mode", v.name).apply()
 
@@ -59,22 +57,18 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("show_energy_progress", true)
         set(v) = prefs.edit().putBoolean("show_energy_progress", v).apply()
 
-    /** Reserved for a later global battle-HUD text switch. */
     var showHudText: Boolean
         get() = prefs.getBoolean("show_hud_text", true)
         set(v) = prefs.edit().putBoolean("show_hud_text", v).apply()
 
-    /** PGSharp-style label visibility for the floating quick menu. */
     var quickMenuShowLabels: Boolean
-        get() = prefs.getBoolean("quick_menu_show_labels", true)
+        get() = prefs.getBoolean("quick_menu_show_labels", false)
         set(v) = prefs.edit().putBoolean("quick_menu_show_labels", v).apply()
 
-    /** Convenience form used by UI surfaces that present the option as "Somente ícones". */
     var quickMenuIconsOnly: Boolean
         get() = !quickMenuShowLabels
         set(v) { quickMenuShowLabels = !v }
 
-    /** Normalized screen position for the floating gear, so it survives resolution changes. */
     var quickMenuXFraction: Float
         get() = prefs.getFloat("quick_menu_x_frac", 1f)
         set(v) = prefs.edit().putFloat("quick_menu_x_frac", v.coerceIn(0f, 1f)).apply()
@@ -83,16 +77,21 @@ class SettingsRepository(context: Context) {
         get() = prefs.getFloat("quick_menu_y_frac", 1f)
         set(v) = prefs.edit().putFloat("quick_menu_y_frac", v.coerceIn(0f, 1f)).apply()
 
-    /**
-     * V2 changes the initial gear anchor from the top/center to the bottom/right.
-     * Apply exactly once so existing installs get the new requested default, then preserve every drag.
-     */
     fun ensureQuickMenuBottomRightV2() {
         if (prefs.getInt("quick_menu_position_version", 0) >= 2) return
         prefs.edit()
             .putFloat("quick_menu_x_frac", 1f)
             .putFloat("quick_menu_y_frac", 1f)
             .putInt("quick_menu_position_version", 2)
+            .apply()
+    }
+
+    /** One-time migration to the compact icons-only quick menu. */
+    fun ensureQuickMenuStyleV3() {
+        if (prefs.getInt("quick_menu_style_version", 0) >= 3) return
+        prefs.edit()
+            .putBoolean("quick_menu_show_labels", false)
+            .putInt("quick_menu_style_version", 3)
             .apply()
     }
 
@@ -121,30 +120,17 @@ class SettingsRepository(context: Context) {
         set(v) = prefs.edit().putBoolean("overlay_service_running", v).apply()
 
     fun setPosition(block: String, x: Float, y: Float) {
-        prefs.edit()
-            .putFloat("${block}_x", x)
-            .putFloat("${block}_y", y)
-            .apply()
+        prefs.edit().putFloat("${block}_x", x).putFloat("${block}_y", y).apply()
     }
 
-    fun getPosition(
-        block: String,
-        defaultX: Float,
-        defaultY: Float
-    ): Pair<Float, Float> =
-        prefs.getFloat("${block}_x", defaultX) to
-            prefs.getFloat("${block}_y", defaultY)
+    fun getPosition(block: String, defaultX: Float, defaultY: Float): Pair<Float, Float> =
+        prefs.getFloat("${block}_x", defaultX) to prefs.getFloat("${block}_y", defaultY)
 
     fun clearHudPositions() {
         val blocks = listOf(
-            "hud_player_matchup",
-            "hud_strong_types",
-            "hud_enemy_moves",
-            "hud_reserve_1",
-            "hud_reserve_2",
-            "hud_reserves",
-            "hud_toggle",
-            "hud_battle_assist"
+            "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
+            "hud_reserve_1", "hud_reserve_2", "hud_reserves",
+            "hud_toggle", "hud_battle_assist"
         )
         prefs.edit().also { editor ->
             blocks.forEach { block ->
@@ -155,7 +141,6 @@ class SettingsRepository(context: Context) {
     }
 
     fun resetQuickMenuPosition() {
-        // Canonical quick-menu home position is the bottom-right corner.
         prefs.edit()
             .putFloat("quick_menu_x_frac", 1f)
             .putFloat("quick_menu_y_frac", 1f)
