@@ -14,6 +14,7 @@ import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
+import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
 import com.lucianotoscano.pvppokego.engine.TypeChart
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -108,6 +109,7 @@ class BattleOverlayView(
 
         if (near(BLOCK_HUD_TOGGLE, HUD_TOGGLE_CENTER_X, HUD_TOGGLE_CENTER_Y, 32f, 32f)) return BLOCK_HUD_TOGGLE
         if (near(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X, TOP_ICON_Y, 34f, 30f)) return BLOCK_PLAYER_MATCHUP
+        if (near(BLOCK_BATTLE_ASSIST, BATTLE_ASSIST_X, BATTLE_ASSIST_Y, 190f, 45f)) return BLOCK_BATTLE_ASSIST
 
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isNotEmpty()) {
@@ -157,10 +159,11 @@ class BattleOverlayView(
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
         if (settings.showEnemyMoves) drawMoveTriangle(canvas)
-        if (state.chargedIncoming && settings.showEnemyMoves) drawShieldAdvice(canvas)
+        if (state.chargedIncoming && settings.showEnemyMoves && !settings.battleAssistEnabled) drawShieldAdvice(canvas)
         if (settings.analyzeReserves) {
             if (switchChoicePromptVisible) drawSwitchChoiceIndicators(canvas) else drawReserves(canvas)
         }
+        if (settings.battleAssistEnabled) drawBattleAssist(canvas)
         if (settings.showSwitchTimer) drawTimers(canvas)
         if (settings.editMode) {
             drawResetAndCorrection(canvas)
@@ -367,6 +370,38 @@ class BattleOverlayView(
         }
     }
 
+    private fun drawBattleAssist(canvas: Canvas) {
+        if (switchChoicePromptVisible) return
+        val advice = BattleAssistAdvisor.advise(state, gameRepo) ?: return
+        val (refCx, refCy) = pos(BLOCK_BATTLE_ASSIST, BATTLE_ASSIST_X, BATTLE_ASSIST_Y)
+        val cx = rx(refCx)
+        val cy = ry(refCy)
+        val halfW = 176f*u()
+        val halfH = 30f*u()
+        val box = RectF(cx-halfW, cy-halfH, cx+halfW, cy+halfH)
+
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(Color.rgb(18,22,28), .78f)
+        canvas.drawRoundRect(box, 15f*u(), 15f*u(), paint)
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 2.2f*u()
+        stroke.color = hudColor(advice.color, .98f)
+        canvas.drawRoundRect(box, 15f*u(), 15f*u(), stroke)
+
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.color = hudColor(advice.color)
+        paint.textSize = 15.5f*u()
+        paint.setShadowLayer(2.5f,0f,1f,Color.BLACK)
+        canvas.drawText(advice.title, cx, cy-4f*u(), paint)
+        paint.color = hudColor(Color.WHITE)
+        paint.textSize = 10.5f*u()
+        canvas.drawText(advice.detail, cx, cy+15f*u(), paint)
+        paint.clearShadowLayer()
+
+        drawEditSelection(canvas, BLOCK_BATTLE_ASSIST, cx, cy, halfW+5f*u(), halfH+5f*u())
+    }
+
     private fun drawTimers(canvas: Canvas) {
         paint.textAlign=Paint.Align.LEFT; paint.textSize=12f*u(); paint.typeface=Typeface.DEFAULT_BOLD; paint.color=hudColor(Color.WHITE)
         state.ownSwitchSeconds?.let{canvas.drawText("↻ $it",10f*u(),height*.47f,paint)}
@@ -431,6 +466,7 @@ class BattleOverlayView(
         const val BLOCK_RESERVE_2 = "hud_reserve_2"
         const val BLOCK_RESERVES_LEGACY = "hud_reserves"
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
+        const val BLOCK_BATTLE_ASSIST = "hud_battle_assist"
 
         const val TOP_ICON_Y=12f
         const val PLAYER_MATCHUP_X=136f
@@ -445,5 +481,7 @@ class BattleOverlayView(
         const val SWITCH_CHOICE_LEFT_X=282f
         const val SWITCH_CHOICE_RIGHT_X=582f
         const val SWITCH_CHOICE_INDICATOR_Y=1444f
+        const val BATTLE_ASSIST_X=432f
+        const val BATTLE_ASSIST_Y=770f
     }
 }
