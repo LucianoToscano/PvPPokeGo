@@ -11,8 +11,10 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -61,6 +63,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var charged1Touch: View? = null
     private var charged2Touch: View? = null
     private var hudToggleTouch: View? = null
+    private var editTouchLayer: View? = null
     private var moveMenuView: View? = null
     private var hudCollapsed = false
     private var appUiVisible = false
@@ -177,6 +180,18 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         redraw()
     }
 
+    private fun enemyMoveAnchor(): Pair<Float, Float> = settingsRepo.getPosition(
+        BattleOverlayView.BLOCK_ENEMY_MOVES,
+        BattleOverlayView.ENEMY_MOVE_CENTER_X,
+        BattleOverlayView.ENEMY_MOVE_FAST_Y
+    )
+
+    private fun hudToggleAnchor(): Pair<Float, Float> = settingsRepo.getPosition(
+        BattleOverlayView.BLOCK_HUD_TOGGLE,
+        BattleOverlayView.HUD_TOGGLE_CENTER_X,
+        BattleOverlayView.HUD_TOGGLE_CENTER_Y
+    )
+
     private fun attachMoveTouchZones() {
         val wm = windowManager ?: return
         if (fastTouch != null) return
@@ -204,10 +219,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             return view
         }
 
-        val centerX = BattleOverlayView.ENEMY_MOVE_CENTER_X
-        fastTouch = zone(centerX, 370f, 106f, 116f) { showMoveMenu(MoveKind.FAST) }
-        charged1Touch = zone(centerX - 72f, 495f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_1) }
-        charged2Touch = zone(centerX + 72f, 495f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_2) }
+        val (centerX, fastY) = enemyMoveAnchor()
+        fastTouch = zone(centerX, fastY + 15f, 106f, 116f) { showMoveMenu(MoveKind.FAST) }
+        charged1Touch = zone(centerX - 72f, fastY + 140f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_1) }
+        charged2Touch = zone(centerX + 72f, fastY + 140f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_2) }
     }
 
     private fun attachHudToggleTouch() {
@@ -226,8 +241,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val sy = metrics.heightPixels / 1536f
         val unit = min(sx, sy) * (settingsRepo.scale / .8f).coerceIn(.62f, 1.5f)
         val size = (52f * unit).toInt().coerceAtLeast(44)
-        val centerX = BattleOverlayView.HUD_TOGGLE_CENTER_X * sx
-        val centerY = BattleOverlayView.HUD_TOGGLE_CENTER_Y * sy
+        val (refX, refY) = hudToggleAnchor()
+        val centerX = refX * sx
+        val centerY = refY * sy
         return smallTouchableParams(size, size).apply {
             x = (centerX - size / 2f).toInt()
             y = (centerY - size / 2f).toInt()
@@ -252,9 +268,99 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START }
 
+    /** Full-screen touch layer exists ONLY in explicit edit mode. Battle input is blocked while editing. */
+    private fun attachEditTouchLayer() {
+        val wm = windowManager ?: return
+        if (editTouchLayer != null) return
+
+        var candidate: String? = null
+        var downAt = 0L
+        var dragging = false
+
+        val layer = View(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            setOnTouchListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        candidate = overlayView?.dragTargetAt(event.x, event.y)
+                        overlayView?.setEditTarget(candidate)
+                        downAt = SystemClock.uptimeMillis()
+                        dragging = false
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val block = candidate
+                        if (block != null && SystemClock.uptimeMillis() - downAt >= EDIT_LONG_PRESS_MS) {
+                            dragging = true
+                            overlayView?.moveDragTarget(block, event.x, event.y)
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val block = candidate
+                        if (block != null && dragging) {
+                            overlayView?.moveDragTarget(block, event.x, event.y)
+                            rebuildTouchableZones()
+                        }
+                        candidate = null
+                        dragging = false
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        candidate = null
+                        dragging = false
+                        overlayView?.setEditTarget(null)
+                        true
+                    }
+                    else -> true
+                }
+            }
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+
+        editTouchLayer = layer
+        wm.addView(layer, params)
+    }
+
+    private fun removeEditTouchLayer() {
+        val layer = editTouchLayer ?: return
+        runCatching { windowManager?.removeView(layer) }
+        editTouchLayer = null
+        overlayView?.setEditTarget(null)
+    }
+
+    private fun syncEditTouchLayer(enabled: Boolean) {
+        val shouldEdit = enabled && settingsRepo.editMode && !hudCollapsed
+        if (shouldEdit) attachEditTouchLayer() else removeEditTouchLayer()
+    }
+
+    private fun rebuildTouchableZones() {
+        runCatching { fastTouch?.let { windowManager?.removeView(it) } }
+        runCatching { charged1Touch?.let { windowManager?.removeView(it) } }
+        runCatching { charged2Touch?.let { windowManager?.removeView(it) } }
+        runCatching { hudToggleTouch?.let { windowManager?.removeView(it) } }
+        fastTouch = null
+        charged1Touch = null
+        charged2Touch = null
+        hudToggleTouch = null
+        attachMoveTouchZones()
+        attachHudToggleTouch()
+    }
+
     /** Compact, translucent submenu for changing the enemy move without covering the battle. */
     private fun showMoveMenu(kind: MoveKind) {
-        if (hudCollapsed || appUiVisible || !battleActive) return
+        if (hudCollapsed || appUiVisible || !battleActive || settingsRepo.editMode) return
         val wm = windowManager ?: return
         val e = engine ?: return
         val options = when (kind) {
@@ -400,7 +506,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val d = resources.displayMetrics.density
         fun dp(v: Int): Int = (v * d).toInt()
         val rgb = darken(baseColor, .60f)
-        val rowColor = withAlpha(rgb, 78) // ~30%: color hint without becoming a large opaque card.
+        val rowColor = withAlpha(rgb, 78)
         val border = if (selected) Color.argb(220, 255, 255, 255) else withAlpha(baseColor, 125)
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -594,11 +700,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val ui = engine?.uiState(settingsRepo.debugMode)
         ui?.let(view::render)
 
-        val selectorsEnabled = enabled && !hudCollapsed
+        syncEditTouchLayer(enabled)
+        val selectorsEnabled = enabled && !hudCollapsed && !settingsRepo.editMode
         fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
-        hudToggleTouch?.visibility = if (enabled) View.VISIBLE else View.GONE
+        hudToggleTouch?.visibility = if (enabled && !settingsRepo.editMode) View.VISIBLE else View.GONE
         if (!selectorsEnabled) dismissMoveMenu()
     }
 
@@ -650,6 +757,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onDestroy() {
         scanJob?.cancel()
         dismissMoveMenu()
+        removeEditTouchLayer()
         runCatching { overlayView?.let { windowManager?.removeView(it) } }
         runCatching { fastTouch?.let { windowManager?.removeView(it) } }
         runCatching { charged1Touch?.let { windowManager?.removeView(it) } }
@@ -696,6 +804,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         private const val TEAM_OCR_INTERVAL_MS = 1_650L
         private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
         private const val BATTLE_VISIBILITY_GRACE_MS = 3_800L
+        private const val EDIT_LONG_PRESS_MS = 180L
         private val SUPPORTED_LEAGUE_CPS = setOf(1500, 2500, 10000)
         private val BATTLE_TEXT_MARKERS = listOf(
             "usou ",
