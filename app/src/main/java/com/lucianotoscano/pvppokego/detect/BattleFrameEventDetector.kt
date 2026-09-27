@@ -6,29 +6,40 @@ import kotlin.math.abs
 import kotlin.math.max
 
 /**
- * Lightweight frame detector for enemy Fast Moves and native reserve-card visibility.
+ * Lightweight visual detector.
  *
- * Enemy Fast Move energy is now advanced only from a discrete loss on the PLAYER HP bar.
- * Visual motion on the enemy side is kept only as diagnostic data because the player's own
- * attack effects also animate there and previously produced false enemy-energy increments.
+ * Enemy Fast Moves are inferred only from discrete losses on the PLAYER HP bar.
+ * Player Fast Moves are inferred independently from discrete losses on the OPPONENT HP bar.
+ * Motion is diagnostic only, so attack VFX cannot increase either energy counter by themselves.
  */
 class BattleFrameEventDetector {
     data class Event(
         val fastMoveCount: Int = 0,
+        val ownFastMoveCount: Int = 0,
         val hpRatio: Float? = null,
+        val opponentHpRatio: Float? = null,
         val motion: Float = 0f,
         val confidence: Float = 0f,
         val source: String = "none",
         val reserve1Visible: Boolean? = null,
         val reserve2Visible: Boolean? = null,
-        val battleUiVisible: Boolean = false
+        val battleUiVisible: Boolean = false,
+        /** Screen-pixel Y of the top edge of GO's white trainer/Pokemon cards when found. */
+        val nativeTopCardY: Int? = null,
+        /** Aggregate visual confidence that a live PvP battle HUD is present. */
+        val battleConfidence: Float = 0f
     )
+
+    private data class HpFill(val run: Int, val y: Int)
 
     private var previousHpRun: Int? = null
     private var maximumHpRun: Int = 0
+    private var previousOpponentHpRun: Int? = null
+    private var maximumOpponentHpRun: Int = 0
     private var previousMotionSamples: IntArray? = null
     private var motionEma = 0f
     private var lastFastAtMs = 0L
+    private var lastOwnFastAtMs = 0L
     private var frozenUntilMs = 0L
 
     private val reserveVisibility = arrayOfNulls<Boolean>(2)
@@ -38,9 +49,12 @@ class BattleFrameEventDetector {
     fun reset() {
         previousHpRun = null
         maximumHpRun = 0
+        previousOpponentHpRun = null
+        maximumOpponentHpRun = 0
         previousMotionSamples = null
         motionEma = 0f
         lastFastAtMs = 0L
+        lastOwnFastAtMs = 0L
         frozenUntilMs = 0L
         reserveVisibility.fill(null)
         reserveHitStreak.fill(0)
@@ -50,83 +64,120 @@ class BattleFrameEventDetector {
     fun freezeForCharged(nowMs: Long = System.currentTimeMillis(), durationMs: Long = 6_200L) {
         frozenUntilMs = max(frozenUntilMs, nowMs + durationMs)
         previousHpRun = null
+        previousOpponentHpRun = null
         previousMotionSamples = null
     }
 
-    fun analyze(frame: Bitmap, expectedFastDurationMs: Long, nowMs: Long = System.currentTimeMillis()): Event {
+    fun analyze(
+        frame: Bitmap,
+        expectedEnemyFastDurationMs: Long,
+        expectedOwnFastDurationMs: Long = expectedEnemyFastDurationMs,
+        nowMs: Long = System.currentTimeMillis()
+    ): Event {
         if (frame.isRecycled) return Event()
 
         val reserve1 = updateReserveVisibility(0, hasNativeReserveHpBar(frame, 0))
         val reserve2 = updateReserveVisibility(1, hasNativeReserveHpBar(frame, 1))
 
-        val hpRun = findPlayerHpFill(frame)
-        val opponentHpRun = findOpponentHpFill(frame)
-        val battleUiVisible = hpRun != null && opponentHpRun != null
+        val playerHp = findPlayerHpFill(frame)
+        val opponentHp = findOpponentHpFill(frame)
+        val nativeTopCardY = findNativeTopCardTop(frame)
+        val hpRun = playerHp?.run
+        val opponentHpRun = opponentHp?.run
+        val bothHp = hpRun != null && opponentHpRun != null
+        val battleConfidence = (
+            (if (bothHp) .68f else if (hpRun != null || opponentHpRun != null) .30f else 0f) +
+            (if (nativeTopCardY != null) .24f else 0f) +
+            (if (reserve1 == true || reserve2 == true) .08f else 0f)
+        ).coerceIn(0f, 1f)
+        val battleUiVisible = battleConfidence >= .62f
+
         val hpRatio = if (hpRun != null) {
             maximumHpRun = max(maximumHpRun, hpRun)
             if (maximumHpRun > 0) hpRun.toFloat() / maximumHpRun.toFloat() else null
+        } else null
+        val opponentHpRatio = if (opponentHpRun != null) {
+            maximumOpponentHpRun = max(maximumOpponentHpRun, opponentHpRun)
+            if (maximumOpponentHpRun > 0) opponentHpRun.toFloat() / maximumOpponentHpRun.toFloat() else null
         } else null
         val motion = motionScore(frame)
 
         if (nowMs < frozenUntilMs) {
             if (hpRun != null) previousHpRun = hpRun
+            if (opponentHpRun != null) previousOpponentHpRun = opponentHpRun
             return Event(
                 hpRatio = hpRatio,
+                opponentHpRatio = opponentHpRatio,
                 motion = motion,
                 source = "frozen",
                 reserve1Visible = reserve1,
                 reserve2Visible = reserve2,
-                battleUiVisible = battleUiVisible
+                battleUiVisible = battleUiVisible,
+                nativeTopCardY = nativeTopCardY,
+                battleConfidence = battleConfidence
             )
         }
 
-        val minGap = (expectedFastDurationMs * 0.42f).toLong().coerceIn(230L, 1_450L)
+        val enemyMinGap = (expectedEnemyFastDurationMs * 0.42f).toLong().coerceIn(230L, 1_450L)
+        val ownMinGap = (expectedOwnFastDurationMs * 0.42f).toLong().coerceIn(230L, 1_450L)
+        var enemyFast = 0
+        var ownFast = 0
+        var source = if (battleUiVisible) "battle-hud" else "no-battle-hud"
+        var confidence = if (battleUiVisible) .78f else .18f
+
         if (hpRun != null) {
             val old = previousHpRun
             previousHpRun = hpRun
             if (old != null) {
                 if (hpRun > old + max(7, maximumHpRun / 30)) {
                     maximumHpRun = max(maximumHpRun, hpRun)
-                    return Event(
-                        hpRatio = hpRatio,
-                        motion = motion,
-                        confidence = .4f,
-                        source = "hp-reset",
-                        reserve1Visible = reserve1,
-                        reserve2Visible = reserve2,
-                        battleUiVisible = battleUiVisible
-                    )
-                }
-                val drop = old - hpRun
-                val threshold = max(2, maximumHpRun / 95)
-                if (drop >= threshold && nowMs - lastFastAtMs >= minGap) {
-                    lastFastAtMs = nowMs
-                    return Event(
-                        fastMoveCount = 1,
-                        hpRatio = hpRatio,
-                        motion = motion,
-                        confidence = .98f,
-                        source = "player-hp-drop",
-                        reserve1Visible = reserve1,
-                        reserve2Visible = reserve2,
-                        battleUiVisible = battleUiVisible
-                    )
+                    source = "player-hp-reset"
+                } else {
+                    val drop = old - hpRun
+                    val threshold = max(2, maximumHpRun / 95)
+                    if (drop >= threshold && nowMs - lastFastAtMs >= enemyMinGap) {
+                        lastFastAtMs = nowMs
+                        enemyFast = 1
+                        source = "player-hp-drop"
+                        confidence = .98f
+                    }
                 }
             }
-        } else {
-            // Never infer enemy energy from motion alone. Player attack VFX occur inside the
-            // opponent ROI too, which was the cause of energy rising when the user attacked.
-            previousHpRun = null
-        }
+        } else previousHpRun = null
+
+        if (opponentHpRun != null) {
+            val old = previousOpponentHpRun
+            previousOpponentHpRun = opponentHpRun
+            if (old != null) {
+                if (opponentHpRun > old + max(7, maximumOpponentHpRun / 30)) {
+                    maximumOpponentHpRun = max(maximumOpponentHpRun, opponentHpRun)
+                    if (enemyFast == 0) source = "opponent-hp-reset"
+                } else {
+                    val drop = old - opponentHpRun
+                    val threshold = max(2, maximumOpponentHpRun / 95)
+                    if (drop >= threshold && nowMs - lastOwnFastAtMs >= ownMinGap) {
+                        lastOwnFastAtMs = nowMs
+                        ownFast = 1
+                        source = if (enemyFast > 0) "both-hp-drop" else "opponent-hp-drop"
+                        confidence = .98f
+                    }
+                }
+            }
+        } else previousOpponentHpRun = null
 
         return Event(
+            fastMoveCount = enemyFast,
+            ownFastMoveCount = ownFast,
             hpRatio = hpRatio,
+            opponentHpRatio = opponentHpRatio,
             motion = motion,
-            confidence = if (battleUiVisible) .72f else .18f,
-            source = if (battleUiVisible) "battle-hud" else "no-battle-hud",
+            confidence = confidence,
+            source = source,
             reserve1Visible = reserve1,
             reserve2Visible = reserve2,
-            battleUiVisible = battleUiVisible
+            battleUiVisible = battleUiVisible,
+            nativeTopCardY = nativeTopCardY,
+            battleConfidence = battleConfidence
         )
     }
 
@@ -138,7 +189,7 @@ class BattleFrameEventDetector {
         } else {
             reserveMissStreak[index]++
             reserveHitStreak[index] = 0
-            if (reserveMissStreak[index] >= 4) reserveVisibility[index] = false
+            if (reserveMissStreak[index] >= 5) reserveVisibility[index] = false
         }
         return reserveVisibility[index]
     }
@@ -161,7 +212,7 @@ class BattleFrameEventDetector {
             frame.getPixels(row, 0, roiW, left, y, roiW, 1)
             var run = 0
             for (p in row) {
-                if (isReserveHpColor(p)) {
+                if (isHpColor(p)) {
                     run++
                     if (run > best) best = run
                 } else run = 0
@@ -171,10 +222,48 @@ class BattleFrameEventDetector {
         return best >= (frame.width * .034f).toInt().coerceAtLeast(24)
     }
 
-    private fun isReserveHpColor(p: Int): Boolean = isHpColor(p)
+    /**
+     * Finds GO's two light top info cards. Their top edge is a far more stable anchor than a hard
+     * coded Y because status-bar/notch insets differ by device.
+     */
+    private fun findNativeTopCardTop(frame: Bitmap): Int? {
+        val minY = (frame.height * .045f).toInt().coerceAtLeast(0)
+        val maxY = (frame.height * .16f).toInt().coerceAtMost(frame.height - 1)
+        val leftA = (frame.width * .015f).toInt()
+        val rightA = (frame.width * .42f).toInt()
+        val leftB = (frame.width * .58f).toInt()
+        val rightB = (frame.width * .985f).toInt().coerceAtMost(frame.width)
+        val required = (frame.width * .15f).toInt().coerceAtLeast(70)
+        var y = minY
+        while (y <= maxY) {
+            val leftRun = longestBrightRun(frame, y, leftA, rightA)
+            val rightRun = longestBrightRun(frame, y, leftB, rightB)
+            if (leftRun >= required && rightRun >= required) return y
+            y += 2
+        }
+        return null
+    }
 
-    /** Longest saturated horizontal run in the player's HP-bar region. */
-    private fun findPlayerHpFill(frame: Bitmap): Int? = findHpFill(
+    private fun longestBrightRun(frame: Bitmap, y: Int, left: Int, right: Int): Int {
+        if (right <= left) return 0
+        var best = 0
+        var run = 0
+        var x = left.coerceAtLeast(0)
+        val end = right.coerceAtMost(frame.width)
+        while (x < end) {
+            val p = frame.getPixel(x, y)
+            val r = Color.red(p); val g = Color.green(p); val b = Color.blue(p)
+            val brightCard = r >= 175 && g >= 185 && b >= 190 && abs(r - g) < 55 && abs(g - b) < 55
+            if (brightCard) {
+                run++
+                if (run > best) best = run
+            } else run = 0
+            x += 2
+        }
+        return best * 2
+    }
+
+    private fun findPlayerHpFill(frame: Bitmap): HpFill? = findHpFill(
         frame = frame,
         leftFrac = .035f,
         rightFrac = .405f,
@@ -182,8 +271,7 @@ class BattleFrameEventDetector {
         bottomFrac = .445f
     )
 
-    /** Enemy HP bar is required as a second battle-HUD anchor so the overlay hides on the map. */
-    private fun findOpponentHpFill(frame: Bitmap): Int? = findHpFill(
+    private fun findOpponentHpFill(frame: Bitmap): HpFill? = findHpFill(
         frame = frame,
         leftFrac = .49f,
         rightFrac = .91f,
@@ -197,7 +285,7 @@ class BattleFrameEventDetector {
         rightFrac: Float,
         topFrac: Float,
         bottomFrac: Float
-    ): Int? {
+    ): HpFill? {
         val left = (frame.width * leftFrac).toInt().coerceAtLeast(0)
         val right = (frame.width * rightFrac).toInt().coerceAtMost(frame.width)
         val top = (frame.height * topFrac).toInt().coerceAtLeast(0)
@@ -207,6 +295,7 @@ class BattleFrameEventDetector {
         val roiW = right - left
         val row = IntArray(roiW)
         var best = 0
+        var bestY = top
         var y = top
         while (y < bottom) {
             frame.getPixels(row, 0, roiW, left, y, roiW, 1)
@@ -214,12 +303,13 @@ class BattleFrameEventDetector {
             for (p in row) {
                 if (isHpColor(p)) {
                     run++
-                    if (run > best) best = run
+                    if (run > best) { best = run; bestY = y }
                 } else run = 0
             }
             y += 2
         }
-        return best.takeIf { it >= (frame.width * .055f).toInt().coerceAtLeast(28) }
+        val minimum = (frame.width * .055f).toInt().coerceAtLeast(28)
+        return if (best >= minimum) HpFill(best, bestY) else null
     }
 
     private fun isHpColor(p: Int): Boolean {
