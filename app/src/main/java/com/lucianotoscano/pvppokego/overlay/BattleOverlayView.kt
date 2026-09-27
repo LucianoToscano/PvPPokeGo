@@ -77,9 +77,8 @@ class BattleOverlayView(
         stroke.alpha = 255
         stroke.color = hudColor(Color.WHITE)
 
-        // Hard rule from the clean Pokemon GO battle reference: PvPPokeGo may use the free
-        // space around the game HUD, but it may never draw over native cards, status/type chips,
-        // HP bars, reserve cards, switch control or the player's charged-move controls.
+        // Mandatory rule: PvPPokeGo may only use free regions around Pokemon GO's native HUD.
+        // The clean battle screenshots supplied by the project are the canonical reference.
         val nativeSafeSave = canvas.save()
         clipOutNativePokemonGoUi(canvas)
 
@@ -90,7 +89,8 @@ class BattleOverlayView(
         }
 
         if (settings.showCurrentIndicator) {
-            // Above the player's white card, to the right of GO's native top-left button.
+            // Player Pokemon can have 1 or 2 native type icons. Reserve two slots permanently,
+            // then draw our matchup chip only after that native lane.
             drawMatchupIndicator(canvas, rx(PLAYER_MATCHUP_X), ry(TOP_ICON_Y), state.playerMatchup, 14f*u())
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
@@ -107,20 +107,26 @@ class BattleOverlayView(
 
     @Suppress("DEPRECATION")
     private fun clipOutNativePokemonGoUi(canvas: Canvas) {
-        // Coordinates are normalized to the 864x1536 design space and scale with the device.
-        // The rectangles intentionally include a small safety margin around native controls.
+        // Normalized 864x1536 coordinates. These are protection zones, not placement guides.
+        // They deliberately include safety margins so future overlay changes cannot cover GO UI.
         val protected = listOf(
-            RectF(0f, 0f, width.toFloat(), ry(56f)),                       // Android/status area
-            RectF(rx(0f), ry(55f), rx(64f), ry(96f)),                     // GO top-left native button
-            RectF(rx(772f), ry(55f), width.toFloat(), ry(96f)),           // GO top-right native type/status chips
+            RectF(0f, 0f, width.toFloat(), ry(52f)),                       // Android/status bar
+
+            // Native top type/status lanes. ALWAYS reserve room for up to TWO Pokemon types.
+            RectF(rx(0f), ry(52f), rx(112f), ry(92f)),                    // player's 1-2 native type icons
+            RectF(rx(744f), ry(52f), width.toFloat(), ry(92f)),           // opponent's 1-2 native type icons
+
             RectF(rx(14f), ry(93f), rx(354f), ry(176f)),                  // player's white name/CP card
             RectF(rx(510f), ry(93f), rx(852f), ry(176f)),                 // opponent white name/CP card
-            RectF(rx(12f), ry(180f), rx(116f), ry(286f)),                 // switch button
-            RectF(rx(35f), ry(620f), rx(304f), ry(704f)),                 // player's native HP/effectiveness area
-            RectF(rx(425f), ry(620f), rx(724f), ry(704f)),                // opponent native HP area
+            RectF(rx(12f), ry(180f), rx(116f), ry(286f)),                 // native switch/run button
+
+            RectF(rx(35f), ry(620f), rx(304f), ry(704f)),                 // player's HP/effectiveness
+            RectF(rx(425f), ry(620f), rx(724f), ry(704f)),                // opponent HP/effectiveness
+
             RectF(rx(716f), ry(846f), width.toFloat(), ry(988f)),         // reserve card 1
             RectF(rx(716f), ry(996f), width.toFloat(), ry(1122f)),        // reserve card 2
-            RectF(rx(78f), ry(1260f), rx(786f), height.toFloat())         // native charged-move buttons/text
+
+            RectF(rx(78f), ry(1260f), rx(786f), height.toFloat())         // player's charged move controls
         )
         protected.forEach { canvas.clipRect(it, Region.Op.DIFFERENCE) }
     }
@@ -167,13 +173,13 @@ class BattleOverlayView(
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isEmpty()) return
 
-        // The clean game reference leaves a safe lane above the opponent card. PvPPokeGo uses
-        // the LEFT portion of that lane and leaves the far-right portion untouched for GO.
+        // Enemy Pokemon can also have 1 or 2 native type icons. Our weakness row ends well before
+        // that reserved two-icon lane; it can never use the far-right native area.
         val radius = 14f*u()
         val y = ry(TOP_ICON_Y)
         val spacing = rx(35f)
-        val strongRight = rx(704f)
-        val arrowX = rx(742f)
+        val strongRight = rx(688f)
+        val arrowX = rx(724f)
         val firstStrong = strongRight - spacing*(strong.size-1).coerceAtLeast(0)
         strong.forEachIndexed { i,type -> drawTypeChip(canvas,firstStrong+spacing*i,y,type,radius) }
         paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=18f*u(); paint.typeface=Typeface.DEFAULT_BOLD
@@ -203,7 +209,6 @@ class BattleOverlayView(
         }
     }
 
-    /** Mirrors GO's compact SUPEREFICAZ! feedback under the dangerous enemy Charged Move. */
     private fun drawEnemySuperEffectiveText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
         val playerTypes = currentPlayerTypes()
         if (playerTypes.isEmpty()) return
@@ -217,72 +222,28 @@ class BattleOverlayView(
         paint.clearShadowLayer()
     }
 
-    /**
-     * Qualitative shield alert. Exact HP percentage is deliberately not invented because the
-     * overlay does not know exact live IV/level/defense; it uses real type effectiveness plus
-     * PvP move power and the enemy's current energy prediction.
-     */
     private fun drawShieldAdvice(canvas: Canvas) {
         val playerTypes = currentPlayerTypes()
         if (playerTypes.isEmpty()) return
-
         val all = listOfNotNull(state.charged1, state.charged2)
         if (all.isEmpty()) return
         val plausible = all.filter { it.ready || it.progress >= .72f }.ifEmpty { all }
-        val threat = plausible.maxByOrNull { p ->
-            p.move.power.toDouble() * TypeChart.multiplier(p.move.type, playerTypes)
-        } ?: return
-
+        val threat = plausible.maxByOrNull { p -> p.move.power.toDouble() * TypeChart.multiplier(p.move.type, playerTypes) } ?: return
         val eff = TypeChart.multiplier(threat.move.type, playerTypes)
         val threatScore = threat.move.power.toDouble() * eff
         val advice = when {
-            eff >= 1.5 || threatScore >= 100.0 -> ShieldAdvice(
-                title = "USAR ESCUDO",
-                detail = "${shortMoveName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}DANO ALTO",
-                color = Color.rgb(232, 61, 72)
-            )
-            eff <= .65 && threatScore < 70.0 -> ShieldAdvice(
-                title = "PODE NÃO USAR",
-                detail = "${shortMoveName(threat.move.name)} • POUCO EFICAZ • DANO BAIXO",
-                color = Color.rgb(46, 188, 105)
-            )
-            threatScore >= 70.0 -> ShieldAdvice(
-                title = "ESCUDO OPCIONAL",
-                detail = "${shortMoveName(threat.move.name)} • DANO MÉDIO",
-                color = Color.rgb(245, 175, 52)
-            )
-            else -> ShieldAdvice(
-                title = "PODE NÃO USAR",
-                detail = "${shortMoveName(threat.move.name)} • DANO BAIXO",
-                color = Color.rgb(46, 188, 105)
-            )
+            eff >= 1.5 || threatScore >= 100.0 -> ShieldAdvice("USAR ESCUDO", "${shortMoveName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}DANO ALTO", Color.rgb(232,61,72))
+            eff <= .65 && threatScore < 70.0 -> ShieldAdvice("PODE NÃO USAR", "${shortMoveName(threat.move.name)} • POUCO EFICAZ • DANO BAIXO", Color.rgb(46,188,105))
+            threatScore >= 70.0 -> ShieldAdvice("ESCUDO OPCIONAL", "${shortMoveName(threat.move.name)} • DANO MÉDIO", Color.rgb(245,175,52))
+            else -> ShieldAdvice("PODE NÃO USAR", "${shortMoveName(threat.move.name)} • DANO BAIXO", Color.rgb(46,188,105))
         }
-
-        val centerX = rx(ENEMY_MOVE_CENTER_X)
-        val centerY = ry(592f)
-        val halfW = 142f*u()
-        val halfH = 31f*u()
-        val box = RectF(centerX-halfW, centerY-halfH, centerX+halfW, centerY+halfH)
-
-        paint.style = Paint.Style.FILL
-        paint.color = hudColor(Color.rgb(22, 27, 34), .90f)
-        canvas.drawRoundRect(box, 16f*u(), 16f*u(), paint)
-        stroke.style = Paint.Style.STROKE
-        stroke.strokeWidth = 2.4f*u()
-        stroke.color = hudColor(advice.color)
-        canvas.drawRoundRect(box, 16f*u(), 16f*u(), stroke)
-
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = Typeface.DEFAULT_BOLD
-        paint.color = hudColor(advice.color)
-        paint.textSize = 16f*u()
-        paint.setShadowLayer(2f,0f,1f,Color.BLACK)
-        canvas.drawText(advice.title, centerX, centerY-4f*u(), paint)
-
-        paint.color = hudColor(Color.WHITE)
-        paint.textSize = 10.5f*u()
-        canvas.drawText(advice.detail, centerX, centerY+16f*u(), paint)
-        paint.clearShadowLayer()
+        val centerX=rx(ENEMY_MOVE_CENTER_X); val centerY=ry(592f); val halfW=142f*u(); val halfH=31f*u()
+        val box=RectF(centerX-halfW,centerY-halfH,centerX+halfW,centerY+halfH)
+        paint.style=Paint.Style.FILL; paint.color=hudColor(Color.rgb(22,27,34),.90f); canvas.drawRoundRect(box,16f*u(),16f*u(),paint)
+        stroke.style=Paint.Style.STROKE; stroke.strokeWidth=2.4f*u(); stroke.color=hudColor(advice.color); canvas.drawRoundRect(box,16f*u(),16f*u(),stroke)
+        paint.textAlign=Paint.Align.CENTER; paint.typeface=Typeface.DEFAULT_BOLD; paint.color=hudColor(advice.color); paint.textSize=16f*u(); paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+        canvas.drawText(advice.title,centerX,centerY-4f*u(),paint)
+        paint.color=hudColor(Color.WHITE); paint.textSize=10.5f*u(); canvas.drawText(advice.detail,centerX,centerY+16f*u(),paint); paint.clearShadowLayer()
     }
 
     private fun drawCharged(canvas: Canvas,cx: Float,cy: Float,radius: Float,prediction: ChargedPrediction) {
@@ -292,9 +253,7 @@ class BattleOverlayView(
         if (settings.showEnergyProgress) {
             val progress=prediction.progress.coerceIn(0f,1f); val fillTop=cy+radius-2f*radius*progress
             paint.color=hudColor(typeColor(prediction.move.type)); canvas.drawRect(cx-radius,fillTop,cx+radius,cy+radius,paint)
-            if (progress>.02f && progress<.98f) {
-                paint.color=hudColor(Color.WHITE,.84f); canvas.drawRect(cx-radius,fillTop-1f*u(),cx+radius,fillTop+1f*u(),paint)
-            }
+            if (progress>.02f && progress<.98f) { paint.color=hudColor(Color.WHITE,.84f); canvas.drawRect(cx-radius,fillTop-1f*u(),cx+radius,fillTop+1f*u(),paint) }
         } else {
             paint.color=hudColor(typeColor(prediction.move.type)); canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
         }
@@ -304,26 +263,12 @@ class BattleOverlayView(
         if (settings.showChargedCounter) drawChargeProgressDots(canvas,cx,cy,radius,prediction)
     }
 
-    /**
-     * Dots show useful information even when the main circle is already full. Before the first
-     * charge is ready they mirror progress to that charge. Once ready, they show banked overflow
-     * toward a second copy. That makes a spend visible even when residual energy still leaves the
-     * move immediately ready again, exactly matching Pokemon GO's shared-energy behavior.
-     */
     private fun drawChargeProgressDots(canvas: Canvas,cx: Float,cy: Float,radius: Float,prediction: ChargedPrediction) {
         val total=5
-        val progress = if (prediction.ready) prediction.overflowProgress.coerceIn(0f,1f) else prediction.progress.coerceIn(0f,1f)
-        val filled = if (prediction.ready) {
-            if (progress >= .999f) total else floor(progress * total).toInt().coerceIn(0,total)
-        } else {
-            if (progress <= 0f) 0 else ceil(progress * total).toInt().coerceIn(0,total)
-        }
+        val progress=if(prediction.ready) prediction.overflowProgress.coerceIn(0f,1f) else prediction.progress.coerceIn(0f,1f)
+        val filled=if(prediction.ready){ if(progress>=.999f) total else floor(progress*total).toInt().coerceIn(0,total) } else { if(progress<=0f) 0 else ceil(progress*total).toInt().coerceIn(0,total) }
         val dotRadius=2.5f*u(); val gap=7.5f*u(); val startX=cx-gap*(total-1)/2f; val y=cy+radius*.72f
-        repeat(total) { i ->
-            paint.style=Paint.Style.FILL
-            paint.color=if(i<filled) hudColor(Color.WHITE) else hudColor(Color.rgb(34,37,44),.92f)
-            canvas.drawCircle(startX+i*gap,y,dotRadius,paint)
-        }
+        repeat(total){i-> paint.style=Paint.Style.FILL; paint.color=if(i<filled) hudColor(Color.WHITE) else hudColor(Color.rgb(34,37,44),.92f); canvas.drawCircle(startX+i*gap,y,dotRadius,paint)}
     }
 
     private fun drawMoveCircle(canvas: Canvas,cx: Float,cy: Float,radius: Float,move: MoveDef) {
@@ -338,38 +283,35 @@ class BattleOverlayView(
     }
 
     private fun drawReserves(canvas: Canvas) {
-        // Keep reserve extras completely outside Pokemon GO's gray reserve cards.
         val indicatorX=rx(692f); val firstY=ry(918f); val secondY=ry(1058f); val typeYDelta=ry(82f)
         state.reserves.take(2).forEachIndexed { index,reserve ->
             if (!reserve.visible) return@forEachIndexed
             val cardCenterY=if(index==0) firstY else secondY
             drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u())
-            if (settings.showReserveTypes && reserve.types.isNotEmpty()) {
+            if(settings.showReserveTypes && reserve.types.isNotEmpty()){
                 val typeRadius=12f*u(); val spacing=rx(31f); val centerX=rx(790f)
                 var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
-                reserve.types.take(2).forEach { type -> drawTypeChip(canvas,x,cardCenterY+typeYDelta,type,typeRadius); x+=spacing }
+                reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+typeYDelta,type,typeRadius);x+=spacing}
             }
         }
     }
 
     private fun drawTimers(canvas: Canvas) {
         paint.textAlign=Paint.Align.LEFT; paint.textSize=12f*u(); paint.typeface=Typeface.DEFAULT_BOLD; paint.color=hudColor(Color.WHITE)
-        state.ownSwitchSeconds?.let { canvas.drawText("↻ $it",10f*u(),height*.47f,paint) }
-        state.opponentSwitchSeconds?.let { canvas.drawText("↻ $it",width-58f*u(),height*.47f,paint) }
+        state.ownSwitchSeconds?.let{canvas.drawText("↻ $it",10f*u(),height*.47f,paint)}
+        state.opponentSwitchSeconds?.let{canvas.drawText("↻ $it",width-58f*u(),height*.47f,paint)}
     }
 
     private fun drawResetAndCorrection(canvas: Canvas) {
         val y=ry(274f); val radius=15f*u(); val resetX=rx(22f)
         paint.color=hudColor(Color.rgb(45,45,45)); canvas.drawCircle(resetX,y,radius,paint); stroke.color=hudColor(Color.WHITE); canvas.drawCircle(resetX,y,radius,stroke)
         paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=16f*u(); canvas.drawText("↻",resetX,y+5f*u(),paint)
-        val correctionY=y+40f*u(); listOf(resetX to "−",(resetX+38f*u()) to "+").forEach { (x,g) ->
-            paint.color=hudColor(Color.rgb(45,45,45)); canvas.drawCircle(x,correctionY,radius,paint); canvas.drawCircle(x,correctionY,radius,stroke); paint.color=hudColor(Color.WHITE); canvas.drawText(g,x,correctionY+5f*u(),paint)
-        }
+        val correctionY=y+40f*u(); listOf(resetX to "−",(resetX+38f*u()) to "+").forEach{(x,g)->paint.color=hudColor(Color.rgb(45,45,45));canvas.drawCircle(x,correctionY,radius,paint);canvas.drawCircle(x,correctionY,radius,stroke);paint.color=hudColor(Color.WHITE);canvas.drawText(g,x,correctionY+5f*u(),paint)}
     }
 
     private fun drawDebug(canvas: Canvas) {
         val text=state.debugText?:return; paint.color=hudColor(Color.BLACK,.78f); val box=RectF(8f,height-166f*u(),width*.82f,height-8f); canvas.drawRoundRect(box,8f,8f,paint)
-        paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.LEFT; paint.textSize=10f*u(); text.lines().take(9).forEachIndexed { i,line -> canvas.drawText(line,box.left+8f,box.top+(i+1)*14f*u(),paint) }
+        paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.LEFT; paint.textSize=10f*u(); text.lines().take(9).forEachIndexed{i,line->canvas.drawText(line,box.left+8f,box.top+(i+1)*14f*u(),paint)}
     }
 
     private fun drawTypeChip(canvas: Canvas,cx: Float,cy: Float,type: String,radius: Float) {
@@ -383,21 +325,19 @@ class BattleOverlayView(
     }
 
     private fun currentPlayerTypes(): List<String> = gameRepo.pokemon(state.playerName)?.types.orEmpty()
-    private data class ShieldAdvice(val title: String, val detail: String, val color: Int)
-
+    private data class ShieldAdvice(val title:String,val detail:String,val color:Int)
     private fun shortMoveName(name:String)=if(name.length<=19) name else name.take(18)+"…"
-    private fun hudColor(color:Int,multiplier:Float=1f):Int { val a=(hudAlpha*multiplier).toInt().coerceIn(0,255); return Color.argb(a,Color.red(color),Color.green(color),Color.blue(color)) }
+    private fun hudColor(color:Int,multiplier:Float=1f):Int{val a=(hudAlpha*multiplier).toInt().coerceIn(0,255);return Color.argb(a,Color.red(color),Color.green(color),Color.blue(color))}
     private fun typeColor(type:String):Int=when(type.lowercase()){
         "fairy"->Color.rgb(239,153,230);"psychic"->Color.rgb(250,137,131);"fighting"->Color.rgb(219,66,86);"rock"->Color.rgb(206,193,141);"fire"->Color.rgb(251,165,75);"steel"->Color.rgb(85,151,164);"water"->Color.rgb(91,166,224);"flying"->Color.rgb(155,180,229);"ghost"->Color.rgb(99,111,191);"grass"->Color.rgb(93,190,101);"bug"->Color.rgb(161,194,49);"ground"->Color.rgb(214,133,85);"ice"->Color.rgb(125,212,200);"dark"->Color.rgb(113,121,140);"dragon"->Color.rgb(7,115,200);"normal"->Color.rgb(153,156,161);"electric"->Color.rgb(243,219,85);"poison"->Color.rgb(178,98,204);else->Color.rgb(153,156,161)
     }
 
     companion object {
-        // Measured from the user's clean 709x1536 Pokemon GO battle reference. This row sits
-        // between the Android status bar and the native white Pokemon cards.
-        private const val TOP_ICON_Y=76f
-        private const val PLAYER_MATCHUP_X=88f
+        // Canonical free row from the clean 709x1536 battle references.
+        private const val TOP_ICON_Y=72f
+        private const val PLAYER_MATCHUP_X=136f
         const val HUD_TOGGLE_CENTER_X=432f
-        const val HUD_TOGGLE_CENTER_Y=76f
+        const val HUD_TOGGLE_CENTER_Y=72f
         const val ENEMY_MOVE_CENTER_X=558f
     }
 }
