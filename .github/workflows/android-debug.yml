@@ -1,6 +1,6 @@
-name: Build Android V05 copilot hardening
+name: Build Android V05 audited controls
 
-# build trigger: global HUD unlock drag repair
+# build trigger: V05 FIX2 audited controls + lint/tests
 on:
   push:
     branches: [v04-v03-stable-base]
@@ -33,12 +33,12 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Build debug APK
+      - name: Lint, tests and build debug APK
         id: build
         shell: bash
         run: |
           set +e
-          gradle --no-daemon --stacktrace :app:assembleDebug 2>&1 | tee build-log.txt
+          gradle --no-daemon --stacktrace :app:lintDebug :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build-log.txt
           code=${PIPESTATUS[0]}
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
@@ -49,20 +49,23 @@ jobs:
         run: |
           mkdir -p artifact
           cp build-log.txt artifact/build-log.txt || true
+          if [ -f app/build/reports/lint-results-debug.html ]; then
+            cp app/build/reports/lint-results-debug.html artifact/lint-results-debug.html
+          fi
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk artifact/PVPPokeGo_V05-copilot-debug.apk
-            sha256sum artifact/PVPPokeGo_V05-copilot-debug.apk > artifact/PVPPokeGo_V05-copilot-debug.apk.sha256
+            cp app/build/outputs/apk/debug/app-debug.apk artifact/PVPPokeGo_V05_FIX2-audited-debug.apk
+            sha256sum artifact/PVPPokeGo_V05_FIX2-audited-debug.apk > artifact/PVPPokeGo_V05_FIX2-audited-debug.apk.sha256
           fi
 
-      - name: Upload APK and log
+      - name: Upload APK and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PVPPokeGo-V05-copilot-build
+          name: PVPPokeGo-V05-FIX2-audited-build
           path: artifact/
           if-no-files-found: error
           retention-days: 14
 
-      - name: Fail if Gradle failed
+      - name: Fail if validation failed
         if: steps.build.outputs.exit_code != '0'
         run: exit 1
