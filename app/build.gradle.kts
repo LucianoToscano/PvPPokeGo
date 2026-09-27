@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "com.lucianotoscano.pvppokego"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
-        targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0-v03-overlay-counter"
+        targetSdk = 36
+        versionCode = 5
+        versionName = "0.5.0-copilot-hardening"
     }
 
     buildFeatures { compose = true }
@@ -50,6 +50,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
-    // Same bundled OCR family found in the supplied PVPPokeGo_V01.apk.
     implementation("com.google.mlkit:text-recognition:16.0.1")
 }
