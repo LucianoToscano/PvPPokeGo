@@ -122,15 +122,16 @@ class BattleOverlayView(
     }
 
     private fun safeDragPosition(block: String, x: Float, y: Float): Pair<Float, Float> = when (block) {
-        // Top blocks remain in the free strip between status bar and native white cards.
-        BLOCK_PLAYER_MATCHUP -> x.coerceIn(124f, 352f) to y.coerceIn(60f, 88f)
-        BLOCK_STRONG_TYPES -> x.coerceIn(520f, 688f) to y.coerceIn(60f, 88f)
-        BLOCK_HUD_TOGGLE -> x.coerceIn(382f, 482f) to y.coerceIn(60f, 88f)
+        // On this overlay window Android already offsets us below the system status bar. Therefore
+        // the visual free strip above Pokemon GO's white cards lives close to local Y=0..30.
+        BLOCK_PLAYER_MATCHUP -> x.coerceIn(124f, 352f) to y.coerceIn(4f, 30f)
+        BLOCK_STRONG_TYPES -> x.coerceIn(520f, 688f) to y.coerceIn(4f, 30f)
+        BLOCK_HUD_TOGGLE -> x.coerceIn(382f, 482f) to y.coerceIn(4f, 30f)
         // Main move cluster can be moved broadly, while native HUD clipping remains authoritative.
         BLOCK_ENEMY_MOVES -> x.coerceIn(330f, 680f) to y.coerceIn(250f, 520f)
         // Reserve annotations move as one group and remain near the right-side reserve lane.
         BLOCK_RESERVES -> x.coerceIn(620f, 710f) to y.coerceIn(820f, 1010f)
-        else -> x.coerceIn(24f, 840f) to y.coerceIn(60f, 1470f)
+        else -> x.coerceIn(24f, 840f) to y.coerceIn(4f, 1470f)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -172,8 +173,10 @@ class BattleOverlayView(
 
     @Suppress("DEPRECATION")
     private fun clipOutNativePokemonGoUi(canvas: Canvas) {
+        // Do not clip the whole local top strip: TYPE_APPLICATION_OVERLAY is already laid out below
+        // the Android status-bar inset on the tested device. Keeping that blanket clip was exactly
+        // what forced our chips downward onto Pokemon GO's white cards.
         val protected = listOf(
-            RectF(0f, 0f, width.toFloat(), ry(52f)),
             RectF(rx(0f), ry(52f), rx(112f), ry(92f)),
             RectF(rx(744f), ry(52f), width.toFloat(), ry(92f)),
             RectF(rx(14f), ry(93f), rx(354f), ry(176f)),
@@ -430,11 +433,12 @@ class BattleOverlayView(
         const val BLOCK_RESERVES = "hud_reserves"
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
 
-        const val TOP_ICON_Y=72f
+        // Local overlay Y: this window begins below the Android status area on the tested device.
+        const val TOP_ICON_Y=12f
         const val PLAYER_MATCHUP_X=136f
         const val STRONG_TYPES_RIGHT_X=688f
         const val HUD_TOGGLE_CENTER_X=432f
-        const val HUD_TOGGLE_CENTER_Y=72f
+        const val HUD_TOGGLE_CENTER_Y=12f
         const val ENEMY_MOVE_CENTER_X=558f
         const val ENEMY_MOVE_FAST_Y=355f
         const val RESERVE_INDICATOR_X=692f
