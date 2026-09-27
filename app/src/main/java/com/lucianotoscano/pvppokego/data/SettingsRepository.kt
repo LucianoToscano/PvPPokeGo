@@ -64,10 +64,15 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("show_hud_text", true)
         set(v) = prefs.edit().putBoolean("show_hud_text", v).apply()
 
-    /** PGSharp-style "Somente ícones" switch for the floating quick menu. */
+    /** PGSharp-style label visibility for the floating quick menu. */
     var quickMenuShowLabels: Boolean
         get() = prefs.getBoolean("quick_menu_show_labels", true)
         set(v) = prefs.edit().putBoolean("quick_menu_show_labels", v).apply()
+
+    /** Convenience form used by UI surfaces that present the option as "Somente ícones". */
+    var quickMenuIconsOnly: Boolean
+        get() = !quickMenuShowLabels
+        set(v) { quickMenuShowLabels = !v }
 
     /** Normalized screen position for the floating gear, so it survives resolution changes. */
     var quickMenuXFraction: Float
