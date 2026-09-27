@@ -59,6 +59,25 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("show_energy_progress", true)
         set(v) = prefs.edit().putBoolean("show_energy_progress", v).apply()
 
+    /** Global text switch for the battle HUD. Icons remain visible when text is hidden. */
+    var showHudText: Boolean
+        get() = prefs.getBoolean("show_hud_text", true)
+        set(v) = prefs.edit().putBoolean("show_hud_text", v).apply()
+
+    /** Whether the floating gear menu shows labels beside its icons. */
+    var quickMenuShowLabels: Boolean
+        get() = prefs.getBoolean("quick_menu_show_labels", true)
+        set(v) = prefs.edit().putBoolean("quick_menu_show_labels", v).apply()
+
+    /** Normalized screen position for the floating gear, so it survives resolution changes. */
+    var quickMenuXFraction: Float
+        get() = prefs.getFloat("quick_menu_x_frac", .018f)
+        set(v) = prefs.edit().putFloat("quick_menu_x_frac", v.coerceIn(0f, 1f)).apply()
+
+    var quickMenuYFraction: Float
+        get() = prefs.getFloat("quick_menu_y_frac", .205f)
+        set(v) = prefs.edit().putFloat("quick_menu_y_frac", v.coerceIn(0f, 1f)).apply()
+
     var showSwitchTimer: Boolean
         get() = prefs.getBoolean("show_switch_timer", false)
         set(v) = prefs.edit().putBoolean("show_switch_timer", v).apply()
@@ -115,6 +134,13 @@ class SettingsRepository(context: Context) {
                 editor.remove("${block}_y")
             }
         }.apply()
+    }
+
+    fun resetQuickMenuPosition() {
+        prefs.edit()
+            .remove("quick_menu_x_frac")
+            .remove("quick_menu_y_frac")
+            .apply()
     }
 
     companion object {
