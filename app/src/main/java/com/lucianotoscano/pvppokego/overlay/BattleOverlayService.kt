@@ -864,17 +864,17 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                         switchPrompt = switchPrompt,
                                         nowMs = now
                                     )
-                                    e.onBattleConfidence(presenceTracker.confidence)
+                                    e?.onBattleConfidence(presenceTracker.confidence)
                                     markBattleEvidence(now)
                                 }
                                 if (switchPrompt) {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
-                                val changes = e.onDetection(d)
-                                if (changes.playerChanged || changes.enemyChanged) frameDetector?.reset()
-                                if (changes.playerChanged) switchChoicePromptUntilMs = 0L
-                                val textEvent = e.onBattleText(d.battleText, now)
-                                when {
+                                val changes = e?.onDetection(d)
+                                if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
+                                if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
+                                val textEvent = e?.onBattleText(d.battleText, now)
+                                if (textEvent != null) when {
                                     textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
                                     textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
                                 }
