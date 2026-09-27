@@ -68,10 +68,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var hudCollapsed = false
     private var appUiVisible = false
 
-    // The HUD should exist only while a real PvP battle UI is present. Frame detection provides
-    // the two HP-bar anchors; OCR battle text extends the grace period through Charged/shield UI.
     private var battleActive = false
     private var lastBattleEvidenceAtMs = 0L
+    private var switchChoicePromptUntilMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -89,6 +88,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 frameDetector?.reset()
                 battleActive = false
                 lastBattleEvidenceAtMs = 0L
+                switchChoicePromptUntilMs = 0L
                 dismissMoveMenu()
                 redraw()
                 return START_STICKY
@@ -358,7 +358,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         attachHudToggleTouch()
     }
 
-    /** Compact, translucent submenu for changing the enemy move without covering the battle. */
+    /** Compact type-colored submenu. Individual rows carry the color; there is no black panel behind them. */
     private fun showMoveMenu(kind: MoveKind) {
         if (hudCollapsed || appUiVisible || !battleActive || settingsRepo.editMode) return
         val wm = windowManager ?: return
@@ -384,13 +384,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(7), dp(6), dp(7), dp(7))
-            background = roundedBackground(
-                Color.argb(168, 18, 22, 28),
-                Color.argb(110, 225, 230, 238),
-                13f * density,
-                dp(1)
-            )
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setBackgroundColor(Color.TRANSPARENT)
         }
 
         val header = LinearLayout(this).apply {
@@ -400,6 +395,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val title = TextView(this).apply {
             text = if (kind == MoveKind.FAST) "ATAQUE RÁPIDO" else "ATAQUE CARREGADO"
             setTextColor(Color.WHITE)
+            setShadowLayer(4f, 0f, 1f, Color.BLACK)
             textSize = 12.5f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -408,6 +404,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             text = "✕"
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
+            setShadowLayer(4f, 0f, 1f, Color.BLACK)
             textSize = 16f
             setPadding(dp(8), 0, dp(2), 0)
             isClickable = true
@@ -419,7 +416,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         panel.addView(TextView(this).apply {
             text = "PvP • toque para trocar"
-            setTextColor(Color.argb(210, 210, 215, 224))
+            setTextColor(Color.WHITE)
+            setShadowLayer(4f, 0f, 1f, Color.BLACK)
             textSize = 8.5f
             setPadding(0, 0, 0, dp(4))
         })
@@ -469,6 +467,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         val scroll = ScrollView(this).apply {
             isFillViewport = true
+            setBackgroundColor(Color.TRANSPARENT)
             addView(list, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         panel.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -505,9 +504,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     ) {
         val d = resources.displayMetrics.density
         fun dp(v: Int): Int = (v * d).toInt()
-        val rgb = darken(baseColor, .60f)
-        val rowColor = withAlpha(rgb, 78)
-        val border = if (selected) Color.argb(220, 255, 255, 255) else withAlpha(baseColor, 125)
+        val rgb = darken(baseColor, .82f)
+        val rowColor = withAlpha(rgb, 198)
+        val border = if (selected) Color.argb(245, 255, 255, 255) else withAlpha(baseColor, 220)
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(5), dp(8), dp(5))
@@ -524,7 +523,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         })
         row.addView(TextView(this).apply {
             text = detail
-            setTextColor(Color.argb(225, 238, 241, 246))
+            setTextColor(Color.argb(245, 248, 249, 252))
             textSize = 9f
             setPadding(0, dp(1), 0, 0)
             maxLines = 1
@@ -576,11 +575,19 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         battleActive = true
     }
 
+    private fun normalizedBattleText(raw: String): String =
+        Normalizer.normalize(raw.lowercase(), Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+
     private fun battleTextLooksActive(raw: String): Boolean {
         if (raw.isBlank()) return false
-        val normalized = Normalizer.normalize(raw.lowercase(), Normalizer.Form.NFD)
-            .replace(Regex("\\p{Mn}+"), "")
+        val normalized = normalizedBattleText(raw)
         return BATTLE_TEXT_MARKERS.any(normalized::contains)
+    }
+
+    private fun switchChoicePromptDetected(raw: String): Boolean {
+        if (raw.isBlank()) return false
+        return normalizedBattleText(raw).contains("quer trocar por um pokemon")
     }
 
     private fun startScanLoop() {
@@ -634,8 +641,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 if ((d.player != null && d.opponent != null) || battleTextLooksActive(d.battleText)) {
                                     markBattleEvidence(now)
                                 }
+                                if (switchChoicePromptDetected(d.battleText)) {
+                                    switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
+                                    markBattleEvidence(now)
+                                }
                                 val changes = e.onDetection(d)
                                 if (changes.playerChanged || changes.enemyChanged) frameDetector?.reset()
+                                if (changes.playerChanged) switchChoicePromptUntilMs = 0L
                                 val textEvent = e.onBattleText(d.battleText, now)
                                 when {
                                     textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
@@ -661,6 +673,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
                         if (battleActive && now - lastBattleEvidenceAtMs > BATTLE_VISIBILITY_GRACE_MS) {
                             battleActive = false
+                            switchChoicePromptUntilMs = 0L
                         }
 
                         consecutiveErrors = 0
@@ -684,6 +697,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         currentLeagueCp = cp
         engine = BattleEngine(gameRepo)
         frameDetector?.reset()
+        switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
             startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(cp)} • HUD PvP ativo"))
@@ -696,6 +710,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val enabled = settingsRepo.overlayEnabled && !appUiVisible && battleActive
         view.visibility = if (enabled) View.VISIBLE else View.GONE
         view.setCollapsed(hudCollapsed)
+        view.setSwitchChoicePromptVisible(enabled && System.currentTimeMillis() <= switchChoicePromptUntilMs)
 
         val ui = engine?.uiState(settingsRepo.debugMode)
         ui?.let(view::render)
@@ -717,6 +732,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         frameDetector?.reset()
         battleActive = false
         lastBattleEvidenceAtMs = 0L
+        switchChoicePromptUntilMs = 0L
         dismissMoveMenu()
         redraw()
     }
@@ -804,6 +820,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         private const val TEAM_OCR_INTERVAL_MS = 1_650L
         private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
         private const val BATTLE_VISIBILITY_GRACE_MS = 3_800L
+        private const val SWITCH_CHOICE_PROMPT_GRACE_MS = 2_400L
         private const val EDIT_LONG_PRESS_MS = 180L
         private val SUPPORTED_LEAGUE_CPS = setOf(1500, 2500, 10000)
         private val BATTLE_TEXT_MARKERS = listOf(
