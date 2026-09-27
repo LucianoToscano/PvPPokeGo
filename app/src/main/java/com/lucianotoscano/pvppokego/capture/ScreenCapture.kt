@@ -17,6 +17,8 @@ class ScreenCapture(
     private val projection: MediaProjection
 ) {
     private val latest = AtomicReference<Bitmap?>(null)
+    /** Guards copy/replacement so the capture thread never recycles a bitmap mid-copy. */
+    private val bitmapLock = Any()
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
     private var thread: HandlerThread? = null
@@ -49,7 +51,11 @@ class ScreenCapture(
                 padded.copyPixelsFromBuffer(buffer)
                 val cropped = Bitmap.createBitmap(padded, 0, 0, width, height)
                 padded.recycle()
-                latest.getAndSet(cropped)?.recycle()
+
+                val old = synchronized(bitmapLock) {
+                    latest.getAndSet(cropped)
+                }
+                old?.recycle()
             } finally {
                 image.close()
             }
@@ -68,12 +74,14 @@ class ScreenCapture(
     }
 
     /** Caller owns and must recycle the returned copy. */
-    fun acquireLatestBitmap(): Bitmap? = latest.get()?.let { src ->
+    fun acquireLatestBitmap(): Bitmap? = synchronized(bitmapLock) {
+        val src = latest.get() ?: return@synchronized null
         if (src.isRecycled) null else src.copy(Bitmap.Config.ARGB_8888, false)
     }
 
     fun stop() {
-        latest.getAndSet(null)?.recycle()
+        val last = synchronized(bitmapLock) { latest.getAndSet(null) }
+        last?.recycle()
         display?.release(); display = null
         reader?.close(); reader = null
         thread?.quitSafely(); thread = null
