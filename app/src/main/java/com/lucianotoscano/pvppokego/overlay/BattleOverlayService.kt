@@ -565,7 +565,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     /** Compact type-colored submenu. Individual rows carry the color; there is no black panel behind them. */
     private fun showMoveMenu(kind: MoveKind) {
-        if (hudCollapsed || appUiVisible || !battleActive || settingsRepo.editMode) return
+        // In manual HUD mode (automatic recognition disabled), battleActive has no
+        // visual/OCR evidence by design; move selection must still remain usable.
+        if (hudCollapsed || appUiVisible || (settingsRepo.autoRecognition && !battleActive) || settingsRepo.editMode) return
         val wm = windowManager ?: return
         val e = engine ?: return
         val options = when (kind) {
