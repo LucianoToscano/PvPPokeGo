@@ -41,6 +41,7 @@ fun SettingsScreen(
 ) {
     var overlay by remember { mutableStateOf(repository.overlayEnabled) }
     var auto by remember { mutableStateOf(repository.autoRecognition) }
+    var assist by remember { mutableStateOf(repository.battleAssistEnabled) }
     var league by remember { mutableStateOf(repository.leagueMode) }
     var strong by remember { mutableStateOf(repository.showStrongTypes) }
     var current by remember { mutableStateOf(repository.showCurrentIndicator) }
@@ -111,6 +112,16 @@ fun SettingsScreen(
                 Toggle("Reconhecimento automático", auto) {
                     auto = it
                     repository.autoRecognition = it
+                }
+                Toggle("Modo Batalha Assistido", assist) {
+                    assist = it
+                    repository.battleAssistEnabled = it
+                }
+                if (assist) {
+                    Text(
+                        "Copiloto visual: recomenda CONTINUE FAST, TROQUE, ESCUDO, NÃO ESCUDE e alerta de Charged. " +
+                            "Ele não toca nem envia comandos ao Pokémon GO."
+                    )
                 }
 
                 Text("Liga / ranking PvP", style = MaterialTheme.typography.titleMedium)
@@ -184,7 +195,7 @@ fun SettingsScreen(
                 if (edit) {
                     Text(
                         "Na batalha, segure um bloco do HUD por um instante e arraste. " +
-                            "As posições são salvas automaticamente e as áreas nativas do jogo continuam protegidas."
+                            "As posições são salvas automaticamente e o movimento é livre pela tela."
                     )
                     OutlinedButton(
                         onClick = { repository.clearHudPositions() },
