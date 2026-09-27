@@ -1,0 +1,37 @@
+name: Apply quick overlay menu patch
+
+on:
+  push:
+    branches:
+      - v04-v03-stable-base
+    paths:
+      - scripts/apply_quick_menu_patch.py
+      - .github/workflows/apply-quick-menu.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: v04-v03-stable-base
+          fetch-depth: 0
+
+      - name: Patch service
+        run: python3 scripts/apply_quick_menu_patch.py
+
+      - name: Commit integration
+        run: |
+          if git diff --quiet; then
+            echo "No patch required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          git commit -m "feat: integrate floating quick settings gear"
+          git push origin HEAD:v04-v03-stable-base
