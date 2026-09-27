@@ -89,6 +89,7 @@ class BattleOverlayView(
         BLOCK_ENEMY_MOVES -> pos(block, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
         BLOCK_BATTLE_ASSIST -> pos(block, BATTLE_ASSIST_X, BATTLE_ASSIST_Y)
         BLOCK_HUD_TOGGLE -> pos(block, HUD_TOGGLE_CENTER_X, HUD_TOGGLE_CENTER_Y)
+        BLOCK_HUD_LOCK -> pos(block, HUD_LOCK_CENTER_X, HUD_LOCK_CENTER_Y)
         BLOCK_ENEMY_HISTORY -> pos(block, ENEMY_HISTORY_X, ENEMY_HISTORY_Y)
         else -> null
     }
@@ -137,7 +138,7 @@ class BattleOverlayView(
 
     /** Returns the draggable HUD block under a screen coordinate while edit mode is active. */
     fun dragTargetAt(screenX: Float, screenY: Float): String? {
-        if (!settings.editMode || collapsed || width <= 0 || height <= 0) return null
+        if ((settings.layoutLocked && !settings.editMode) || collapsed || width <= 0 || height <= 0) return null
         val x = refX(screenX)
         val y = refY(screenY)
 
@@ -148,6 +149,7 @@ class BattleOverlayView(
         }
 
         if (near(BLOCK_HUD_TOGGLE, HUD_TOGGLE_CENTER_X, HUD_TOGGLE_CENTER_Y, 32f, 32f)) return BLOCK_HUD_TOGGLE
+        if (near(BLOCK_HUD_LOCK, HUD_LOCK_CENTER_X, HUD_LOCK_CENTER_Y, 32f, 32f)) return BLOCK_HUD_LOCK
         if (near(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X, TOP_ICON_Y, 34f, 30f)) return BLOCK_PLAYER_MATCHUP
         if (near(BLOCK_BATTLE_ASSIST, BATTLE_ASSIST_X, BATTLE_ASSIST_Y, 190f, 45f)) return BLOCK_BATTLE_ASSIST
 
@@ -165,6 +167,7 @@ class BattleOverlayView(
         if (x in (r1x-65f)..(r1x+175f) && y in (r1y-55f)..(r1y+125f)) return BLOCK_RESERVE_1
         val (r2x, r2y) = reservePos(1)
         if (x in (r2x-65f)..(r2x+175f) && y in (r2y-55f)..(r2y+125f)) return BLOCK_RESERVE_2
+        if (near(BLOCK_ENEMY_HISTORY, ENEMY_HISTORY_X, ENEMY_HISTORY_Y, 180f, 80f)) return BLOCK_ENEMY_HISTORY
         return null
     }
 
@@ -175,7 +178,7 @@ class BattleOverlayView(
 
     /** Persists exactly where the user drags the block. No positional restrictions are applied. */
     fun moveDragTarget(block: String, screenX: Float, screenY: Float) {
-        if (!settings.editMode || width <= 0 || height <= 0) return
+        if ((settings.layoutLocked && !settings.editMode) || width <= 0 || height <= 0) return
         if (settings.isBlockLocked(block)) return
         settings.setPosition(block, refX(screenX), refY(screenY))
         editTarget = block
@@ -212,7 +215,32 @@ class BattleOverlayView(
             drawEditModeGuide(canvas)
         }
         if (settings.debugMode) drawDebug(canvas)
+        drawLayoutLock(canvas)
         drawVisibilityToggle(canvas, false)
+    }
+
+    private fun drawLayoutLock(canvas: Canvas) {
+        val (refCx, refCy) = pos(BLOCK_HUD_LOCK, HUD_LOCK_CENTER_X, HUD_LOCK_CENTER_Y)
+        val cx = rx(refCx); val cy = ry(refCy); val radius = 16f*u()
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(if (settings.layoutLocked) Color.rgb(72,76,82) else Color.rgb(45,112,82), .88f)
+        canvas.drawCircle(cx, cy, radius, paint)
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 1.5f*u(); stroke.color = hudColor(Color.WHITE, .72f)
+        canvas.drawCircle(cx, cy, radius, stroke)
+        val body = RectF(cx-7f*u(), cy-1.5f*u(), cx+7f*u(), cy+9f*u())
+        stroke.strokeWidth = 1.8f*u(); stroke.color = hudColor(Color.WHITE)
+        canvas.drawRoundRect(body, 2.2f*u(), 2.2f*u(), stroke)
+        val shackle = RectF(cx-5.2f*u(), cy-8f*u(), cx+5.2f*u(), cy+3.2f*u())
+        canvas.drawArc(shackle, 190f, 160f, false, stroke)
+        if (!settings.layoutLocked) {
+            // Open shackle: short break/offset on the right makes unlocked state obvious.
+            paint.style = Paint.Style.FILL; paint.color = hudColor(if (settings.layoutLocked) Color.rgb(72,76,82) else Color.rgb(45,112,82))
+            canvas.drawRect(cx+3.8f*u(), cy-7.5f*u(), cx+8.2f*u(), cy-1f*u(), paint)
+            stroke.color = hudColor(Color.WHITE); stroke.strokeWidth = 1.8f*u()
+            canvas.drawLine(cx+4.7f*u(), cy-7.0f*u(), cx+7.4f*u(), cy-9.0f*u(), stroke)
+        }
+        drawEditSelection(canvas, BLOCK_HUD_LOCK, cx, cy, 25f*u(), 25f*u())
     }
 
     private fun drawVisibilityToggle(canvas: Canvas, hidden: Boolean) {
@@ -587,6 +615,7 @@ class BattleOverlayView(
         const val BLOCK_RESERVE_2 = "hud_reserve_2"
         const val BLOCK_RESERVES_LEGACY = "hud_reserves"
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
+        const val BLOCK_HUD_LOCK = "hud_lock"
         const val BLOCK_BATTLE_ASSIST = "hud_battle_assist"
         const val BLOCK_ENEMY_HISTORY = "hud_enemy_history"
 
@@ -595,6 +624,8 @@ class BattleOverlayView(
         const val STRONG_TYPES_RIGHT_X=688f
         const val HUD_TOGGLE_CENTER_X=432f
         const val HUD_TOGGLE_CENTER_Y=66f
+        const val HUD_LOCK_CENTER_X=382f
+        const val HUD_LOCK_CENTER_Y=66f
         const val ENEMY_MOVE_CENTER_X=558f
         const val ENEMY_MOVE_FAST_Y=355f
         const val RESERVE_INDICATOR_X=692f

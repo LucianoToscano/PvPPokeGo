@@ -31,6 +31,7 @@ class QuickOverlayMenu(
         fun onSettingsChanged(rebuildTouchZones: Boolean = false)
         fun onToggleHud()
         fun isHudCollapsed(): Boolean
+        fun isLayoutLocked(): Boolean
         fun onResetHudPositions()
         fun currentBattleModeLabel(): String
     }
@@ -362,7 +363,7 @@ class QuickOverlayMenu(
     }
 
     private fun leagueLayoutParams(): WindowManager.LayoutParams {
-        val size = dp(34).coerceAtLeast(36)
+        val size = dp(42).coerceAtLeast(44)
         return floatingParams(size, size).apply {
             val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
             val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
@@ -399,14 +400,14 @@ class QuickOverlayMenu(
     }
 
     private fun installGearDragAndTap(view: View, params: WindowManager.LayoutParams) {
-        installDrag(view, params, onMoved = { xFrac, yFrac ->
+        installDrag(view, params, canDrag = { !callbacks.isLayoutLocked() }, onMoved = { xFrac, yFrac ->
             settings.quickMenuXFraction = xFrac
             settings.quickMenuYFraction = yFrac
         }, onTap = { togglePanel() })
     }
 
     private fun installLeagueDrag(view: View, params: WindowManager.LayoutParams) {
-        installDrag(view, params, onMoved = { xFrac, yFrac ->
+        installDrag(view, params, canDrag = { !callbacks.isLayoutLocked() }, onMoved = { xFrac, yFrac ->
             settings.leagueBadgeXFraction = xFrac
             settings.leagueBadgeYFraction = yFrac
         }, onTap = { /* display only; league changes from the menu */ })
@@ -415,6 +416,7 @@ class QuickOverlayMenu(
     private fun installDrag(
         view: View,
         params: WindowManager.LayoutParams,
+        canDrag: () -> Boolean,
         onMoved: (Float, Float) -> Unit,
         onTap: () -> Unit
     ) {
@@ -426,7 +428,7 @@ class QuickOverlayMenu(
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX; val dy = event.rawY - downRawY
-                    if (abs(dx) + abs(dy) >= 6f) dragging = true
+                    if (canDrag() && abs(dx) + abs(dy) >= 6f) dragging = true
                     if (dragging) {
                         removePanel(false)
                         val maxX = (metrics.widthPixels - params.width).coerceAtLeast(0)
@@ -481,32 +483,60 @@ class QuickOverlayMenu(
     }
 
 
+    /** Vector recreation of the league emblems supplied as the visual reference. */
     private inner class LeagueBadgeView(ctx: Context) : View(ctx) {
-        private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style=Paint.Style.STROKE; strokeWidth=dp(2).toFloat(); color=Color.argb(235,240,240,240) }
+        private val p = Paint(Paint.ANTI_ALIAS_FLAG)
         private var kind: LeagueKind = LeagueKind.AUTO
         fun setKind(value: LeagueKind) { kind=value; invalidate() }
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            val w=width.toFloat(); val h=height.toFloat(); val pad=3f*density
+            val w=width.toFloat(); val h=height.toFloat(); val pad=2.5f*density
             val tri=Path().apply { moveTo(pad,pad); lineTo(w-pad,pad); lineTo(w/2f,h-pad); close() }
-            fill.style=Paint.Style.FILL
-            fill.color=when(kind){
-                LeagueKind.GREAT->Color.rgb(45,99,190)
-                LeagueKind.ULTRA->Color.rgb(58,72,78)
-                LeagueKind.MASTER->Color.rgb(82,37,145)
-                LeagueKind.AUTO->Color.rgb(66,72,84)
+            canvas.save(); canvas.clipPath(tri)
+            p.style=Paint.Style.FILL
+            p.color=when(kind){
+                LeagueKind.GREAT->Color.rgb(18,55,142)
+                LeagueKind.ULTRA->Color.rgb(18,23,35)
+                LeagueKind.MASTER->Color.rgb(105,55,151)
+                LeagueKind.AUTO->Color.rgb(235,45,49)
             }
-            canvas.drawPath(tri,fill)
-            canvas.drawPath(tri,strokePaint)
-            fill.color=when(kind){LeagueKind.GREAT->Color.rgb(235,55,62);LeagueKind.ULTRA->Color.rgb(245,202,34);LeagueKind.MASTER->Color.rgb(237,66,183);LeagueKind.AUTO->Color.rgb(120,190,240)}
-            fill.strokeWidth=dp(2).toFloat(); fill.style=Paint.Style.STROKE
-            canvas.drawLine(w*.28f,h*.35f,w*.73f,h*.22f,fill)
-            canvas.drawLine(w*.34f,h*.52f,w*.79f,h*.36f,fill)
-            fill.style=Paint.Style.FILL; fill.color=Color.WHITE
-            canvas.drawCircle(w*.35f,h*.25f,w*.085f,fill)
-            strokePaint.strokeWidth=dp(1).toFloat(); strokePaint.color=Color.rgb(40,45,55)
-            canvas.drawCircle(w*.35f,h*.25f,w*.032f,strokePaint)
+            canvas.drawRect(0f,0f,w,h,p)
+            p.style=Paint.Style.STROKE; p.strokeCap=Paint.Cap.SQUARE
+            when(kind){
+                LeagueKind.GREAT->{
+                    p.color=Color.rgb(235,53,58); p.strokeWidth=5.2f*density
+                    canvas.drawLine(w*.30f,h*.50f,w*.90f,h*.18f,p)
+                }
+                LeagueKind.ULTRA->{
+                    p.color=Color.rgb(250,207,26); p.strokeWidth=4.6f*density
+                    canvas.drawLine(w*.22f,h*.48f,w*.92f,h*.12f,p)
+                    canvas.drawLine(w*.32f,h*.66f,w*.92f,h*.34f,p)
+                }
+                LeagueKind.MASTER->{
+                    p.color=Color.rgb(232,64,178); p.strokeWidth=4.1f*density
+                    canvas.drawLine(w*.20f,h*.44f,w*.90f,h*.10f,p)
+                    canvas.drawLine(w*.27f,h*.59f,w*.91f,h*.27f,p)
+                    canvas.drawLine(w*.35f,h*.73f,w*.82f,h*.49f,p)
+                }
+                LeagueKind.AUTO->{
+                    // Fourth supplied emblem: red field with pale sweeping lower section.
+                    p.style=Paint.Style.FILL; p.color=Color.rgb(224,239,249)
+                    val sweep=Path().apply { moveTo(w*.40f,h*.25f); cubicTo(w*.58f,h*.18f,w*.78f,h*.17f,w,h*.18f); lineTo(w,h); lineTo(w*.5f,h); close() }
+                    canvas.drawPath(sweep,p)
+                }
+            }
+            canvas.restore()
+            // Gray outer and white inner triangle borders.
+            p.style=Paint.Style.STROKE; p.strokeJoin=Paint.Join.ROUND
+            p.strokeWidth=4.2f*density; p.color=Color.rgb(96,96,96); canvas.drawPath(tri,p)
+            val innerPad=5.2f*density
+            val inner=Path().apply { moveTo(innerPad,innerPad); lineTo(w-innerPad,innerPad); lineTo(w/2f,h-innerPad); close() }
+            p.strokeWidth=1.8f*density; p.color=Color.WHITE; canvas.drawPath(inner,p)
+            // White Pokeball mark in the upper-left, matching the supplied emblems.
+            val cx=w*.31f; val cy=h*.25f; val r=w*.105f
+            p.style=Paint.Style.FILL; p.color=Color.WHITE; canvas.drawCircle(cx,cy,r,p)
+            p.style=Paint.Style.STROKE; p.strokeWidth=1.6f*density; p.color=when(kind){LeagueKind.GREAT->Color.rgb(18,55,142);LeagueKind.ULTRA->Color.rgb(18,23,35);LeagueKind.MASTER->Color.rgb(105,55,151);LeagueKind.AUTO->Color.rgb(210,45,49)}
+            canvas.drawLine(cx-r,cy,cx+r,cy,p); canvas.drawCircle(cx,cy,r*.30f,p)
         }
     }
 

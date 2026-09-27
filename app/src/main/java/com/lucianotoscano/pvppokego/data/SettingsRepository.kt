@@ -140,6 +140,11 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("edit_mode", false)
         set(v) = prefs.edit().putBoolean("edit_mode", v).apply()
 
+    /** Global HUD position lock. Unlocking enables direct drag without opening edit mode. */
+    var layoutLocked: Boolean
+        get() = prefs.getBoolean("layout_locked", true)
+        set(v) = prefs.edit().putBoolean("layout_locked", v).apply()
+
     var scale: Float
         get() = prefs.getFloat("overlay_scale", 0.8f)
         set(v) = prefs.edit().putFloat("overlay_scale", v.coerceIn(.5f, 1.2f)).apply()
@@ -208,7 +213,7 @@ class SettingsRepository(context: Context) {
         val HUD_BLOCKS = listOf(
             "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
             "hud_reserve_1", "hud_reserve_2", "hud_reserves",
-            "hud_toggle", "hud_battle_assist", "hud_enemy_history"
+            "hud_toggle", "hud_lock", "hud_battle_assist", "hud_enemy_history"
         )
     }
 }
