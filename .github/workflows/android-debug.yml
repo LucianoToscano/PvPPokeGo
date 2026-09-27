@@ -1,6 +1,6 @@
 name: Build Android V05 copilot hardening
 
-# build trigger: free-drag lock + hide-all eye + league recognition
+# build trigger: final free-drag controls + hide-all eye + league recognition
 on:
   push:
     branches: [v04-v03-stable-base]
