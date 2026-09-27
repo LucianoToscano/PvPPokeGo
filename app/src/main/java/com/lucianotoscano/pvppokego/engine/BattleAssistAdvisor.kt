@@ -2,12 +2,11 @@ package com.lucianotoscano.pvppokego.engine
 
 import android.graphics.Color
 import com.lucianotoscano.pvppokego.data.BattleUiState
+import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 
-/**
- * Read-only PvP copilot. It recommends the next action but never sends input to Pokémon GO.
- */
+/** Read-only PvP copilot. It recommends the next action but never sends input to Pokemon GO. */
 object BattleAssistAdvisor {
     data class Advice(
         val title: String,
@@ -18,93 +17,146 @@ object BattleAssistAdvisor {
 
     fun advise(state: BattleUiState, repo: GameDataRepository): Advice? {
         val playerTypes = repo.pokemon(state.playerName)?.types.orEmpty()
-        val charged = listOfNotNull(state.charged1, state.charged2)
+        val enemyTypes = state.opponentTypes
+        val enemyCharged = listOfNotNull(state.charged1, state.charged2)
+        val ownCharged = listOfNotNull(state.ownCharged1, state.ownCharged2)
 
-        if (state.chargedIncoming && playerTypes.isNotEmpty() && charged.isNotEmpty()) {
-            val plausible = charged.filter { it.ready || it.progress >= .72f }.ifEmpty { charged }
-            val threat = plausible.maxByOrNull {
-                it.move.power.toDouble() * TypeChart.multiplier(it.move.type, playerTypes)
-            }
+        // 1) Incoming Charged: compare cheap bait and high-damage nuke possibilities.
+        if (state.chargedIncoming && playerTypes.isNotEmpty() && enemyCharged.isNotEmpty()) {
+            val plausible = enemyCharged.filter { it.ready || it.maxEnergy >= it.energyCost }.ifEmpty { enemyCharged }
+            val threat = plausible.maxByOrNull { it.move.power.toDouble() * TypeChart.multiplier(it.move.type, playerTypes) }
+            val bait = plausible.minByOrNull { it.energyCost }
             if (threat != null) {
                 val eff = TypeChart.multiplier(threat.move.type, playerTypes)
                 val score = threat.move.power.toDouble() * eff
+                val baitPossible = bait != null && bait.move.moveId != threat.move.moveId &&
+                    bait.energyCost + 5 <= threat.energyCost && threat.maxEnergy >= threat.energyCost
                 return when {
+                    baitPossible && score >= 95.0 -> Advice(
+                        "PODE SER BAIT",
+                        "${shortName(bait!!.move.name)} ou ${shortName(threat.move.name)} • ${energyLabel(threat)}",
+                        Color.rgb(245, 175, 52),
+                        110
+                    )
                     eff >= 1.5 || score >= 100.0 -> Advice(
                         "ESCUDO",
-                        "${shortName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}ameaça alta",
+                        "${shortName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}${energyLabel(threat)}",
                         Color.rgb(232, 61, 72),
-                        100
+                        108
                     )
                     eff <= .65 && score < 70.0 -> Advice(
                         "NÃO ESCUDE",
                         "${shortName(threat.move.name)} • pouco eficaz",
                         Color.rgb(46, 188, 105),
-                        100
+                        108
                     )
                     else -> Advice(
                         "ESCUDO OPCIONAL",
                         "${shortName(threat.move.name)} • dano moderado",
                         Color.rgb(245, 175, 52),
-                        95
+                        103
                     )
                 }
             }
         }
 
-        val visibleReserves = state.reserves.filter { it.visible }
-        val bestReserve = visibleReserves.firstOrNull { it.matchup == MatchupState.FAVORABLE }
-        val neutralReserve = visibleReserves.firstOrNull { it.matchup == MatchupState.NEUTRAL }
+        // 2) If one of our Charged Moves is ready, prefer actual matchup value rather than slot #1.
+        val ownReady = ownCharged.filter { it.ready }
+        if (ownReady.isNotEmpty() && enemyTypes.isNotEmpty()) {
+            val best = ownReady.maxByOrNull { p ->
+                val eff = TypeChart.multiplier(p.move.type, enemyTypes)
+                (p.move.power.toDouble() * eff) / p.energyCost.coerceAtLeast(1)
+            }
+            if (best != null) {
+                val eff = TypeChart.multiplier(best.move.type, enemyTypes)
+                val other = ownCharged.firstOrNull { it.move.moveId != best.move.moveId }
+                val holdForNuke = other != null && !other.ready && other.fastMovesRemaining <= 1 &&
+                    other.move.power * TypeChart.multiplier(other.move.type, enemyTypes) >
+                    best.move.power * eff * 1.35
+                if (holdForNuke && state.playerMatchup != MatchupState.UNFAVORABLE) {
+                    return Advice(
+                        "SEGURE ENERGIA",
+                        "+1 FAST para ${shortName(other!!.move.name)}",
+                        Color.rgb(110, 170, 235),
+                        92
+                    )
+                }
+                return Advice(
+                    "USE ${shortName(best.move.name).uppercase()}",
+                    if (eff > 1.01) "SUPEREFICAZ • melhor valor agora" else "Charged pronto • melhor valor agora",
+                    if (eff > 1.01) Color.rgb(245, 175, 52) else Color.rgb(110, 170, 235),
+                    96
+                )
+            }
+        }
 
-        if (state.playerMatchup == MatchupState.UNFAVORABLE && bestReserve != null) {
+        // 3) One fast away from our next useful Charged.
+        val nextOwn = ownCharged.filter { !it.ready }.minByOrNull { it.fastMovesRemaining }
+        if (nextOwn != null && nextOwn.fastMovesRemaining == 1) {
             return Advice(
-                "TROQUE",
-                bestReserve.name?.let { "Melhor opção: $it" } ?: "Há uma reserva favorável",
-                Color.rgb(232, 61, 72),
-                90
+                "+1 FAST",
+                "Depois ${shortName(nextOwn.move.name)}",
+                Color.rgb(110, 170, 235),
+                88
             )
         }
 
-        val enemyReady = charged.filter { it.ready }
+        // 4) Smarter swap recommendation using the engine's move-aware reserve score.
+        val visibleReserves = state.reserves.filter { it.visible }
+        val bestReserve = visibleReserves.maxByOrNull { it.score }
+        if (state.playerMatchup == MatchupState.UNFAVORABLE && bestReserve != null && bestReserve.score > -.10) {
+            return Advice(
+                "TROQUE → ${shortName(bestReserve.name ?: "RESERVA")}",
+                "${bestReserve.recommendation ?: "melhora o matchup"} • score ${"%.1f".format(bestReserve.score)}",
+                Color.rgb(232, 61, 72),
+                86
+            )
+        }
+
+        // 5) Enemy energy warning. RANGE explicitly tells the user when OCR could not identify cost.
+        val enemyReady = enemyCharged.filter { it.ready }
         if (enemyReady.isNotEmpty()) {
             val cheapest = enemyReady.minByOrNull { it.energyCost }
             return Advice(
                 "ATENÇÃO",
-                cheapest?.let { "Inimigo já pode usar ${shortName(it.move.name)}" } ?: "Charged inimigo disponível",
+                cheapest?.let { "Pode usar ${shortName(it.move.name)} • ${energyLabel(it)}" } ?: "Charged inimigo disponível",
                 Color.rgb(245, 175, 52),
                 75
-            )
-        }
-
-        if (state.playerMatchup == MatchupState.UNFAVORABLE && neutralReserve != null) {
-            return Advice(
-                "PREPARE A TROCA",
-                neutralReserve.name?.let { "$it melhora o matchup" } ?: "Reserva neutra disponível",
-                Color.rgb(245, 175, 52),
-                65
             )
         }
 
         return when (state.playerMatchup) {
             MatchupState.FAVORABLE -> Advice(
                 "CONTINUE FAST",
-                "Matchup favorável • mantenha pressão",
+                ownEnergyDetail(ownCharged, "Matchup favorável • mantenha pressão"),
                 Color.rgb(46, 188, 105),
                 35
             )
             MatchupState.NEUTRAL -> Advice(
                 "CONTINUE FAST",
-                "Matchup neutro • acompanhe energia",
+                ownEnergyDetail(ownCharged, "Matchup neutro • acompanhe energia"),
                 Color.rgb(110, 170, 235),
                 30
             )
             MatchupState.UNFAVORABLE -> Advice(
                 "CUIDADO",
-                "Matchup desfavorável • preserve recursos",
+                "Matchup desfavorável • preserve energia/troca",
                 Color.rgb(245, 175, 52),
                 40
             )
             MatchupState.UNKNOWN -> null
         }
+    }
+
+    private fun ownEnergyDetail(charged: List<com.lucianotoscano.pvppokego.data.ChargedPrediction>, fallback: String): String {
+        val first = charged.minByOrNull { it.fastMovesRemaining } ?: return fallback
+        return if (first.fastMovesRemaining > 0) "$fallback • ${first.fastMovesRemaining}F p/ ${shortName(first.move.name)}" else fallback
+    }
+
+    private fun energyLabel(p: com.lucianotoscano.pvppokego.data.ChargedPrediction): String = when (p.confidence) {
+        EnergyConfidence.CONFIRMED -> "${p.currentEnergy}E confirmado"
+        EnergyConfidence.ESTIMATED -> "~${p.currentEnergy}E"
+        EnergyConfidence.RANGE -> "${p.minEnergy}-${p.maxEnergy}E"
     }
 
     private fun shortName(name: String): String = if (name.length <= 18) name else name.take(17) + "…"
