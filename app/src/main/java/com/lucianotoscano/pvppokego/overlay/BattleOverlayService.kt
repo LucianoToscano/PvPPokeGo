@@ -65,6 +65,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var hudToggleTouch: View? = null
     private var editTouchLayer: View? = null
     private var moveMenuView: View? = null
+    private var quickMenu: QuickOverlayMenu? = null
     private var hudCollapsed = false
     private var appUiVisible = false
 
@@ -176,7 +177,29 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
 
         attachMoveTouchZones()
-        attachHudToggleTouch()
+        quickMenu = QuickOverlayMenu(
+            this,
+            windowManager!!,
+            settingsRepo,
+            object : QuickOverlayMenu.Callbacks {
+                override fun onSettingsChanged(rebuildTouchZones: Boolean) {
+                    if (rebuildTouchZones) rebuildTouchableZones()
+                    redraw()
+                }
+
+                override fun onToggleHud() {
+                    toggleHudCollapsed()
+                }
+
+                override fun isHudCollapsed(): Boolean = hudCollapsed
+
+                override fun onResetHudPositions() {
+                    settingsRepo.clearHudPositions()
+                    rebuildTouchableZones()
+                    redraw()
+                }
+            }
+        ).also { it.attach() }
         redraw()
     }
 
@@ -355,7 +378,6 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         charged2Touch = null
         hudToggleTouch = null
         attachMoveTouchZones()
-        attachHudToggleTouch()
     }
 
     /** Compact type-colored submenu. Individual rows carry the color; there is no black panel behind them. */
@@ -720,7 +742,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
-        hudToggleTouch?.visibility = if (enabled && !settingsRepo.editMode) View.VISIBLE else View.GONE
+        hudToggleTouch?.visibility = View.GONE
+        quickMenu?.setVisible(enabled && !settingsRepo.editMode)
         if (!selectorsEnabled) dismissMoveMenu()
     }
 
@@ -773,6 +796,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onDestroy() {
         scanJob?.cancel()
         dismissMoveMenu()
+        quickMenu?.destroy()
+        quickMenu = null
         removeEditTouchLayer()
         runCatching { overlayView?.let { windowManager?.removeView(it) } }
         runCatching { fastTouch?.let { windowManager?.removeView(it) } }
