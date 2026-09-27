@@ -51,16 +51,29 @@ class BattleOverlayView(
     private var hudAlpha = 255
     private var collapsed = false
     private var editTarget: String? = null
+    private var switchChoicePromptVisible = false
+    private val reserveUsableCache = booleanArrayOf(true, true)
 
     fun render(newState: BattleUiState) {
         state = newState
         scaleFactor = settings.scale
         opacityFactor = settings.opacity
+        if (!switchChoicePromptVisible) {
+            newState.reserves.take(2).forEachIndexed { index, reserve ->
+                reserveUsableCache[index] = reserve.visible
+            }
+        }
         invalidate()
     }
 
     fun setCollapsed(value: Boolean) { collapsed = value; invalidate() }
     fun isCollapsed(): Boolean = collapsed
+    fun setSwitchChoicePromptVisible(value: Boolean) {
+        if (switchChoicePromptVisible != value) {
+            switchChoicePromptVisible = value
+            invalidate()
+        }
+    }
     fun showMoveMenu(kind: MoveKind, options: List<MoveDef>) = Unit
     fun dismissMenu() = Unit
 
@@ -133,8 +146,6 @@ class BattleOverlayView(
         stroke.alpha = 255
         stroke.color = hudColor(Color.WHITE)
 
-        // Safe defaults remain outside the native Pokemon GO HUD, but manual edit mode is sovereign:
-        // once the user chooses a position we never clip or constrain that element.
         if (collapsed) {
             drawVisibilityToggle(canvas, true)
             return
@@ -147,7 +158,9 @@ class BattleOverlayView(
         if (settings.showStrongTypes) drawStrongTypes(canvas)
         if (settings.showEnemyMoves) drawMoveTriangle(canvas)
         if (state.chargedIncoming && settings.showEnemyMoves) drawShieldAdvice(canvas)
-        if (settings.analyzeReserves) drawReserves(canvas)
+        if (settings.analyzeReserves) {
+            if (switchChoicePromptVisible) drawSwitchChoiceIndicators(canvas) else drawReserves(canvas)
+        }
         if (settings.showSwitchTimer) drawTimers(canvas)
         if (settings.editMode) {
             drawResetAndCorrection(canvas)
@@ -333,8 +346,24 @@ class BattleOverlayView(
                 var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
                 reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+ry(82f),type,typeRadius);x+=spacing}
             }
-            // One edit frame per reserve Pokemon, never a combined frame.
             drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u(), 72f*u())
+        }
+    }
+
+    /** During Pokemon GO's switch chooser, show a clear matchup icon below each selectable Pokemon. */
+    private fun drawSwitchChoiceIndicators(canvas: Canvas) {
+        val candidates = state.reserves.take(2).mapIndexedNotNull { index, reserve ->
+            if (reserveUsableCache.getOrElse(index) { true }) reserve else null
+        }
+        if (candidates.isEmpty()) return
+
+        val y = ry(SWITCH_CHOICE_INDICATOR_Y)
+        val xs = when (candidates.size) {
+            1 -> listOf(rx(432f))
+            else -> listOf(rx(SWITCH_CHOICE_LEFT_X), rx(SWITCH_CHOICE_RIGHT_X))
+        }
+        candidates.take(xs.size).forEachIndexed { index, reserve ->
+            drawMatchupIndicator(canvas, xs[index], y, reserve.matchup, 16f*u())
         }
     }
 
@@ -403,7 +432,6 @@ class BattleOverlayView(
         const val BLOCK_RESERVES_LEGACY = "hud_reserves"
         const val BLOCK_HUD_TOGGLE = "hud_toggle"
 
-        // Safe defaults only. Edit mode may move every block anywhere on screen without limits.
         const val TOP_ICON_Y=12f
         const val PLAYER_MATCHUP_X=136f
         const val STRONG_TYPES_RIGHT_X=688f
@@ -414,5 +442,8 @@ class BattleOverlayView(
         const val RESERVE_INDICATOR_X=692f
         const val RESERVE_FIRST_Y=918f
         const val RESERVE_SPACING_Y=140f
+        const val SWITCH_CHOICE_LEFT_X=282f
+        const val SWITCH_CHOICE_RIGHT_X=582f
+        const val SWITCH_CHOICE_INDICATOR_Y=1444f
     }
 }
