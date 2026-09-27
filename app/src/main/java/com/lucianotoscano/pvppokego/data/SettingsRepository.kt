@@ -13,6 +13,10 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("auto_recognition", true)
         set(v) = prefs.edit().putBoolean("auto_recognition", v).apply()
 
+    var battleAssistEnabled: Boolean
+        get() = prefs.getBoolean("battle_assist_enabled", true)
+        set(v) = prefs.edit().putBoolean("battle_assist_enabled", v).apply()
+
     var leagueMode: BattleLeagueMode
         get() = runCatching {
             BattleLeagueMode.valueOf(
@@ -102,7 +106,8 @@ class SettingsRepository(context: Context) {
             "hud_reserve_1",
             "hud_reserve_2",
             "hud_reserves",
-            "hud_toggle"
+            "hud_toggle",
+            "hud_battle_assist"
         )
         prefs.edit().also { editor ->
             blocks.forEach { block ->
