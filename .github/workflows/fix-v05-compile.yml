@@ -1,0 +1,25 @@
+name: Fix V05 compile cleanup
+on:
+  push:
+    branches: [v04-v03-stable-base]
+    paths:
+      - '.github/scripts/fix_v05_compile.py'
+      - '.github/workflows/fix-v05-compile.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v04-v03-stable-base
+      - run: python .github/scripts/fix_v05_compile.py
+      - shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix: parenthesize own fast move confidence expression'
+          git push origin HEAD:v04-v03-stable-base
