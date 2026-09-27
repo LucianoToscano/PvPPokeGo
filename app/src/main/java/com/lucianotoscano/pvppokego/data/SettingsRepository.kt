@@ -94,6 +94,22 @@ class SettingsRepository(context: Context) {
         prefs.getFloat("${block}_x", defaultX) to
             prefs.getFloat("${block}_y", defaultY)
 
+    fun clearHudPositions() {
+        val blocks = listOf(
+            "hud_player_matchup",
+            "hud_strong_types",
+            "hud_enemy_moves",
+            "hud_reserves",
+            "hud_toggle"
+        )
+        prefs.edit().also { editor ->
+            blocks.forEach { block ->
+                editor.remove("${block}_x")
+                editor.remove("${block}_y")
+            }
+        }.apply()
+    }
+
     companion object {
         private const val FILE = "pvppokego_prefs"
     }
