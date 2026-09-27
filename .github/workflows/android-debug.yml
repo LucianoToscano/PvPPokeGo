@@ -1,6 +1,6 @@
 name: Build Android V05 copilot hardening
 
-# build trigger: final integrated V05 verification
+# build trigger: verify API 36 compile fix
 on:
   push:
     branches: [v04-v03-stable-base]
