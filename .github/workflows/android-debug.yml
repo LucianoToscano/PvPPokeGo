@@ -1,6 +1,6 @@
 name: Build Android V05 copilot hardening
 
-# build trigger: nullable auto-league fix + free-drag controls final
+# build trigger: global HUD unlock drag repair
 on:
   push:
     branches: [v04-v03-stable-base]
