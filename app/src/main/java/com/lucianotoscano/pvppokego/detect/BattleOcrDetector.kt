@@ -76,13 +76,22 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
     }
 
     private suspend fun recognizeCard(roi: Bitmap): DetectedPokemon? {
-        // First try original teal-text isolation. If that removes too much, fall back to raw ROI.
+        // Try teal-text isolation first, but only accept it if the resulting text resolves
+        // to a real known Pokemon. A few garbage OCR characters must not suppress the raw fallback.
         val filtered = filterByColor(roi, TARGET_TEXT_COLOR, COLOR_TOLERANCE)
-        val first = recognize(filtered)
-        filtered.recycle()
-        val raw = if (first.length >= 3) first else recognize(roi)
-        if (raw.isBlank()) return null
+        val filteredRaw = try {
+            recognize(filtered)
+        } finally {
+            filtered.recycle()
+        }
+        parseCard(filteredRaw)?.let { return it }
 
+        // Raw ROI is the authoritative fallback when color isolation removed/distorted glyphs.
+        return parseCard(recognize(roi))
+    }
+
+    private fun parseCard(raw: String): DetectedPokemon? {
+        if (raw.isBlank()) return null
         val cp = CP_REGEX.find(raw)?.groupValues?.getOrNull(1)?.toIntOrNull()
         val candidates = raw.lines()
             .map { it.replace(CP_REGEX, "").trim() }
