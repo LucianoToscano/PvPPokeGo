@@ -51,6 +51,7 @@ class BattleOverlayView(
     private var opacityFactor = settings.opacity
     private var hudAlpha = 255
     private var collapsed = false
+    private var editTarget: String? = null
 
     fun render(newState: BattleUiState) {
         state = newState
@@ -69,6 +70,68 @@ class BattleOverlayView(
     private fun u(): Float = min(sx(), sy()) * (scaleFactor / .8f).coerceIn(.62f, 1.5f)
     private fun rx(v: Float): Float = v * sx()
     private fun ry(v: Float): Float = v * sy()
+    private fun refX(px: Float): Float = if (sx() > 0f) px / sx() else px
+    private fun refY(px: Float): Float = if (sy() > 0f) px / sy() else px
+
+    private fun pos(block: String, defaultX: Float, defaultY: Float): Pair<Float, Float> =
+        settings.getPosition(block, defaultX, defaultY)
+
+    /** Returns the draggable HUD block under a screen coordinate while edit mode is active. */
+    fun dragTargetAt(screenX: Float, screenY: Float): String? {
+        if (!settings.editMode || collapsed || width <= 0 || height <= 0) return null
+        val x = refX(screenX)
+        val y = refY(screenY)
+
+        fun near(block: String, dx: Float, dy: Float, halfW: Float, halfH: Float): Boolean {
+            val (cx, cy) = pos(block, dx, dy)
+            return x in (cx-halfW)..(cx+halfW) && y in (cy-halfH)..(cy+halfH)
+        }
+
+        if (near(BLOCK_HUD_TOGGLE, HUD_TOGGLE_CENTER_X, HUD_TOGGLE_CENTER_Y, 32f, 32f)) return BLOCK_HUD_TOGGLE
+        if (near(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X, TOP_ICON_Y, 34f, 30f)) return BLOCK_PLAYER_MATCHUP
+
+        val strong = state.strongTypesAgainstOpponent.take(4)
+        if (strong.isNotEmpty()) {
+            val (right, cy) = pos(BLOCK_STRONG_TYPES, STRONG_TYPES_RIGHT_X, TOP_ICON_Y)
+            val left = right - 35f * (strong.size - 1).coerceAtLeast(0) - 28f
+            if (x in left..(right + 48f) && y in (cy-30f)..(cy+30f)) return BLOCK_STRONG_TYPES
+        }
+
+        val (mx, my) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
+        if (x in (mx-150f)..(mx+150f) && y in (my-55f)..(my+205f)) return BLOCK_ENEMY_MOVES
+
+        val (rx, ry) = pos(BLOCK_RESERVES, RESERVE_INDICATOR_X, RESERVE_FIRST_Y)
+        if (x in (rx-65f)..(rx+175f) && y in (ry-55f)..(ry+255f)) return BLOCK_RESERVES
+        return null
+    }
+
+    fun setEditTarget(block: String?) {
+        editTarget = block
+        invalidate()
+    }
+
+    /** Persists a dragged position in normalized 864x1536 coordinates. */
+    fun moveDragTarget(block: String, screenX: Float, screenY: Float) {
+        if (!settings.editMode || width <= 0 || height <= 0) return
+        val x = refX(screenX)
+        val y = refY(screenY)
+        val safe = safeDragPosition(block, x, y)
+        settings.setPosition(block, safe.first, safe.second)
+        editTarget = block
+        invalidate()
+    }
+
+    private fun safeDragPosition(block: String, x: Float, y: Float): Pair<Float, Float> = when (block) {
+        // Top blocks remain in the free strip between status bar and native white cards.
+        BLOCK_PLAYER_MATCHUP -> x.coerceIn(124f, 352f) to y.coerceIn(60f, 88f)
+        BLOCK_STRONG_TYPES -> x.coerceIn(520f, 688f) to y.coerceIn(60f, 88f)
+        BLOCK_HUD_TOGGLE -> x.coerceIn(382f, 482f) to y.coerceIn(60f, 88f)
+        // Main move cluster can be moved broadly, while native HUD clipping remains authoritative.
+        BLOCK_ENEMY_MOVES -> x.coerceIn(330f, 680f) to y.coerceIn(250f, 520f)
+        // Reserve annotations move as one group and remain near the right-side reserve lane.
+        BLOCK_RESERVES -> x.coerceIn(620f, 710f) to y.coerceIn(820f, 1010f)
+        else -> x.coerceIn(24f, 840f) to y.coerceIn(60f, 1470f)
+    }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -89,16 +152,18 @@ class BattleOverlayView(
         }
 
         if (settings.showCurrentIndicator) {
-            // Player Pokemon can have 1 or 2 native type icons. Reserve two slots permanently,
-            // then draw our matchup chip only after that native lane.
-            drawMatchupIndicator(canvas, rx(PLAYER_MATCHUP_X), ry(TOP_ICON_Y), state.playerMatchup, 14f*u())
+            val (x, y) = pos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X, TOP_ICON_Y)
+            drawMatchupIndicator(canvas, rx(x), ry(y), state.playerMatchup, 14f*u())
         }
         if (settings.showStrongTypes) drawStrongTypes(canvas)
         if (settings.showEnemyMoves) drawMoveTriangle(canvas)
         if (state.chargedIncoming && settings.showEnemyMoves) drawShieldAdvice(canvas)
         if (settings.analyzeReserves) drawReserves(canvas)
         if (settings.showSwitchTimer) drawTimers(canvas)
-        if (settings.editMode) drawResetAndCorrection(canvas)
+        if (settings.editMode) {
+            drawResetAndCorrection(canvas)
+            drawEditModeGuide(canvas)
+        }
         if (settings.debugMode) drawDebug(canvas)
         drawVisibilityToggle(canvas, false)
 
@@ -107,32 +172,25 @@ class BattleOverlayView(
 
     @Suppress("DEPRECATION")
     private fun clipOutNativePokemonGoUi(canvas: Canvas) {
-        // Normalized 864x1536 coordinates. These are protection zones, not placement guides.
-        // They deliberately include safety margins so future overlay changes cannot cover GO UI.
         val protected = listOf(
-            RectF(0f, 0f, width.toFloat(), ry(52f)),                       // Android/status bar
-
-            // Native top type/status lanes. ALWAYS reserve room for up to TWO Pokemon types.
-            RectF(rx(0f), ry(52f), rx(112f), ry(92f)),                    // player's 1-2 native type icons
-            RectF(rx(744f), ry(52f), width.toFloat(), ry(92f)),           // opponent's 1-2 native type icons
-
-            RectF(rx(14f), ry(93f), rx(354f), ry(176f)),                  // player's white name/CP card
-            RectF(rx(510f), ry(93f), rx(852f), ry(176f)),                 // opponent white name/CP card
-            RectF(rx(12f), ry(180f), rx(116f), ry(286f)),                 // native switch/run button
-
-            RectF(rx(35f), ry(620f), rx(304f), ry(704f)),                 // player's HP/effectiveness
-            RectF(rx(425f), ry(620f), rx(724f), ry(704f)),                // opponent HP/effectiveness
-
-            RectF(rx(716f), ry(846f), width.toFloat(), ry(988f)),         // reserve card 1
-            RectF(rx(716f), ry(996f), width.toFloat(), ry(1122f)),        // reserve card 2
-
-            RectF(rx(78f), ry(1260f), rx(786f), height.toFloat())         // player's charged move controls
+            RectF(0f, 0f, width.toFloat(), ry(52f)),
+            RectF(rx(0f), ry(52f), rx(112f), ry(92f)),
+            RectF(rx(744f), ry(52f), width.toFloat(), ry(92f)),
+            RectF(rx(14f), ry(93f), rx(354f), ry(176f)),
+            RectF(rx(510f), ry(93f), rx(852f), ry(176f)),
+            RectF(rx(12f), ry(180f), rx(116f), ry(286f)),
+            RectF(rx(35f), ry(620f), rx(304f), ry(704f)),
+            RectF(rx(425f), ry(620f), rx(724f), ry(704f)),
+            RectF(rx(716f), ry(846f), width.toFloat(), ry(988f)),
+            RectF(rx(716f), ry(996f), width.toFloat(), ry(1122f)),
+            RectF(rx(78f), ry(1260f), rx(786f), height.toFloat())
         )
         protected.forEach { canvas.clipRect(it, Region.Op.DIFFERENCE) }
     }
 
     private fun drawVisibilityToggle(canvas: Canvas, hidden: Boolean) {
-        val cx = rx(HUD_TOGGLE_CENTER_X); val cy = ry(HUD_TOGGLE_CENTER_Y); val radius = 16f*u()
+        val (refCx, refCy) = pos(BLOCK_HUD_TOGGLE, HUD_TOGGLE_CENTER_X, HUD_TOGGLE_CENTER_Y)
+        val cx = rx(refCx); val cy = ry(refCy); val radius = 16f*u()
         paint.style = Paint.Style.FILL
         paint.color = hudColor(Color.rgb(72,76,82), .88f)
         canvas.drawCircle(cx, cy, radius, paint)
@@ -148,6 +206,7 @@ class BattleOverlayView(
             stroke.strokeWidth = 2.1f*u()
             canvas.drawLine(cx-9f*u(),cy+7.7f*u(),cx+9f*u(),cy-7.7f*u(),stroke)
         }
+        drawEditSelection(canvas, BLOCK_HUD_TOGGLE, cx, cy, 25f*u(), 25f*u())
     }
 
     private fun drawMatchupIndicator(canvas: Canvas, cx: Float, cy: Float, matchup: MatchupState, radius: Float = 17f*u()) {
@@ -167,27 +226,35 @@ class BattleOverlayView(
             MatchupState.NEUTRAL -> canvas.drawCircle(cx,cy,5.6f*u(),paint)
             MatchupState.UNKNOWN -> { paint.textSize=13f*u(); canvas.drawText("?",cx,cy+4.5f*u(),paint) }
         }
+        if (settings.editMode) {
+            val (mx, my) = pos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X, TOP_ICON_Y)
+            if (kotlin.math.abs(cx-rx(mx)) < 2f && kotlin.math.abs(cy-ry(my)) < 2f) {
+                drawEditSelection(canvas, BLOCK_PLAYER_MATCHUP, cx, cy, 24f*u(), 24f*u())
+            }
+        }
     }
 
     private fun drawStrongTypes(canvas: Canvas) {
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isEmpty()) return
-
-        // Enemy Pokemon can also have 1 or 2 native type icons. Our weakness row ends well before
-        // that reserved two-icon lane; it can never use the far-right native area.
         val radius = 14f*u()
-        val y = ry(TOP_ICON_Y)
+        val (rightRef, yRef) = pos(BLOCK_STRONG_TYPES, STRONG_TYPES_RIGHT_X, TOP_ICON_Y)
+        val y = ry(yRef)
         val spacing = rx(35f)
-        val strongRight = rx(688f)
-        val arrowX = rx(724f)
+        val strongRight = rx(rightRef)
+        val arrowX = strongRight + rx(36f)
         val firstStrong = strongRight - spacing*(strong.size-1).coerceAtLeast(0)
         strong.forEachIndexed { i,type -> drawTypeChip(canvas,firstStrong+spacing*i,y,type,radius) }
         paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=18f*u(); paint.typeface=Typeface.DEFAULT_BOLD
         paint.setShadowLayer(2.5f,0f,1f,Color.BLACK); canvas.drawText("›",arrowX,y+5.8f*u(),paint); paint.clearShadowLayer()
+        val centerX = (firstStrong + strongRight) / 2f
+        val halfW = (strongRight-firstStrong)/2f + 27f*u()
+        drawEditSelection(canvas, BLOCK_STRONG_TYPES, centerX, y, halfW, 24f*u())
     }
 
     private fun drawMoveTriangle(canvas: Canvas) {
-        val centerX=rx(ENEMY_MOVE_CENTER_X); val fastY=ry(355f); val chargedY=ry(478f)
+        val (centerRefX, fastRefY) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
+        val centerX=rx(centerRefX); val fastY=ry(fastRefY); val chargedY=ry(fastRefY+123f)
         val spread=rx(72f); val fastRadius=31f*u(); val chargedRadius=38f*u()
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)
@@ -207,6 +274,7 @@ class BattleOverlayView(
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
+        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 132f*u(), 116f*u())
     }
 
     private fun drawEnemySuperEffectiveText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
@@ -237,7 +305,8 @@ class BattleOverlayView(
             threatScore >= 70.0 -> ShieldAdvice("ESCUDO OPCIONAL", "${shortMoveName(threat.move.name)} • DANO MÉDIO", Color.rgb(245,175,52))
             else -> ShieldAdvice("PODE NÃO USAR", "${shortMoveName(threat.move.name)} • DANO BAIXO", Color.rgb(46,188,105))
         }
-        val centerX=rx(ENEMY_MOVE_CENTER_X); val centerY=ry(592f); val halfW=142f*u(); val halfH=31f*u()
+        val (centerRefX, fastRefY) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
+        val centerX=rx(centerRefX); val centerY=ry(fastRefY+237f); val halfW=142f*u(); val halfH=31f*u()
         val box=RectF(centerX-halfW,centerY-halfH,centerX+halfW,centerY+halfH)
         paint.style=Paint.Style.FILL; paint.color=hudColor(Color.rgb(22,27,34),.90f); canvas.drawRoundRect(box,16f*u(),16f*u(),paint)
         stroke.style=Paint.Style.STROKE; stroke.strokeWidth=2.4f*u(); stroke.color=hudColor(advice.color); canvas.drawRoundRect(box,16f*u(),16f*u(),stroke)
@@ -283,17 +352,19 @@ class BattleOverlayView(
     }
 
     private fun drawReserves(canvas: Canvas) {
-        val indicatorX=rx(692f); val firstY=ry(918f); val secondY=ry(1058f); val typeYDelta=ry(82f)
+        val (indicatorRefX, firstRefY) = pos(BLOCK_RESERVES, RESERVE_INDICATOR_X, RESERVE_FIRST_Y)
+        val indicatorX=rx(indicatorRefX); val firstY=ry(firstRefY); val secondY=ry(firstRefY+140f); val typeYDelta=ry(82f)
         state.reserves.take(2).forEachIndexed { index,reserve ->
             if (!reserve.visible) return@forEachIndexed
             val cardCenterY=if(index==0) firstY else secondY
             drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u())
             if(settings.showReserveTypes && reserve.types.isNotEmpty()){
-                val typeRadius=12f*u(); val spacing=rx(31f); val centerX=rx(790f)
+                val typeRadius=12f*u(); val spacing=rx(31f); val centerX=rx(indicatorRefX+98f)
                 var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
                 reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+typeYDelta,type,typeRadius);x+=spacing}
             }
         }
+        drawEditSelection(canvas, BLOCK_RESERVES, indicatorX+rx(49f), (firstY+secondY)/2f, 112f*u(), 132f*u())
     }
 
     private fun drawTimers(canvas: Canvas) {
@@ -307,6 +378,26 @@ class BattleOverlayView(
         paint.color=hudColor(Color.rgb(45,45,45)); canvas.drawCircle(resetX,y,radius,paint); stroke.color=hudColor(Color.WHITE); canvas.drawCircle(resetX,y,radius,stroke)
         paint.color=hudColor(Color.WHITE); paint.textAlign=Paint.Align.CENTER; paint.textSize=16f*u(); canvas.drawText("↻",resetX,y+5f*u(),paint)
         val correctionY=y+40f*u(); listOf(resetX to "−",(resetX+38f*u()) to "+").forEach{(x,g)->paint.color=hudColor(Color.rgb(45,45,45));canvas.drawCircle(x,correctionY,radius,paint);canvas.drawCircle(x,correctionY,radius,stroke);paint.color=hudColor(Color.WHITE);canvas.drawText(g,x,correctionY+5f*u(),paint)}
+    }
+
+    private fun drawEditModeGuide(canvas: Canvas) {
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(Color.rgb(18,22,28), .72f)
+        val cx = rx(432f); val cy = ry(302f); val box = RectF(cx-rx(145f),cy-ry(18f),cx+rx(145f),cy+ry(18f))
+        canvas.drawRoundRect(box,12f*u(),12f*u(),paint)
+        paint.color = hudColor(Color.WHITE)
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = 11.5f*u()
+        paint.typeface = Typeface.DEFAULT_BOLD
+        canvas.drawText("MODO EDIÇÃO • SEGURE E ARRASTE",cx,cy+4f*u(),paint)
+    }
+
+    private fun drawEditSelection(canvas: Canvas, block: String, cx: Float, cy: Float, halfW: Float, halfH: Float) {
+        if (!settings.editMode || editTarget != block) return
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 1.7f*u()
+        stroke.color = hudColor(Color.rgb(255,205,60), .95f)
+        canvas.drawRoundRect(RectF(cx-halfW,cy-halfH,cx+halfW,cy+halfH),8f*u(),8f*u(),stroke)
     }
 
     private fun drawDebug(canvas: Canvas) {
@@ -333,11 +424,20 @@ class BattleOverlayView(
     }
 
     companion object {
-        // Canonical free row from the clean 709x1536 battle references.
-        private const val TOP_ICON_Y=72f
-        private const val PLAYER_MATCHUP_X=136f
+        const val BLOCK_PLAYER_MATCHUP = "hud_player_matchup"
+        const val BLOCK_STRONG_TYPES = "hud_strong_types"
+        const val BLOCK_ENEMY_MOVES = "hud_enemy_moves"
+        const val BLOCK_RESERVES = "hud_reserves"
+        const val BLOCK_HUD_TOGGLE = "hud_toggle"
+
+        const val TOP_ICON_Y=72f
+        const val PLAYER_MATCHUP_X=136f
+        const val STRONG_TYPES_RIGHT_X=688f
         const val HUD_TOGGLE_CENTER_X=432f
         const val HUD_TOGGLE_CENTER_Y=72f
         const val ENEMY_MOVE_CENTER_X=558f
+        const val ENEMY_MOVE_FAST_Y=355f
+        const val RESERVE_INDICATOR_X=692f
+        const val RESERVE_FIRST_Y=918f
     }
 }
