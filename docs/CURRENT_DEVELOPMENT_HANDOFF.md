@@ -1,75 +1,119 @@
-# PvPPokeGo — Handoff atual (V04 sobre base V03)
+# PvPPokeGo — Handoff atual
 
-Atualizado em: 2026-09-26
+Atualizado em: 2026-09-27
+Branch: `v04-v03-stable-base`
 
-Este branch (`v04-v03-stable-base`) é a linha de desenvolvimento que parte da V03 aprovada e adiciona funções sem redesenhar o HUD.
+## LEIA PRIMEIRO
 
-## Memória canônica do projeto
+O contexto mestre atual está em:
 
-A memória completa dos chats, arquitetura, APKs analisados, PvPoke, Battle Brain e roadmap está na `main`:
+`docs/MASTER_PROJECT_CONTEXT_2026-09-27.md`
+
+Qualquer novo chat, conta, GPT ou desenvolvedor deve ler esse arquivo antes de continuar o projeto.
+
+Para histórico anterior mais extenso, a branch `main` também contém:
 
 - `docs/CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md`
 - `docs/VISUAL_CONTRACT_2026-09-26.md`
 
-Esses documentos devem ser lidos primeiro por qualquer nova conta/GPT/desenvolvedor.
+## Estado técnico atual
 
-## Referência visual final aprovada
+Package: `com.lucianotoscano.pvppokego`
 
-Em `2026-09-26 09:04 UTC-03`, o proprietário do projeto aprovou uma imagem final de referência para o overlay. Essa imagem passa a ser o alvo visual obrigatório do branch.
+Versão: `0.5.0-copilot-hardening`
 
-Identificação da referência:
+Android atual:
 
-- resolução: `864 x 1536`;
-- SHA-256: `d4a91442fd160b041832643ec3c2d4810be9e1e802f64b76ca797d1733cd5ccb`;
-- contrato detalhado registrado na `main` em `docs/VISUAL_CONTRACT_2026-09-26.md`.
+- minSdk 29
+- compileSdk 36
+- targetSdk 36
+- Java 17
+- Gradle CI 8.11.1
 
-Elementos que não podem regredir:
+Build principal: `.github/workflows/android-debug.yml`
 
-- indicador do Pokémon atual + `×` vermelho no topo esquerdo;
-- tipos fortes e tipos do inimigo perfeitamente alinhados ao topo do HUD nativo;
-- Fast Move do inimigo em cima e dois Charged abaixo em triângulo;
-- nomes dos golpes + `▼`;
-- Charged Moves inimigos enchendo de baixo para cima, com área escura ainda não carregada;
-- bolha numérica de Fast Moves restantes;
-- reservas na lateral direita com indicador de matchup e ícones dos tipos;
-- controle discreto de olho riscado na região inferior central para ocultar/mostrar o overlay;
-- nenhuma sobreposição indevida sobre nome/CP, HP, Pokébolas, escudos ou botões do jogador.
+Último build validado ao atualizar este handoff:
 
-Novas funções devem se adaptar a essa composição. Não alterar o layout-base para encaixar funções novas.
+- run `#78`
+- run id `36312971519`
+- `success`
+- head `4f48cda9238f1ea40d4223cbb7389541e7078cf1`
 
-## Estado atual deste branch
+## Regras que não podem regredir
 
-- base visual/funcional derivada da V03 aprovada;
-- OCR via captura de tela/MediaProjection;
-- reconhecimento de jogador e oponente;
-- leitura da liga no lobby (Grande/Ultra/Mestra) com fallback manual;
-- moveset inicial provável pelo PvPoke;
-- Fast/Charged 1/Charged 2 com submenu manual;
-- Charged observado por OCR pode corrigir automaticamente slots previstos;
-- segundo Charged diferente ocupa/confirma o outro slot;
-- escolha manual é protegida contra substituição automática;
-- energia residual preservada depois de Charged;
-- memória individual dos inimigos ao trocar e voltar;
-- contador de Fast Moves restante para os dois Charged;
-- HUD click-through com pequenas zonas de toque apenas nos controles;
-- botão ocultar/restaurar HUD;
-- ícones de tipo no estilo circular da referência;
-- carregamento do Charged inimigo de baixo para cima, imitando o botão de Charged do jogo;
-- posições do topo ancoradas nas coordenadas aprovadas do mockup 864x1536.
+O PvPPokeGo continua sendo assistente externo: MediaProjection + visão/OCR + overlay. Não injeta código, não modifica Pokémon GO e não automatiza cliques/gestos no jogo.
 
-## Regra visual
+O HUD não pode cobrir nome/PC, HP, Pokébolas, escudos, tipos nativos, botões de ataque do jogador nem áreas importantes de toque.
 
-Não substituir o HUD compacto por painel central grande. O contrato visual da `main` é a referência obrigatória.
+Energia inimiga e energia própria são modelos separados. Fast Move inimigo só deve ser contado por evidência do inimigo; ação do jogador não pode incrementar energia inimiga.
 
-## Próximos passos prioritários
+Cada Pokémon adversário preserva energia/contagem ao trocar e voltar.
 
-1. validar em aparelho as posições do topo e das reservas contra a referência final;
-2. validar botão ocultar/restaurar e controle de olho riscado;
-3. validar Fast Move detector em batalhas reais;
-4. confirmar OCR de qualquer banner `X usou Y` e recálculo de energia;
-5. melhorar confirmação visual `PREVISTO #1` / `✓ CONFIRMADO`;
-6. avançar para Battle Brain, timing de Charged, Sac Swap/Catch Assist, Win Condition e importação `PGSStats.json`.
+## Funções V05 já integradas
 
-## Restrição de arquitetura
+- confiança de presença de batalha
+- HUD oculto fora da batalha
+- energia inimiga com estado confirmado/estimado/faixa
+- energia própria para recomendações
+- Battle Assist / Copilot
+- Shield Advisor
+- reservas `MELHOR / NEUTRO / EVITAR`
+- histórico opcional do inimigo
+- topo ancorado dinamicamente aos cards nativos
+- ataques inimigos com visual de Charged do GO
+- quick menu básico/avançado
+- menu ícone+texto ou somente ícones
+- engrenagem independente e arrastável
+- badge de liga independente e arrastável
+- detecção de Liga Grande/Ultra/Mestra/Auto
+- olho para ocultar/restaurar HUD
+- cadeado global para travar/destravar posições
+- modo edição avançado com escala/opacidade/hide/undo/reset
 
-O PvPPokeGo continua como assistente externo: não injeta código no Pokémon GO, não modifica o processo do jogo e não envia cliques/gestos para o jogo.
+## Correção mais recente — arraste travado
+
+O usuário relatou que os ícones permaneciam travados mesmo após a introdução do cadeado global.
+
+Reparo aplicado:
+
+`66e40a9247bee74b489dd724e630ac7f5014a18e`
+
+Mensagem do commit:
+
+`fix: unlock all HUD blocks for free drag`
+
+Mudança principal:
+
+- `layoutLocked` passa a ser a fonte global de verdade;
+- com cadeado aberto, locks individuais não impedem arraste;
+- abrir o cadeado deve reconstruir a camada de drag imediatamente;
+- fechar o cadeado remove a camada de drag e protege as posições.
+
+O build `#78` passou. Ainda é necessário confirmar em aparelho que todos os blocos realmente arrastam.
+
+## Controles atuais da overlay
+
+- olho: ocultar/mostrar HUD inteiro
+- cadeado: destravar/travar posições
+- engrenagem: abrir menu rápido
+- badge da liga: mostrar modo atual
+
+Esses controles devem ser independentes, não colados uns aos outros.
+
+## Dados PvP
+
+PvPoke continua como fonte principal para rankings, movesets, energia e matchups.
+
+RankedBoost pode ser usado apenas como fonte secundária de stats gerais/consulta, não como ranking PvP principal.
+
+## Próxima ação recomendada
+
+Primeiro validar o build mais recente em aparelho:
+
+1. abrir cadeado;
+2. arrastar ataques, reservas, ícones do topo, Assistido, olho/cadeado/engrenagem/badge;
+3. fechar cadeado;
+4. confirmar que tudo fica fixo;
+5. testar olho ocultando absolutamente tudo e deixando somente o controle mínimo para restaurar.
+
+Se algum bloco continuar imóvel, corrigir somente a camada de hit-test/drag daquele bloco sem redesenhar o projeto inteiro.
