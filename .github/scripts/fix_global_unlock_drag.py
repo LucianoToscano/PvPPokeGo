@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Apply the free-drag repair after the workflow is present on the branch.
 service = Path('app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt')
 text = service.read_text()
 old = '''            installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
