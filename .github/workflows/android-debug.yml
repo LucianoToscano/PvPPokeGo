@@ -1,6 +1,6 @@
 name: Build Android V05 copilot hardening
 
-# build trigger: confidence fusion + own energy + dynamic HUD + modern Android
+# build trigger: final integrated V05 verification
 on:
   push:
     branches: [v04-v03-stable-base]
