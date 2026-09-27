@@ -61,6 +61,14 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean("show_hud_text", true)
         set(v) = prefs.edit().putBoolean("show_hud_text", v).apply()
 
+    var showEnemyHistory: Boolean
+        get() = prefs.getBoolean("show_enemy_history", false)
+        set(v) = prefs.edit().putBoolean("show_enemy_history", v).apply()
+
+    var quickMenuAdvanced: Boolean
+        get() = prefs.getBoolean("quick_menu_advanced", false)
+        set(v) = prefs.edit().putBoolean("quick_menu_advanced", v).apply()
+
     /** Menu can switch between PGSharp-like icon+text rows and compact icons only. */
     var quickMenuShowLabels: Boolean
         get() = prefs.getBoolean("quick_menu_show_labels", true)
@@ -80,11 +88,11 @@ class SettingsRepository(context: Context) {
 
     /** Independent league badge position; it never follows the gear. */
     var leagueBadgeXFraction: Float
-        get() = prefs.getFloat("league_badge_x_frac", .86f)
+        get() = prefs.getFloat("league_badge_x_frac", .82f)
         set(v) = prefs.edit().putFloat("league_badge_x_frac", v.coerceIn(0f, 1f)).apply()
 
     var leagueBadgeYFraction: Float
-        get() = prefs.getFloat("league_badge_y_frac", .84f)
+        get() = prefs.getFloat("league_badge_y_frac", .91f)
         set(v) = prefs.edit().putFloat("league_badge_y_frac", v.coerceIn(0f, 1f)).apply()
 
     fun ensureQuickMenuBottomRightV2() {
@@ -96,29 +104,28 @@ class SettingsRepository(context: Context) {
             .apply()
     }
 
-    /** V4 restores icon+text as the default menu style; users can still switch to icons only. */
+    /** Default is icon+text like the PGSharp reference; users can collapse to icons only. */
     fun ensureQuickMenuStyleV3() {
         if (prefs.getInt("quick_menu_style_version", 0) >= 4) return
         prefs.edit()
             .putBoolean("quick_menu_show_labels", true)
+            .putBoolean("quick_menu_advanced", false)
             .putInt("quick_menu_style_version", 4)
             .apply()
     }
 
     /**
-     * Android keeps TYPE_APPLICATION_OVERLAY below the system status bar. Therefore the correct fix
-     * is to keep our top chips in Pokemon GO's free strip below the status bar, not try to cover it.
-     * Only legacy positions that are high enough to be clipped are migrated.
+     * V6 stops forcing a fixed top Y. The detector now anchors against GO's actual white cards.
+     * We only clear legacy auto-generated high positions once; manual edits made after V6 persist.
      */
     fun ensureTopHudSafeV4() {
-        if (prefs.getInt("top_hud_position_version", 0) >= 5) return
+        if (prefs.getInt("top_hud_position_version", 0) >= 6) return
         val editor = prefs.edit()
-        listOf("hud_player_matchup", "hud_strong_types", "hud_toggle").forEach { block ->
-            val key = "${block}_y"
-            val current = prefs.getFloat(key, Float.NaN)
-            if (current.isNaN() || current < 54f) editor.putFloat(key, 66f)
+        listOf("hud_player_matchup", "hud_strong_types").forEach { block ->
+            editor.remove("${block}_x")
+            editor.remove("${block}_y")
         }
-        editor.putInt("top_hud_position_version", 5).apply()
+        editor.putInt("top_hud_position_version", 6).apply()
     }
 
     var showSwitchTimer: Boolean
@@ -152,12 +159,22 @@ class SettingsRepository(context: Context) {
     fun getPosition(block: String, defaultX: Float, defaultY: Float): Pair<Float, Float> =
         prefs.getFloat("${block}_x", defaultX) to prefs.getFloat("${block}_y", defaultY)
 
+    fun hasPosition(block: String): Boolean = prefs.contains("${block}_x") && prefs.contains("${block}_y")
+
+    fun blockScale(block: String): Float = prefs.getFloat("${block}_scale", 1f).coerceIn(.55f, 1.6f)
+    fun setBlockScale(block: String, value: Float) = prefs.edit().putFloat("${block}_scale", value.coerceIn(.55f, 1.6f)).apply()
+
+    fun blockOpacity(block: String): Float = prefs.getFloat("${block}_opacity", 1f).coerceIn(.25f, 1f)
+    fun setBlockOpacity(block: String, value: Float) = prefs.edit().putFloat("${block}_opacity", value.coerceIn(.25f, 1f)).apply()
+
+    fun isBlockHidden(block: String): Boolean = prefs.getBoolean("${block}_hidden", false)
+    fun setBlockHidden(block: String, hidden: Boolean) = prefs.edit().putBoolean("${block}_hidden", hidden).apply()
+
+    fun isBlockLocked(block: String): Boolean = prefs.getBoolean("${block}_locked", false)
+    fun setBlockLocked(block: String, locked: Boolean) = prefs.edit().putBoolean("${block}_locked", locked).apply()
+
     fun clearHudPositions() {
-        val blocks = listOf(
-            "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
-            "hud_reserve_1", "hud_reserve_2", "hud_reserves",
-            "hud_toggle", "hud_battle_assist"
-        )
+        val blocks = HUD_BLOCKS
         prefs.edit().also { editor ->
             blocks.forEach { block ->
                 editor.remove("${block}_x")
@@ -166,17 +183,32 @@ class SettingsRepository(context: Context) {
         }.apply()
     }
 
+    fun resetHudCustomization() {
+        prefs.edit().also { editor ->
+            HUD_BLOCKS.forEach { block ->
+                listOf("x", "y", "scale", "opacity", "hidden", "locked").forEach { suffix ->
+                    editor.remove("${block}_$suffix")
+                }
+            }
+        }.apply()
+    }
+
     fun resetQuickMenuPosition() {
         prefs.edit()
             .putFloat("quick_menu_x_frac", 1f)
             .putFloat("quick_menu_y_frac", 1f)
-            .putFloat("league_badge_x_frac", .86f)
-            .putFloat("league_badge_y_frac", .84f)
+            .putFloat("league_badge_x_frac", .82f)
+            .putFloat("league_badge_y_frac", .91f)
             .putInt("quick_menu_position_version", 2)
             .apply()
     }
 
     companion object {
         private const val FILE = "pvppokego_prefs"
+        val HUD_BLOCKS = listOf(
+            "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
+            "hud_reserve_1", "hud_reserve_2", "hud_reserves",
+            "hud_toggle", "hud_battle_assist", "hud_enemy_history"
+        )
     }
 }
