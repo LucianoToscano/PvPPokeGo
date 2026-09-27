@@ -11,7 +11,6 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
-import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -43,6 +42,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.Normalizer
+import kotlin.math.abs
 import kotlin.math.min
 
 class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
@@ -64,6 +64,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var charged2Touch: View? = null
     private var hudToggleTouch: View? = null
     private var editTouchLayer: View? = null
+    private var editToolbarView: View? = null
     private var moveMenuView: View? = null
     private var quickMenu: QuickOverlayMenu? = null
     private var hudCollapsed = false
@@ -198,6 +199,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     rebuildTouchableZones()
                     redraw()
                 }
+
+                override fun currentBattleModeLabel(): String = currentBattleModeLabelText()
             }
         ).also { it.attach() }
         redraw()
@@ -297,7 +300,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (editTouchLayer != null) return
 
         var candidate: String? = null
-        var downAt = 0L
+        var downX = 0f
+        var downY = 0f
         var dragging = false
 
         val layer = View(this).apply {
@@ -308,23 +312,29 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     MotionEvent.ACTION_DOWN -> {
                         candidate = overlayView?.dragTargetAt(event.x, event.y)
                         overlayView?.setEditTarget(candidate)
-                        downAt = SystemClock.uptimeMillis()
+                        downX = event.x
+                        downY = event.y
                         dragging = false
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val block = candidate
-                        if (block != null && SystemClock.uptimeMillis() - downAt >= EDIT_LONG_PRESS_MS) {
-                            dragging = true
-                            overlayView?.moveDragTarget(block, event.x, event.y)
+                        if (block != null) {
+                            val moved = abs(event.x - downX) + abs(event.y - downY) >= 6f
+                            if (moved) dragging = true
+                            if (dragging) overlayView?.moveDragTarget(block, event.x, event.y)
                         }
                         true
                     }
                     MotionEvent.ACTION_UP -> {
                         val block = candidate
-                        if (block != null && dragging) {
-                            overlayView?.moveDragTarget(block, event.x, event.y)
-                            rebuildTouchableZones()
+                        if (block != null) {
+                            if (dragging) {
+                                overlayView?.moveDragTarget(block, event.x, event.y)
+                                rebuildTouchableZones()
+                            } else {
+                                overlayView?.setEditTarget(block)
+                            }
                         }
                         candidate = null
                         dragging = false
@@ -354,12 +364,73 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         editTouchLayer = layer
         wm.addView(layer, params)
+        attachEditToolbar()
+        quickMenu?.bringToFront()
+    }
+
+    /** Always-on edit controls above the full-screen drag layer, so edit mode can be saved/reset. */
+    private fun attachEditToolbar() {
+        val wm = windowManager ?: return
+        if (editToolbarView != null) return
+        val d = resources.displayMetrics.density
+        fun dp(v: Int): Int = (v * d).toInt()
+
+        fun actionButton(textValue: String, color: Int, action: () -> Unit) = TextView(this).apply {
+            text = textValue
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setShadowLayer(2f, 0f, 1f, Color.BLACK)
+            background = roundedBackground(Color.argb(225, Color.red(color), Color.green(color), Color.blue(color)), Color.WHITE, dp(10).toFloat(), dp(1))
+            isClickable = true
+            setOnClickListener { action() }
+        }
+
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            background = roundedBackground(Color.argb(205, 20, 24, 31), Color.argb(190, 255, 255, 255), dp(12).toFloat(), dp(1))
+        }
+
+        bar.addView(actionButton("✓ SALVAR", Color.rgb(39, 156, 86)) {
+            settingsRepo.editMode = false
+            overlayView?.setEditTarget(null)
+            rebuildTouchableZones()
+            redraw()
+        }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(4) })
+
+        bar.addView(actionButton("↺ RESET", Color.rgb(191, 72, 62)) {
+            settingsRepo.clearHudPositions()
+            overlayView?.setEditTarget(null)
+            rebuildTouchableZones()
+            redraw()
+        }, LinearLayout.LayoutParams(0, dp(38), 1f))
+
+        val screenW = resources.displayMetrics.widthPixels
+        val screenH = resources.displayMetrics.heightPixels
+        val width = min((screenW * .68f).toInt(), dp(300))
+        val height = dp(48)
+        val params = smallTouchableParams(width, height).apply {
+            x = (screenW - width) / 2
+            y = (screenH - height - dp(78)).coerceAtLeast(0)
+        }
+        editToolbarView = bar
+        wm.addView(bar, params)
+    }
+
+    private fun removeEditToolbar() {
+        val bar = editToolbarView ?: return
+        runCatching { windowManager?.removeView(bar) }
+        editToolbarView = null
     }
 
     private fun removeEditTouchLayer() {
-        val layer = editTouchLayer ?: return
-        runCatching { windowManager?.removeView(layer) }
+        val layer = editTouchLayer
+        if (layer != null) runCatching { windowManager?.removeView(layer) }
         editTouchLayer = null
+        removeEditToolbar()
         overlayView?.setEditTarget(null)
     }
 
@@ -743,7 +814,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
         hudToggleTouch?.visibility = View.GONE
-        quickMenu?.setVisible(enabled && !settingsRepo.editMode)
+        quickMenu?.setVisible(enabled)
+        quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()
     }
 
@@ -772,6 +844,20 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         frameDetector?.reset()
         dismissMoveMenu()
         redraw()
+    }
+
+    private fun currentBattleModeLabelText(): String {
+        val league = when (settingsRepo.leagueMode) {
+            BattleLeagueMode.AUTO -> when (currentLeagueCp) {
+                2500 -> "AUTO-U"
+                10000 -> "AUTO-M"
+                else -> "AUTO-G"
+            }
+            BattleLeagueMode.GREAT -> "GRANDE"
+            BattleLeagueMode.ULTRA -> "ULTRA"
+            BattleLeagueMode.MASTER -> "MESTRA"
+        }
+        return if (settingsRepo.battleAssistEnabled) "$league • ASSIST" else league
     }
 
     private fun notification(text: String): Notification {
