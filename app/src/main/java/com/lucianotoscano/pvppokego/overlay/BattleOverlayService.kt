@@ -150,13 +150,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 presenceTracker.reset()
 
                 val pm = getSystemService(MediaProjectionManager::class.java)
-                projection = pm.getMediaProjection(resultCode, resultData).also { mp ->
-                    mp.registerCallback(object : MediaProjection.Callback() {
-                        override fun onStop() { stopSelf() }
-                    }, null)
-                }
+                val mediaProjection = pm.getMediaProjection(resultCode, resultData)
+                    ?: error("MediaProjection indisponível")
+                mediaProjection.registerCallback(object : MediaProjection.Callback() {
+                    override fun onStop() { stopSelf() }
+                }, null)
+                projection = mediaProjection
 
-                capture = ScreenCapture(this@BattleOverlayService, projection!!).also { it.start() }
+                capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
                 startForeground(NOTIFICATION_ID, notification("V04 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
