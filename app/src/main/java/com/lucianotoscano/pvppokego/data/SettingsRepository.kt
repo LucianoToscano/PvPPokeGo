@@ -155,6 +155,7 @@ class SettingsRepository(context: Context) {
     }
 
     fun resetQuickMenuPosition() {
+        // Canonical quick-menu home position is the bottom-right corner.
         prefs.edit()
             .putFloat("quick_menu_x_frac", 1f)
             .putFloat("quick_menu_y_frac", 1f)
