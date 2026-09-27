@@ -1,6 +1,6 @@
-name: Build Android V04 from V03 stable base
+name: Build Android V05 copilot hardening
 
-# build trigger: PGSharp-style menu + GO-like enemy moves
+# build trigger: confidence fusion + own energy + dynamic HUD + modern Android
 on:
   push:
     branches: [v04-v03-stable-base]
@@ -28,10 +28,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Gradle 8.9
+      - name: Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
 
       - name: Build debug APK
         id: build
@@ -50,15 +50,15 @@ jobs:
           mkdir -p artifact
           cp build-log.txt artifact/build-log.txt || true
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk artifact/PVPPokeGo_V04-from-V03-debug.apk
-            sha256sum artifact/PVPPokeGo_V04-from-V03-debug.apk > artifact/PVPPokeGo_V04-from-V03-debug.apk.sha256
+            cp app/build/outputs/apk/debug/app-debug.apk artifact/PVPPokeGo_V05-copilot-debug.apk
+            sha256sum artifact/PVPPokeGo_V05-copilot-debug.apk > artifact/PVPPokeGo_V05-copilot-debug.apk.sha256
           fi
 
       - name: Upload APK and log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PVPPokeGo-V04-from-V03-build
+          name: PVPPokeGo-V05-copilot-build
           path: artifact/
           if-no-files-found: error
           retention-days: 14
