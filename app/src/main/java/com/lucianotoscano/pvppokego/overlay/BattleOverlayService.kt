@@ -84,9 +84,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         super.onCreate()
         settingsRepo = SettingsRepository(this)
         settingsRepo.ensureTopHudSafeV4()
-        // Never revive a stale edit/free-drag session after a service restart. A stale
-        // fullscreen drag layer can otherwise consume battle input unexpectedly.
-        settingsRepo.editMode = false
+        // A previously-running flag at process/service creation means the prior session
+        // did not shut down cleanly. Only in that case clear legacy edit mode so an
+        // invisible fullscreen drag layer cannot revive unexpectedly. On a clean start,
+        // preserve an edit-mode choice the user explicitly made in the settings screen.
+        val recoveringStaleSession = settingsRepo.overlayServiceRunning
+        if (recoveringStaleSession) settingsRepo.editMode = false
+        // Free-drag via the global padlock is always re-armed safely on service creation.
         settingsRepo.layoutLocked = true
         settingsRepo.overlayServiceRunning = true
         gameRepo = GameDataRepository(this)
