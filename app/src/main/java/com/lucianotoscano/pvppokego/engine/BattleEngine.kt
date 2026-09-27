@@ -4,6 +4,7 @@ import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.BattlePokemonState
 import com.lucianotoscano.pvppokego.data.BattleUiState
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
+import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
@@ -11,28 +12,36 @@ import com.lucianotoscano.pvppokego.data.ReserveState
 import java.text.Normalizer
 
 /**
- * Battle-domain state. It never touches Pokémon GO and never sends input.
- *
- * Enemy energy follows Pokemon GO PvP rules: Fast Moves add their PvP energy gain up to 100;
- * a confirmed Charged Move subtracts its real PvP energy cost and preserves any residual energy.
+ * Battle-domain state. Read-only relative to Pokemon GO: this class never sends input.
+ * Enemy and own energy are preserved per Pokemon through switches.
  */
 class BattleEngine(private val repo: GameDataRepository) {
     data class DetectionChanges(val playerChanged: Boolean, val enemyChanged: Boolean)
     data class BattleTextResult(
         val newChargedPrompt: Boolean = false,
-        val chargedMoveConfirmed: Boolean = false
+        val chargedMoveConfirmed: Boolean = false,
+        val ownChargedMoveConfirmed: Boolean = false
     )
 
     private val enemyStates = BattleStateStore()
+    private val ownStates = BattleStateStore()
+
     private var playerName: String? = null
     private var playerCp: Int? = null
     private var enemyName: String? = null
     private var enemyCp: Int? = null
+
     private var tracker = EnergyTracker()
     private var activeState: BattlePokemonState? = null
     private var fast: MoveDef? = null
     private var charge1: MoveDef? = null
     private var charge2: MoveDef? = null
+
+    private var ownTracker = EnergyTracker()
+    private var ownActiveState: BattlePokemonState? = null
+    private var ownFast: MoveDef? = null
+    private var ownCharge1: MoveDef? = null
+    private var ownCharge2: MoveDef? = null
 
     private val ownTeam = linkedMapOf<String, Int?>()
     private val reserveSlotVisible = arrayOfNulls<Boolean>(2)
@@ -43,8 +52,11 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var lastChargedConfirmedAtMs: Long = 0L
     private var ignoreFastUntilMs: Long = 0L
     private var lastAutoSource: String = "-"
+    private var lastOwnAutoSource: String = "-"
     private var lastDetectorConfidence = 0f
+    private var lastBattleConfidence = 0f
     private var lastHpRatio: Float? = null
+    private var lastOpponentHpRatio: Float? = null
     private var lastMotion = 0f
 
     fun resetBattle() {
@@ -53,10 +65,15 @@ class BattleEngine(private val repo: GameDataRepository) {
         enemyName = null
         enemyCp = null
         tracker.reset()
+        ownTracker.reset()
         activeState = null
+        ownActiveState = null
         fast = null
         charge1 = null
         charge2 = null
+        ownFast = null
+        ownCharge1 = null
+        ownCharge2 = null
         ownTeam.clear()
         reserveSlotVisible.fill(null)
         reserveMissingStreak.fill(0)
@@ -66,10 +83,18 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastChargedConfirmedAtMs = 0L
         ignoreFastUntilMs = 0L
         lastAutoSource = "-"
+        lastOwnAutoSource = "-"
         lastDetectorConfidence = 0f
+        lastBattleConfidence = 0f
         lastHpRatio = null
+        lastOpponentHpRatio = null
         lastMotion = 0f
         enemyStates.clearBattle()
+        ownStates.clearBattle()
+    }
+
+    fun onBattleConfidence(value: Float) {
+        lastBattleConfidence = value.coerceIn(0f, 1f)
     }
 
     fun onDetection(d: BattleDetection): DetectionChanges {
@@ -78,9 +103,9 @@ class BattleEngine(private val repo: GameDataRepository) {
 
         d.player?.let {
             val canonical = repo.canonicalPokemonName(it.name) ?: it.name
-            playerName = canonical
-            playerCp = it.cp ?: playerCp
             rememberOwnPokemon(canonical, it.cp)
+            if (!canonical.equals(playerName, ignoreCase = true)) onPlayerChanged(canonical, it.cp)
+            else if (it.cp != null) playerCp = it.cp
         }
         d.opponent?.let {
             val canonical = repo.canonicalPokemonName(it.name) ?: it.name
@@ -97,11 +122,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             ownSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
         }
         if (enemyChanged) opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
-
-        return DetectionChanges(
-            playerChanged = playerChanged,
-            enemyChanged = enemyChanged
-        )
+        return DetectionChanges(playerChanged, enemyChanged)
     }
 
     fun onOwnTeamDetected(team: List<DetectedPokemon>) {
@@ -111,7 +132,6 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
     }
 
-    /** Native reserve card visibility comes from their own small HP bars on the right side. */
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
         fun update(index: Int, value: Boolean?) {
             when (value) {
@@ -131,6 +151,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun activePlayerName(): String? = playerName
     fun activeEnemyName(): String? = enemyName
     fun currentFastDurationMs(): Long = fast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
+    fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
     private fun rememberOwnPokemon(name: String, cp: Int?) {
         val existingKey = ownTeam.keys.firstOrNull { it.equals(name, ignoreCase = true) }
@@ -138,30 +159,44 @@ class BattleEngine(private val repo: GameDataRepository) {
         else if (existingKey != null && cp != null) ownTeam[existingKey] = cp
     }
 
+    private fun onPlayerChanged(name: String, cp: Int?) {
+        saveOwnActiveState()
+        playerName = name
+        playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value ?: playerCp
+        val key = normalize(name)
+        ownActiveState = ownStates.getOrCreate(key, name)
+        val saved = ownActiveState!!
+        val likely = repo.likelyMoveset(name)
+        ownFast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
+        ownCharge1 = repo.move(saved.chargedMove1Id) ?: likely.second ?: repo.possibleChargedMoves(name).getOrNull(0)
+        ownCharge2 = repo.move(saved.chargedMove2Id) ?: likely.third ?: repo.possibleChargedMoves(name).getOrNull(1)
+        val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
+        val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
+        ownTracker.restoreRange(minE, maxE, saved.fastMoveCount)
+        saveOwnActiveState()
+    }
+
     private fun onEnemyChanged(name: String) {
         saveActiveState()
         enemyName = name
         chargedPendingSinceMs = null
         ignoreFastUntilMs = 0L
-
         val key = normalize(name)
         activeState = enemyStates.getOrCreate(key, name)
         val saved = activeState!!
-
         val likely = repo.likelyMoveset(name)
         fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
         charge1 = repo.move(saved.chargedMove1Id) ?: likely.second ?: repo.possibleChargedMoves(name).getOrNull(0)
         charge2 = repo.move(saved.chargedMove2Id) ?: likely.third ?: repo.possibleChargedMoves(name).getOrNull(1)
-        tracker.restore(saved.estimatedEnergy, saved.fastMoveCount)
+        val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
+        val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
+        tracker.restoreRange(minE, maxE, saved.fastMoveCount)
         saveActiveState()
     }
 
     fun selectFast(move: MoveDef) {
         fast = move
-        activeState?.apply {
-            fastMoveId = move.moveId
-            fastMoveManual = true
-        }
+        activeState?.apply { fastMoveId = move.moveId; fastMoveManual = true }
         saveActiveState()
     }
 
@@ -176,21 +211,13 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun selectCharged1(move: MoveDef) {
         charge1 = move
-        activeState?.apply {
-            chargedMove1Id = move.moveId
-            charge1Manual = true
-            charge1Confirmed = false
-        }
+        activeState?.apply { chargedMove1Id = move.moveId; charge1Manual = true; charge1Confirmed = false }
         saveActiveState()
     }
 
     fun selectCharged2(move: MoveDef) {
         charge2 = move
-        activeState?.apply {
-            chargedMove2Id = move.moveId
-            charge2Manual = true
-            charge2Confirmed = false
-        }
+        activeState?.apply { chargedMove2Id = move.moveId; charge2Manual = true; charge2Confirmed = false }
         saveActiveState()
     }
 
@@ -202,8 +229,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 state.charge1Manual = false
                 val recommended = likely.second ?: repo.possibleChargedMoves(state.speciesName).getOrNull(0)
                 if (recommended != null && recommended.moveId != charge2?.moveId) {
-                    charge1 = recommended
-                    state.chargedMove1Id = recommended.moveId
+                    charge1 = recommended; state.chargedMove1Id = recommended.moveId
                     state.charge1Confirmed = recommended.moveId in state.observedChargedMoveIds
                 }
             }
@@ -211,8 +237,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 state.charge2Manual = false
                 val recommended = likely.third ?: repo.possibleChargedMoves(state.speciesName).getOrNull(1)
                 if (recommended != null && recommended.moveId != charge1?.moveId) {
-                    charge2 = recommended
-                    state.chargedMove2Id = recommended.moveId
+                    charge2 = recommended; state.chargedMove2Id = recommended.moveId
                     state.charge2Confirmed = recommended.moveId in state.observedChargedMoveIds
                 }
             }
@@ -234,15 +259,20 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastHpRatio = hpRatio
         lastMotion = motion
         if (count <= 0) return
-
-        if (System.currentTimeMillis() < ignoreFastUntilMs) {
-            lastAutoSource = "charged-guard"
-            return
-        }
-
+        if (System.currentTimeMillis() < ignoreFastUntilMs) { lastAutoSource = "charged-guard"; return }
         val f = fast ?: return
         tracker.onFastMove(f, count)
         saveActiveState()
+    }
+
+    fun onOwnFastDetected(count: Int, confidence: Float, source: String, opponentHpRatio: Float?) {
+        lastDetectorConfidence = maxOf(lastDetectorConfidence, confidence)
+        lastOwnAutoSource = source
+        lastOpponentHpRatio = opponentHpRatio
+        if (count <= 0) return
+        val f = ownFast ?: return
+        ownTracker.onFastMove(f, count)
+        saveOwnActiveState()
     }
 
     fun chargedUsed(move: MoveDef): Boolean {
@@ -262,12 +292,36 @@ class BattleEngine(private val repo: GameDataRepository) {
         return true
     }
 
+    private fun observedUnknownChargedUsed(nowMs: Long = System.currentTimeMillis()): Boolean {
+        val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
+        if (!tracker.onObservedUnknownCharged(candidates)) return false
+        chargedPendingSinceMs = null
+        lastChargedConfirmedAtMs = nowMs
+        ignoreFastUntilMs = maxOf(ignoreFastUntilMs, nowMs + CHARGED_FAST_GUARD_MS)
+        lastAutoSource = "charged:unknown-range"
+        saveActiveState()
+        return true
+    }
+
+    private fun observedOwnChargedUsed(move: MoveDef): Boolean {
+        ownTracker.onObservedChargedMove(move)
+        val state = ownActiveState
+        if (state != null) {
+            state.lastChargedMoveId = move.moveId
+            state.observedChargedMoveIds += move.moveId
+            if (move.moveId == ownCharge1?.moveId) state.charge1Confirmed = true
+            if (move.moveId == ownCharge2?.moveId) state.charge2Confirmed = true
+        }
+        lastOwnAutoSource = "charged:${move.moveId}"
+        saveOwnActiveState()
+        return true
+    }
+
     private fun recordChargedMove(move: MoveDef, observed: Boolean) {
         val state = activeState
         if (state != null) {
             state.lastChargedMoveId = move.moveId
             if (observed) state.observedChargedMoveIds += move.moveId
-
             when {
                 move.moveId == charge1?.moveId -> state.charge1Confirmed = observed || state.charge1Confirmed
                 move.moveId == charge2?.moveId -> state.charge2Confirmed = observed || state.charge2Confirmed
@@ -286,16 +340,8 @@ class BattleEngine(private val repo: GameDataRepository) {
             else -> -1
         }
         when (replaceIndex) {
-            0 -> {
-                charge1 = move
-                state.chargedMove1Id = move.moveId
-                state.charge1Confirmed = true
-            }
-            1 -> {
-                charge2 = move
-                state.chargedMove2Id = move.moveId
-                state.charge2Confirmed = true
-            }
+            0 -> { charge1 = move; state.chargedMove1Id = move.moveId; state.charge1Confirmed = true }
+            1 -> { charge2 = move; state.chargedMove2Id = move.moveId; state.charge2Confirmed = true }
         }
     }
 
@@ -312,29 +358,45 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
 
         val actionVerbPresent = ACTION_VERBS.any { text.contains(it) }
-        if (actionVerbPresent) {
-            val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
-            val matched = candidates
-                .map { it to normalizedMoveNames(it) }
-                .firstOrNull { (_, names) -> names.any { n -> n.length >= 4 && text.contains(n) } }
-                ?.first
+        if (!actionVerbPresent) return BattleTextResult(newPrompt, false, false)
 
+        val normalizedPlayer = playerName?.let(::normalizeText).orEmpty()
+        val normalizedEnemy = enemyName?.let(::normalizeText).orEmpty()
+        val playerActor = normalizedPlayer.isNotBlank() && text.contains(normalizedPlayer)
+        val enemyActor = normalizedEnemy.isNotBlank() && text.contains(normalizedEnemy)
+
+        if (playerActor) {
+            val ownCandidates = playerName?.let(repo::possibleChargedMoves).orEmpty().ifEmpty { listOfNotNull(ownCharge1, ownCharge2) }
+            val ownMatched = findMoveMention(text, ownCandidates)
+            if (ownMatched != null) {
+                observedOwnChargedUsed(ownMatched)
+                return BattleTextResult(newPrompt, false, true)
+            }
+        }
+
+        if (enemyActor || !playerActor) {
+            val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
+            val matched = findMoveMention(text, candidates)
             if (matched != null) {
                 if (nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
                     observedChargedUsed(matched, nowMs)
-                    return BattleTextResult(newPrompt, true)
+                    return BattleTextResult(newPrompt, true, false)
                 }
-                return BattleTextResult(newPrompt, false)
+                return BattleTextResult(newPrompt, false, false)
             }
-
             if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
         }
-
-        return BattleTextResult(newPrompt, false)
+        return BattleTextResult(newPrompt, false, false)
     }
+
+    private fun findMoveMention(text: String, candidates: List<MoveDef>): MoveDef? = candidates
+        .distinctBy { it.moveId }
+        .map { it to normalizedMoveNames(it) }
+        .firstOrNull { (_, names) -> names.any { n -> n.length >= 4 && text.contains(n) } }
+        ?.first
 
     fun maybeConfirmPendingCharged(nowMs: Long = System.currentTimeMillis()): Boolean {
         val since = chargedPendingSinceMs ?: return false
@@ -343,24 +405,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             chargedPendingSinceMs = null
             return false
         }
-
-        val candidates = listOfNotNull(charge1, charge2).distinctBy { it.moveId }
-        if (candidates.isEmpty()) {
-            chargedPendingSinceMs = null
-            return false
-        }
-
-        val affordable = candidates.filter { tracker.energy >= it.chargedCost }
-        val observed = activeState?.observedChargedMoveIds.orEmpty()
-        val selected = when {
-            affordable.size == 1 -> affordable.first()
-            affordable.isNotEmpty() -> affordable.firstOrNull { it.moveId in observed }
-                ?: affordable.minByOrNull { it.chargedCost }
-            else -> candidates.firstOrNull { it.moveId in observed }
-                ?: candidates.minByOrNull { it.chargedCost }
-        } ?: return false
-
-        return observedChargedUsed(selected, nowMs)
+        return observedUnknownChargedUsed(nowMs)
     }
 
     fun possibleFastMoves(): List<MoveDef> = enemyName?.let(repo::possibleFastMoves).orEmpty()
@@ -377,19 +422,47 @@ class BattleEngine(private val repo: GameDataRepository) {
         val eTypes = repo.pokemon(enemyName)?.types.orEmpty()
         val matchup = classify(pTypes, eTypes)
         val f = fast
+        val of = ownFast
 
-        val reserveStates = ownTeam.entries
+        val rawReserves = ownTeam.entries
             .filterNot { it.key.equals(playerName, ignoreCase = true) }
             .take(2)
             .mapIndexed { index, (name, cp) ->
                 val types = repo.pokemon(name)?.types.orEmpty()
+                val score = reserveScore(name, types, eTypes)
                 ReserveState(
                     name = name,
                     cp = cp,
                     types = types,
                     matchup = classify(types, eTypes),
-                    visible = reserveSlotVisible.getOrNull(index) != false
+                    visible = reserveSlotVisible.getOrNull(index) != false,
+                    score = score
                 )
+            }
+        val bestVisibleScore = rawReserves.filter { it.visible }.maxOfOrNull { it.score }
+        val reserveStates = rawReserves.map { r ->
+            val label = when {
+                !r.visible -> null
+                bestVisibleScore != null && r.score >= bestVisibleScore - .08 && r.score > .05 -> "MELHOR"
+                r.score < -.35 -> "EVITAR"
+                else -> "NEUTRO"
+            }
+            r.copy(recommendation = label)
+        }
+
+        val enemyConf = enemyEnergyConfidence()
+        val ownConf = ownEnergyConfidence()
+        val enemyHistory = enemyStates.all()
+            .sortedByDescending { it.lastSeenAtMs }
+            .take(3)
+            .map { s ->
+                val e = if (s.energyUncertain || s.minEnergy != s.maxEnergy) "${s.minEnergy}-${s.maxEnergy}E" else "${s.estimatedEnergy}E"
+                val seen = s.lastChargedMoveId?.let(repo::move)?.name
+                buildString {
+                    append(s.speciesName)
+                    append(": ${s.fastMoveCount}F • $e")
+                    if (!seen.isNullOrBlank()) append(" • $seen")
+                }
             }
 
         return BattleUiState(
@@ -402,25 +475,60 @@ class BattleEngine(private val repo: GameDataRepository) {
             strongTypesAgainstOpponent = if (eTypes.isEmpty()) emptyList() else TypeChart.strongTypesAgainst(eTypes),
             reserves = reserveStates,
             fastMove = f,
-            charged1 = if (f != null && charge1 != null) tracker.predict(charge1!!, f) else null,
-            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f) else null,
+            charged1 = if (f != null && charge1 != null) tracker.predict(charge1!!, f, enemyConf) else null,
+            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f, enemyConf) else null,
+            ownFastMove = of,
+            ownCharged1 = if (of != null && ownCharge1 != null) ownTracker.predict(ownCharge1!!, of, ownConf) else null,
+            ownCharged2 = if (of != null && ownCharge2 != null) ownTracker.predict(ownCharge2!!, of, ownConf) else null,
             ownSwitchSeconds = switchSeconds(ownSwitchReadyAtMs),
             opponentSwitchSeconds = switchSeconds(opponentSwitchReadyAtMs),
             chargedIncoming = chargedPendingSinceMs != null,
             detectorConfidence = lastDetectorConfidence,
+            battleConfidence = lastBattleConfidence,
+            enemyHistory = enemyHistory,
             debugText = if (debug) buildString {
                 val s = activeState
+                val os = ownActiveState
                 appendLine("Jogador: ${playerName ?: "?"} PC ${playerCp ?: "?"} | time=${ownTeam.keys.joinToString()}")
+                appendLine("Own fast: ${of?.name ?: "?"} count=${ownTracker.fastMoveCount} E=${ownTracker.minEnergy}-${ownTracker.maxEnergy} src=$lastOwnAutoSource")
                 appendLine("Inimigo: ${enemyName ?: "?"} PC ${enemyCp ?: "?"}")
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
-                appendLine("Energia=${tracker.energy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
-                appendLine("HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"} | movimento=${"%.1f".format(lastMotion)}")
+                appendLine("Energia=${tracker.minEnergy}-${tracker.maxEnergy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
+                appendLine("Battle conf=${"%.2f".format(lastBattleConfidence)} HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"}/${lastOpponentHpRatio?.let { "%.3f".format(it) } ?: "?"}")
                 appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
-                append("Charged pendente=${chargedPendingSinceMs != null}")
+                append("Own C1=${ownCharge1?.name ?: "?"} C2=${ownCharge2?.name ?: "?"} state=${os?.speciesName ?: "?"}")
             } else null
         )
+    }
+
+    private fun enemyEnergyConfidence(): EnergyConfidence = when {
+        tracker.isRange -> EnergyConfidence.RANGE
+        activeState?.fastMoveManual == true || possibleFastMoves().size <= 1 -> EnergyConfidence.CONFIRMED
+        else -> EnergyConfidence.ESTIMATED
+    }
+
+    private fun ownEnergyConfidence(): EnergyConfidence = when {
+        ownTracker.isRange -> EnergyConfidence.RANGE
+        playerName?.let(repo::possibleFastMoves)?.size ?: 0 <= 1 -> EnergyConfidence.CONFIRMED
+        else -> EnergyConfidence.ESTIMATED
+    }
+
+    private fun reserveScore(name: String, myTypes: List<String>, enemyTypes: List<String>): Double {
+        if (myTypes.isEmpty() || enemyTypes.isEmpty()) return 0.0
+        val likely = repo.likelyMoveset(name)
+        val myMoves = listOfNotNull(likely.first, likely.second, likely.third)
+        val enemyLikely = enemyName?.let(repo::likelyMoveset)
+        val enemyMoves = listOfNotNull(enemyLikely?.first, enemyLikely?.second, enemyLikely?.third)
+        val offense = myMoves.maxOfOrNull { TypeChart.multiplier(it.type, enemyTypes) } ?: 1.0
+        val danger = enemyMoves.maxOfOrNull { TypeChart.multiplier(it.type, myTypes) } ?: 1.0
+        val typeBase = when (classify(myTypes, enemyTypes)) {
+            MatchupState.FAVORABLE -> .35
+            MatchupState.UNFAVORABLE -> -.35
+            else -> 0.0
+        }
+        return typeBase + (offense - 1.0) * .75 - (danger - 1.0) * .65
     }
 
     private fun classify(myTypes: List<String>, enemyTypes: List<String>): MatchupState {
@@ -439,6 +547,22 @@ class BattleEngine(private val repo: GameDataRepository) {
         state.chargedMove2Id = charge2?.moveId
         state.fastMoveCount = tracker.fastMoveCount
         state.estimatedEnergy = tracker.energy
+        state.minEnergy = tracker.minEnergy
+        state.maxEnergy = tracker.maxEnergy
+        state.energyUncertain = tracker.isRange
+        state.lastSeenAtMs = System.currentTimeMillis()
+    }
+
+    private fun saveOwnActiveState() {
+        val state = ownActiveState ?: return
+        state.fastMoveId = ownFast?.moveId
+        state.chargedMove1Id = ownCharge1?.moveId
+        state.chargedMove2Id = ownCharge2?.moveId
+        state.fastMoveCount = ownTracker.fastMoveCount
+        state.estimatedEnergy = ownTracker.energy
+        state.minEnergy = ownTracker.minEnergy
+        state.maxEnergy = ownTracker.maxEnergy
+        state.energyUncertain = ownTracker.isRange
         state.lastSeenAtMs = System.currentTimeMillis()
     }
 
