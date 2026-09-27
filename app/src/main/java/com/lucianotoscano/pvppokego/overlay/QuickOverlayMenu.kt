@@ -17,7 +17,7 @@ import com.lucianotoscano.pvppokego.data.SettingsRepository
 import kotlin.math.abs
 import kotlin.math.min
 
-/** Compact floating menu inspired by Pokemon GO's own small circular HUD controls. */
+/** Floating battle menu: icon-only launcher, PGSharp-like icon+text panel, independent league badge. */
 class QuickOverlayMenu(
     private val context: Context,
     private val windowManager: WindowManager,
@@ -34,8 +34,8 @@ class QuickOverlayMenu(
 
     private var gearView: TextView? = null
     private var gearParams: WindowManager.LayoutParams? = null
-    private var modeView: TextView? = null
-    private var modeParams: WindowManager.LayoutParams? = null
+    private var leagueView: TextView? = null
+    private var leagueParams: WindowManager.LayoutParams? = null
     private var panelView: ScrollView? = null
     private var externallyVisible = false
     private var panelScrollY = 0
@@ -53,65 +53,71 @@ class QuickOverlayMenu(
             text = "⚙"
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = 20f
+            textSize = 19f
             contentDescription = "Menu PvPPokeGo"
-            setShadowLayer(2.4f, 0f, 1f, Color.BLACK)
-            background = circleBackground(false)
+            setShadowLayer(2f, 0f, 1f, Color.BLACK)
+            background = roundLauncherBackground()
             visibility = View.GONE
         }
         val gp = gearLayoutParams()
         gearParams = gp
-        installDragAndTap(gear, gp)
+        installGearDragAndTap(gear, gp)
         gearView = gear
         windowManager.addView(gear, gp)
 
-        val mode = TextView(context).apply {
+        val league = TextView(context).apply {
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = 11f
+            textSize = 17f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             setShadowLayer(2f, 0f, 1f, Color.BLACK)
-            background = smallModeBackground()
+            contentDescription = "Liga atual"
             visibility = View.GONE
         }
-        val mp = modeLayoutParams(gp)
-        modeView = mode
-        modeParams = mp
-        windowManager.addView(mode, mp)
+        val lp = leagueLayoutParams()
+        leagueParams = lp
+        installLeagueDrag(league, lp)
+        leagueView = league
+        windowManager.addView(league, lp)
         refreshStatusBadge()
     }
 
     fun setVisible(visible: Boolean) {
         externallyVisible = visible
         gearView?.visibility = if (visible) View.VISIBLE else View.GONE
-        modeView?.visibility = if (visible) View.VISIBLE else View.GONE
+        leagueView?.visibility = if (visible) View.VISIBLE else View.GONE
         if (!visible) removePanel(false)
         if (visible) refreshStatusBadge()
     }
 
-    /** Kept for service compatibility. This is now only a tiny one-letter league chip. */
+    /** Shows the active league as a standalone icon, not attached to the gear. */
     fun refreshStatusBadge() {
         val label = callbacks.currentBattleModeLabel()
-        modeView?.text = when {
-            label.contains("ULTRA") || label.contains("AUTO-U") -> "U"
-            label.contains("MESTRA") || label.contains("AUTO-M") -> "M"
-            else -> "G"
+        val kind = when {
+            label.contains("ULTRA") || label.contains("AUTO-U") -> LeagueKind.ULTRA
+            label.contains("MESTRA") || label.contains("AUTO-M") -> LeagueKind.MASTER
+            label.contains("GRANDE") || label.contains("AUTO-G") -> LeagueKind.GREAT
+            else -> when (settings.leagueMode) {
+                BattleLeagueMode.ULTRA -> LeagueKind.ULTRA
+                BattleLeagueMode.MASTER -> LeagueKind.MASTER
+                BattleLeagueMode.GREAT -> LeagueKind.GREAT
+                BattleLeagueMode.AUTO -> LeagueKind.AUTO
+            }
         }
-        modeView?.background = smallModeBackground()
-        updateModePosition()
+        leagueView?.apply {
+            text = when (kind) {
+                LeagueKind.GREAT -> "◇"
+                LeagueKind.ULTRA -> "◆"
+                LeagueKind.MASTER -> "♛"
+                LeagueKind.AUTO -> "◎"
+            }
+            background = leagueBackground(kind)
+        }
     }
 
     fun bringToFront() {
-        val gear = gearView ?: return
-        val gp = gearParams ?: return
-        runCatching { windowManager.removeView(gear) }
-        runCatching { windowManager.addView(gear, gp) }
-        val mode = modeView
-        val mp = modeParams
-        if (mode != null && mp != null) {
-            runCatching { windowManager.removeView(mode) }
-            runCatching { windowManager.addView(mode, mp) }
-        }
+        gearView?.let { v -> gearParams?.let { p -> runCatching { windowManager.removeView(v) }; runCatching { windowManager.addView(v, p) } } }
+        leagueView?.let { v -> leagueParams?.let { p -> runCatching { windowManager.removeView(v) }; runCatching { windowManager.addView(v, p) } } }
     }
 
     fun dismissPanel() {
@@ -121,10 +127,10 @@ class QuickOverlayMenu(
 
     fun destroy() {
         removePanel(false)
-        modeView?.let { runCatching { windowManager.removeView(it) } }
+        leagueView?.let { runCatching { windowManager.removeView(it) } }
         gearView?.let { runCatching { windowManager.removeView(it) } }
-        modeView = null
-        modeParams = null
+        leagueView = null
+        leagueParams = null
         gearView = null
         gearParams = null
     }
@@ -149,10 +155,9 @@ class QuickOverlayMenu(
         val labels = settings.quickMenuShowLabels
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(3), dp(3), dp(3), dp(3))
+            setPadding(dp(2), dp(3), dp(2), dp(3))
             setBackgroundColor(Color.TRANSPARENT)
         }
-
         if (labels) buildLabeledMenu(content) else buildIconMenu(content)
 
         val scroll = ScrollView(context).apply {
@@ -165,17 +170,16 @@ class QuickOverlayMenu(
         val gear = gearParams ?: return
         val screenW = metrics.widthPixels
         val screenH = metrics.heightPixels
-        val width = if (labels) min((screenW * .54f).toInt(), dp(205)) else min((screenW * .52f).toInt(), dp(194))
-        val desiredHeight = if (labels) dp(420) else dp(245)
-        val height = min((screenH * if (labels) .58f else .34f).toInt(), desiredHeight)
+        val width = if (labels) min((screenW * .62f).toInt(), dp(245)) else min((screenW * .46f).toInt(), dp(176))
+        val desiredHeight = if (labels) dp(470) else dp(245)
+        val height = min((screenH * if (labels) .64f else .36f).toInt(), desiredHeight)
         val margin = dp(5)
         val rightX = gear.x + gear.width + margin
         val x = if (rightX + width <= screenW) rightX else (gear.x - width - margin).coerceAtLeast(0)
         val y = (gear.y - height + gear.height).coerceIn(0, (screenH - height).coerceAtLeast(0))
 
         val params = WindowManager.LayoutParams(
-            width,
-            height,
+            width, height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -186,7 +190,6 @@ class QuickOverlayMenu(
             this.x = x
             this.y = y
         }
-
         panelView = scroll
         windowManager.addView(scroll, params)
         scroll.post { scroll.scrollTo(0, restoreY.coerceAtLeast(0)) }
@@ -196,31 +199,22 @@ class QuickOverlayMenu(
         fun row(vararg items: IconItem) {
             val line = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
+                gravity = Gravity.START
             }
-            items.forEach { item -> addIconCell(line, item) }
+            items.forEach { addIconCell(line, it) }
             while (line.childCount < 4) line.addView(View(context), LinearLayout.LayoutParams(0, dp(43), 1f))
             parent.addView(line, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(47)))
         }
 
-        if (settings.editMode) {
-            row(
-                IconItem("✓", "Salvar edição", true) {
-                    settings.editMode = false
-                    callbacks.onSettingsChanged(true)
-                    dismissPanel()
-                },
-                IconItem("↺", "Resetar posições", null) {
-                    callbacks.onResetHudPositions(); callbacks.onSettingsChanged(true); refreshPanel()
-                }
-            )
-        }
-
+        if (settings.editMode) row(
+            IconItem("✓", "Salvar edição", true) { settings.editMode = false; callbacks.onSettingsChanged(true); dismissPanel() },
+            IconItem("↺", "Resetar posições", null) { callbacks.onResetHudPositions(); callbacks.onSettingsChanged(true); refreshPanel() }
+        )
         row(
             IconItem("◉", "HUD", !callbacks.isHudCollapsed()) { callbacks.onToggleHud(); refreshPanel() },
             IconItem("A", "Reconhecimento", settings.autoRecognition) { settings.autoRecognition = !settings.autoRecognition; changed() },
             IconItem("★", "Assistido", settings.battleAssistEnabled) { settings.battleAssistEnabled = !settings.battleAssistEnabled; changed() },
-            IconItem(leagueGlyph(), "Liga", null) { settings.leagueMode = nextLeague(settings.leagueMode); callbacks.onSettingsChanged(false); refreshStatusBadge(); refreshPanel() }
+            IconItem("♜", "Liga", null) { cycleLeague() }
         )
         row(
             IconItem("◇", "Fraquezas", settings.showStrongTypes) { settings.showStrongTypes = !settings.showStrongTypes; changed() },
@@ -242,34 +236,35 @@ class QuickOverlayMenu(
         )
         row(
             IconItem("≡", "Mostrar textos", null) { settings.quickMenuShowLabels = true; refreshPanel() },
-            IconItem("↺", "Restaurar tudo", null) { settings.resetQuickMenuPosition(); callbacks.onResetHudPositions(); moveGearToStoredPosition(); callbacks.onSettingsChanged(true); refreshPanel() },
+            IconItem("↺", "Restaurar tudo", null) { resetPositions() },
             IconItem("×", "Fechar", null) { dismissPanel() }
         )
     }
 
+    /** PGSharp-like list: square icon cell at left, plain text at right, no large rounded panel. */
     private fun buildLabeledMenu(parent: LinearLayout) {
         if (settings.editMode) {
             addRow(parent, "✓", "SALVAR EDIÇÃO", true) { settings.editMode = false; callbacks.onSettingsChanged(true); dismissPanel() }
             addRow(parent, "↺", "RESETAR POSIÇÕES", null) { callbacks.onResetHudPositions(); callbacks.onSettingsChanged(true); refreshPanel() }
         }
         addRow(parent, "◉", "HUD", !callbacks.isHudCollapsed()) { callbacks.onToggleHud(); refreshPanel() }
-        addRow(parent, "A", "Reconhecimento", settings.autoRecognition) { settings.autoRecognition = !settings.autoRecognition; changed() }
-        addRow(parent, "★", "Assistido", settings.battleAssistEnabled) { settings.battleAssistEnabled = !settings.battleAssistEnabled; changed() }
-        addRow(parent, leagueGlyph(), "Liga: ${leagueShort(settings.leagueMode)}", null) { settings.leagueMode = nextLeague(settings.leagueMode); callbacks.onSettingsChanged(false); refreshStatusBadge(); refreshPanel() }
-        addRow(parent, "◇", "Fraquezas", settings.showStrongTypes) { settings.showStrongTypes = !settings.showStrongTypes; changed() }
-        addRow(parent, "✓", "Matchup atual", settings.showCurrentIndicator) { settings.showCurrentIndicator = !settings.showCurrentIndicator; changed() }
-        addRow(parent, "2", "Reservas", settings.analyzeReserves) { settings.analyzeReserves = !settings.analyzeReserves; changed() }
-        addRow(parent, "T", "Tipos reservas", settings.showReserveTypes) { settings.showReserveTypes = !settings.showReserveTypes; changed() }
-        addRow(parent, "⚔", "Ataques inimigos", settings.showEnemyMoves) { settings.showEnemyMoves = !settings.showEnemyMoves; changed() }
-        addRow(parent, "••", "Contagem", settings.showChargedCounter) { settings.showChargedCounter = !settings.showChargedCounter; changed() }
-        addRow(parent, "⚡", "Energia", settings.showEnergyProgress) { settings.showEnergyProgress = !settings.showEnergyProgress; changed() }
+        addRow(parent, "A", "Reconhecimento automático", settings.autoRecognition) { settings.autoRecognition = !settings.autoRecognition; changed() }
+        addRow(parent, "★", "Modo Batalha Assistido", settings.battleAssistEnabled) { settings.battleAssistEnabled = !settings.battleAssistEnabled; changed() }
+        addRow(parent, "♜", "Liga: ${leagueShort(settings.leagueMode)}", null) { cycleLeague() }
+        addRow(parent, "◇", "Fraquezas do inimigo", settings.showStrongTypes) { settings.showStrongTypes = !settings.showStrongTypes; changed() }
+        addRow(parent, "✓", "Indicador do Pokémon atual", settings.showCurrentIndicator) { settings.showCurrentIndicator = !settings.showCurrentIndicator; changed() }
+        addRow(parent, "2", "Analisar reservas", settings.analyzeReserves) { settings.analyzeReserves = !settings.analyzeReserves; changed() }
+        addRow(parent, "T", "Tipos das reservas", settings.showReserveTypes) { settings.showReserveTypes = !settings.showReserveTypes; changed() }
+        addRow(parent, "⚔", "Ataques do inimigo", settings.showEnemyMoves) { settings.showEnemyMoves = !settings.showEnemyMoves; changed() }
+        addRow(parent, "••", "Pontos de carregamento", settings.showChargedCounter) { settings.showChargedCounter = !settings.showChargedCounter; changed() }
+        addRow(parent, "⚡", "Progresso de energia", settings.showEnergyProgress) { settings.showEnergyProgress = !settings.showEnergyProgress; changed() }
         addRow(parent, "↻", "Timer de troca", settings.showSwitchTimer) { settings.showSwitchTimer = !settings.showSwitchTimer; changed() }
         addRow(parent, "↔", "Modo edição", settings.editMode) { settings.editMode = !settings.editMode; callbacks.onSettingsChanged(true); if (settings.editMode) dismissPanel() else refreshPanel() }
         addRow(parent, "S", "Escala ${(settings.scale * 100).toInt()}%", null) { settings.scale = if (settings.scale >= 1.19f) .5f else settings.scale + .1f; callbacks.onSettingsChanged(true); refreshPanel() }
         addRow(parent, "◐", "Opacidade ${(settings.opacity * 100).toInt()}%", null) { settings.opacity = if (settings.opacity >= .99f) .3f else settings.opacity + .1f; callbacks.onSettingsChanged(false); refreshPanel() }
         addRow(parent, "D", "DEBUG", settings.debugMode) { settings.debugMode = !settings.debugMode; changed() }
-        addRow(parent, "□", "Somente ícones", null) { settings.quickMenuShowLabels = false; refreshPanel() }
-        addRow(parent, "↺", "Restaurar tudo", null) { settings.resetQuickMenuPosition(); callbacks.onResetHudPositions(); moveGearToStoredPosition(); callbacks.onSettingsChanged(true); refreshPanel() }
+        addRow(parent, "▦", "Somente ícones", null) { settings.quickMenuShowLabels = false; refreshPanel() }
+        addRow(parent, "↺", "Restaurar posições", null) { resetPositions() }
         addRow(parent, "×", "Fechar", null) { dismissPanel() }
     }
 
@@ -278,10 +273,10 @@ class QuickOverlayMenu(
             text = item.icon
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = if (item.icon.length > 1) 12.5f else 16.5f
+            textSize = if (item.icon.length > 1) 12f else 17f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setShadowLayer(2f, 0f, 1f, Color.BLACK)
-            background = circleBackground(item.enabled == true, item.enabled == false)
+            setShadowLayer(1.6f, 0f, 1f, Color.BLACK)
+            background = squareIconBackground(item.enabled)
             contentDescription = item.label
             isClickable = true
             setOnClickListener { item.onTap() }
@@ -295,8 +290,7 @@ class QuickOverlayMenu(
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(2), dp(6), dp(2))
-            background = roundedBackground(Color.argb(145, 35, 40, 49), borderColor(enabled), dp(18).toFloat(), dp(1))
+            setPadding(0, 0, dp(6), 0)
             isClickable = true
             setOnClickListener { onTap() }
         }
@@ -304,17 +298,18 @@ class QuickOverlayMenu(
             text = icon
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            textSize = 15f
+            textSize = 16f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }, LinearLayout.LayoutParams(dp(30), dp(30)))
+            background = squareIconBackground(enabled)
+        }, LinearLayout.LayoutParams(dp(38), dp(38)).apply { marginEnd = dp(8) })
         row.addView(TextView(context).apply {
             text = label
             setTextColor(Color.WHITE)
-            textSize = 10.5f
+            textSize = 13f
             maxLines = 1
-            setPadding(dp(4), 0, 0, 0)
+            setShadowLayer(2f, 0f, 1f, Color.BLACK)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)).apply { bottomMargin = dp(3) })
+        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(41)))
     }
 
     private fun changed(rebuildTouches: Boolean = false) {
@@ -323,104 +318,116 @@ class QuickOverlayMenu(
         refreshPanel()
     }
 
-    /** Rebuild while retaining ScrollView position instead of jumping back to the top. */
+    /** Rebuild without jumping to the top after every selection. */
     private fun refreshPanel() {
         val current = panelView ?: return
         panelScrollY = current.scrollY
         showPanel()
     }
 
-    private fun nextLeague(mode: BattleLeagueMode): BattleLeagueMode = when (mode) {
-        BattleLeagueMode.AUTO -> BattleLeagueMode.GREAT
-        BattleLeagueMode.GREAT -> BattleLeagueMode.ULTRA
-        BattleLeagueMode.ULTRA -> BattleLeagueMode.MASTER
-        BattleLeagueMode.MASTER -> BattleLeagueMode.AUTO
-    }
-
-    private fun leagueGlyph(): String = when (settings.leagueMode) {
-        BattleLeagueMode.AUTO -> "A"
-        BattleLeagueMode.GREAT -> "G"
-        BattleLeagueMode.ULTRA -> "U"
-        BattleLeagueMode.MASTER -> "M"
+    private fun cycleLeague() {
+        settings.leagueMode = when (settings.leagueMode) {
+            BattleLeagueMode.AUTO -> BattleLeagueMode.GREAT
+            BattleLeagueMode.GREAT -> BattleLeagueMode.ULTRA
+            BattleLeagueMode.ULTRA -> BattleLeagueMode.MASTER
+            BattleLeagueMode.MASTER -> BattleLeagueMode.AUTO
+        }
+        callbacks.onSettingsChanged(false)
+        refreshStatusBadge()
+        refreshPanel()
     }
 
     private fun leagueShort(mode: BattleLeagueMode): String = when (mode) {
-        BattleLeagueMode.AUTO -> "Auto"
+        BattleLeagueMode.AUTO -> "Automático"
         BattleLeagueMode.GREAT -> "Grande"
         BattleLeagueMode.ULTRA -> "Ultra"
         BattleLeagueMode.MASTER -> "Mestra"
     }
 
+    private fun resetPositions() {
+        settings.resetQuickMenuPosition()
+        callbacks.onResetHudPositions()
+        moveGearToStoredPosition()
+        moveLeagueToStoredPosition()
+        callbacks.onSettingsChanged(true)
+        refreshPanel()
+    }
+
     private fun gearLayoutParams(): WindowManager.LayoutParams {
-        val size = min(dp(40), (metrics.widthPixels * .092f).toInt()).coerceAtLeast(42)
-        val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
-        val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
-        return WindowManager.LayoutParams(
-            size, size,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
+        val size = min(dp(38), (metrics.widthPixels * .088f).toInt()).coerceAtLeast(40)
+        return floatingParams(size, size).apply {
+            val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
+            val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
             x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(0, maxX)
             y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(0, maxY)
         }
     }
 
-    private fun modeLayoutParams(gear: WindowManager.LayoutParams): WindowManager.LayoutParams {
-        val size = dp(25).coerceAtLeast(27)
-        return WindowManager.LayoutParams(
-            size, size,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START }.also { positionMode(it, gear) }
+    private fun leagueLayoutParams(): WindowManager.LayoutParams {
+        val size = dp(34).coerceAtLeast(36)
+        return floatingParams(size, size).apply {
+            val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
+            val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
+            x = (settings.leagueBadgeXFraction * maxX).toInt().coerceIn(0, maxX)
+            y = (settings.leagueBadgeYFraction * maxY).toInt().coerceIn(0, maxY)
+        }
     }
 
-    private fun updateModePosition() {
-        val gp = gearParams ?: return
-        val mp = modeParams ?: return
-        val mode = modeView ?: return
-        positionMode(mp, gp)
-        runCatching { windowManager.updateViewLayout(mode, mp) }
-    }
-
-    private fun positionMode(mode: WindowManager.LayoutParams, gear: WindowManager.LayoutParams) {
-        val gap = dp(4)
-        val leftX = gear.x - mode.width - gap
-        mode.x = if (leftX >= 0) leftX else (gear.x + gear.width + gap).coerceAtMost((metrics.widthPixels - mode.width).coerceAtLeast(0))
-        mode.y = (gear.y + (gear.height - mode.height) / 2).coerceIn(0, (metrics.heightPixels - mode.height).coerceAtLeast(0))
-    }
+    private fun floatingParams(w: Int, h: Int) = WindowManager.LayoutParams(
+        w, h,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT
+    ).apply { gravity = Gravity.TOP or Gravity.START }
 
     private fun moveGearToStoredPosition() {
-        val gear = gearView ?: return
-        val params = gearParams ?: return
-        val maxX = (metrics.widthPixels - params.width).coerceAtLeast(0)
-        val maxY = (metrics.heightPixels - params.height).coerceAtLeast(0)
-        params.x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(0, maxX)
-        params.y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(0, maxY)
-        runCatching { windowManager.updateViewLayout(gear, params) }
-        updateModePosition()
+        val view = gearView ?: return
+        val p = gearParams ?: return
+        val maxX = (metrics.widthPixels - p.width).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - p.height).coerceAtLeast(0)
+        p.x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(0, maxX)
+        p.y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(0, maxY)
+        runCatching { windowManager.updateViewLayout(view, p) }
     }
 
-    /** Direct drag: no long press and no relationship with the separate eye control. */
-    private fun installDragAndTap(view: View, params: WindowManager.LayoutParams) {
-        var downRawX = 0f
-        var downRawY = 0f
-        var startX = 0
-        var startY = 0
-        var dragging = false
+    private fun moveLeagueToStoredPosition() {
+        val view = leagueView ?: return
+        val p = leagueParams ?: return
+        val maxX = (metrics.widthPixels - p.width).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - p.height).coerceAtLeast(0)
+        p.x = (settings.leagueBadgeXFraction * maxX).toInt().coerceIn(0, maxX)
+        p.y = (settings.leagueBadgeYFraction * maxY).toInt().coerceIn(0, maxY)
+        runCatching { windowManager.updateViewLayout(view, p) }
+    }
+
+    private fun installGearDragAndTap(view: View, params: WindowManager.LayoutParams) {
+        installDrag(view, params, onMoved = { xFrac, yFrac ->
+            settings.quickMenuXFraction = xFrac
+            settings.quickMenuYFraction = yFrac
+        }, onTap = { togglePanel() })
+    }
+
+    private fun installLeagueDrag(view: View, params: WindowManager.LayoutParams) {
+        installDrag(view, params, onMoved = { xFrac, yFrac ->
+            settings.leagueBadgeXFraction = xFrac
+            settings.leagueBadgeYFraction = yFrac
+        }, onTap = { /* display only; league changes from the menu */ })
+    }
+
+    private fun installDrag(
+        view: View,
+        params: WindowManager.LayoutParams,
+        onMoved: (Float, Float) -> Unit,
+        onTap: () -> Unit
+    ) {
+        var downRawX = 0f; var downRawY = 0f; var startX = 0; var startY = 0; var dragging = false
         view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    downRawX = event.rawX; downRawY = event.rawY
-                    startX = params.x; startY = params.y
-                    dragging = false
-                    true
+                    downRawX = event.rawX; downRawY = event.rawY; startX = params.x; startY = params.y; dragging = false; true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - downRawX
-                    val dy = event.rawY - downRawY
+                    val dx = event.rawX - downRawX; val dy = event.rawY - downRawY
                     if (abs(dx) + abs(dy) >= 6f) dragging = true
                     if (dragging) {
                         removePanel(false)
@@ -429,7 +436,6 @@ class QuickOverlayMenu(
                         params.x = (startX + dx).toInt().coerceIn(0, maxX)
                         params.y = (startY + dy).toInt().coerceIn(0, maxY)
                         runCatching { windowManager.updateViewLayout(view, params) }
-                        updateModePosition()
                     }
                     true
                 }
@@ -437,10 +443,9 @@ class QuickOverlayMenu(
                     if (dragging) {
                         val maxX = (metrics.widthPixels - params.width).coerceAtLeast(1)
                         val maxY = (metrics.heightPixels - params.height).coerceAtLeast(1)
-                        settings.quickMenuXFraction = params.x.toFloat() / maxX
-                        settings.quickMenuYFraction = params.y.toFloat() / maxY
+                        onMoved(params.x.toFloat() / maxX, params.y.toFloat() / maxY)
                         callbacks.onSettingsChanged(false)
-                    } else togglePanel()
+                    } else onTap()
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> true
@@ -449,41 +454,34 @@ class QuickOverlayMenu(
         }
     }
 
-    private fun circleBackground(active: Boolean, disabled: Boolean = false): GradientDrawable = GradientDrawable().apply {
+    private fun roundLauncherBackground(): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(Color.argb(if (active) 205 else 160, 46, 51, 60))
-        setStroke(dp(1), when {
-            active -> Color.rgb(118, 224, 150)
-            disabled -> Color.argb(150, 190, 196, 205)
-            else -> Color.argb(220, 238, 241, 246)
+        setColor(Color.argb(150, 30, 35, 44))
+        setStroke(dp(1), Color.argb(225, 238, 241, 246))
+    }
+
+    private fun squareIconBackground(enabled: Boolean?): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = dp(2).toFloat()
+        setColor(Color.argb(165, 23, 27, 33))
+        setStroke(dp(1), when (enabled) {
+            true -> Color.rgb(111, 220, 146)
+            false -> Color.argb(120, 170, 177, 188)
+            null -> Color.argb(150, 235, 238, 244)
         })
     }
 
-    private fun smallModeBackground(): GradientDrawable = GradientDrawable().apply {
+    private fun leagueBackground(kind: LeagueKind): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(Color.argb(180, 35, 40, 49))
-        val border = if (settings.battleAssistEnabled) Color.rgb(118, 224, 150) else Color.argb(220, 238, 241, 246)
-        setStroke(dp(1), border)
+        setColor(when (kind) {
+            LeagueKind.GREAT -> Color.argb(215, 52, 111, 190)
+            LeagueKind.ULTRA -> Color.argb(215, 194, 145, 43)
+            LeagueKind.MASTER -> Color.argb(215, 111, 76, 169)
+            LeagueKind.AUTO -> Color.argb(195, 73, 80, 91)
+        })
+        setStroke(dp(1), Color.argb(235, 245, 247, 250))
     }
 
-    private fun borderColor(enabled: Boolean?): Int = when (enabled) {
-        true -> Color.rgb(118, 224, 150)
-        false -> Color.argb(150, 190, 196, 205)
-        null -> Color.argb(210, 238, 241, 246)
-    }
-
-    private fun roundedBackground(color: Int, strokeColor: Int, radius: Float, strokeWidth: Int): GradientDrawable =
-        GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            setColor(color)
-            cornerRadius = radius
-            setStroke(strokeWidth, strokeColor)
-        }
-
-    private data class IconItem(
-        val icon: String,
-        val label: String,
-        val enabled: Boolean?,
-        val onTap: () -> Unit
-    )
+    private enum class LeagueKind { AUTO, GREAT, ULTRA, MASTER }
+    private data class IconItem(val icon: String, val label: String, val enabled: Boolean?, val onTap: () -> Unit)
 }
