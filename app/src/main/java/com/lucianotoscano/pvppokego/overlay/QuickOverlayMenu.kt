@@ -428,7 +428,8 @@ class QuickOverlayMenu(
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX; val dy = event.rawY - downRawY
-                    if (canDrag() && abs(dx) + abs(dy) >= 6f) dragging = true
+                    val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat().coerceAtLeast(16f)
+                    if (canDrag() && (abs(dx) >= touchSlop || abs(dy) >= touchSlop)) dragging = true
                     if (dragging) {
                         removePanel(false)
                         val maxX = (metrics.widthPixels - params.width).coerceAtLeast(0)
