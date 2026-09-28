@@ -558,14 +558,37 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     private fun syncEditTouchLayer(enabled: Boolean) {
-        val shouldDrag = enabled && !hudCollapsed && (settingsRepo.editMode || !settingsRepo.layoutLocked)
-        if (shouldDrag) {
-            attachEditTouchLayer()
-            if (settingsRepo.editMode) attachEditToolbar() else removeEditToolbar()
-            bringHudControlsToFront()
-            quickMenu?.bringToFront()
-        } else removeEditTouchLayer()
+        val inEdit = enabled && !hudCollapsed && settingsRepo.editMode
+        val freeDrag = enabled && !hudCollapsed && !settingsRepo.layoutLocked && !settingsRepo.editMode
+        val mode = when {
+            inEdit -> "edit"
+            freeDrag -> "free"
+            else -> "none"
+        }
+        if (mode == lastDragMode) return
+        lastDragMode = mode
+        when (mode) {
+            "edit" -> {
+                removeFreeDragZones()
+                removeEditToolbar()
+                attachEditTouchLayer()
+                if (editToolbarView == null) attachEditToolbar()
+                bringHudControlsToFront()
+                quickMenu?.bringToFront()
+            }
+            "free" -> {
+                removeEditTouchLayer()
+                if (freeDragZones.isEmpty()) attachFreeDragZones()
+                bringHudControlsToFront()
+                quickMenu?.bringToFront()
+            }
+            else -> {
+                removeEditTouchLayer()
+                removeFreeDragZones()
+            }
+        }
     }
+
 
     private fun bringHudControlsToFront() {
         fun readd(view: View?) {
@@ -591,9 +614,92 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         charged2Touch = null
         hudToggleTouch = null
         hudLockTouch = null
+        lastDragMode = null
         attachMoveTouchZones()
         attachHudToggleTouch()
         attachHudLockTouch()
+    }
+
+    private fun attachFreeDragZones() {
+        val wm = windowManager ?: return
+        val view = overlayView ?: return
+        removeFreeDragZones()
+        val metrics = resources.displayMetrics
+        val sx = metrics.widthPixels / 864f
+        val sy = metrics.heightPixels / 1536f
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop.toFloat().coerceAtLeast(16f)
+        val blocks = listOf(
+            BattleOverlayView.BLOCK_PLAYER_MATCHUP,
+            BattleOverlayView.BLOCK_STRONG_TYPES,
+            BattleOverlayView.BLOCK_ENEMY_MOVES,
+            BattleOverlayView.BLOCK_RESERVE_1,
+            BattleOverlayView.BLOCK_RESERVE_2,
+            BattleOverlayView.BLOCK_BATTLE_ASSIST,
+            BattleOverlayView.BLOCK_ENEMY_HISTORY
+        )
+        for (block in blocks) {
+            if (settingsRepo.isBlockHidden(block)) continue
+            val pos = view.blockPosition(block) ?: continue
+            val half = when (block) {
+                BattleOverlayView.BLOCK_ENEMY_MOVES -> 90f
+                BattleOverlayView.BLOCK_STRONG_TYPES -> 70f
+                BattleOverlayView.BLOCK_BATTLE_ASSIST -> 80f
+                else -> 48f
+            }
+            val w = (half * 2f * sx).toInt().coerceAtLeast(48)
+            val h = (half * 2f * sy).toInt().coerceAtLeast(48)
+            val params = smallTouchableParams(w, h).apply {
+                x = (pos.first * sx - w / 2f).toInt().coerceAtLeast(0)
+                y = (pos.second * sy - h / 2f).toInt().coerceAtLeast(0)
+            }
+            var downX=0f
+            var downY=0f
+            var startX=0
+            var startY=0
+            var dragging=false
+            val zone = View(this).apply {
+                setBackgroundColor(Color.TRANSPARENT)
+                setOnTouchListener { v,event ->
+                    when(event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            downX=event.rawX; downY=event.rawY
+                            startX=params.x; startY=params.y; dragging=false
+                            view.setEditTarget(block)
+                            true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val dx=event.rawX-downX; val dy=event.rawY-downY
+                            if(abs(dx)>=touchSlop || abs(dy)>=touchSlop) dragging=true
+                            if(dragging) {
+                                val maxX=(metrics.widthPixels-params.width).coerceAtLeast(0)
+                                val maxY=(metrics.heightPixels-params.height).coerceAtLeast(0)
+                                params.x=(startX+dx).toInt().coerceIn(0,maxX)
+                                params.y=(startY+dy).toInt().coerceIn(0,maxY)
+                                runCatching { wm.updateViewLayout(v,params) }
+                                settingsRepo.setPosition(block,(params.x+params.width/2f)/sx,(params.y+params.height/2f)/sy)
+                                view.invalidate()
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            if(dragging) redraw()
+                            view.setEditTarget(null)
+                            dragging=false
+                            true
+                        }
+                        else -> true
+                    }
+                }
+            }
+            runCatching { wm.addView(zone,params) }
+            freeDragZones += zone
+        }
+    }
+
+    private fun removeFreeDragZones() {
+        val wm = windowManager
+        freeDragZones.forEach { runCatching { wm?.removeView(it) } }
+        freeDragZones.clear()
     }
 
     /** Compact type-colored submenu. Individual rows carry the color; there is no black panel behind them. */
@@ -996,7 +1102,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         // With automatic recognition disabled, keep the HUD available as a manual
         // overlay instead of making every control disappear because battleActive can no
         // longer receive visual/OCR evidence.
-        val enabled = settingsRepo.overlayEnabled && !appUiVisible && (battleActive || !settingsRepo.autoRecognition)
+        val enabled = settingsRepo.overlayEnabled && !appUiVisible && (battleActive || !settingsRepo.autoRecognition || settingsRepo.editMode)
         view.visibility = if (enabled) View.VISIBLE else View.GONE
         view.setCollapsed(hudCollapsed)
         view.setNativeTopCardY(lastNativeTopCardY)
@@ -1005,16 +1111,17 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val ui = engine?.uiState(settingsRepo.debugMode)
         ui?.let(view::render)
 
-        syncEditTouchLayer(enabled)
+        val dragHostEnabled = settingsRepo.overlayEnabled && !appUiVisible && (enabled || !settingsRepo.layoutLocked || settingsRepo.editMode)
+        syncEditTouchLayer(dragHostEnabled)
         val selectorsEnabled = enabled && !hudCollapsed && settingsRepo.layoutLocked && !settingsRepo.editMode
         fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
         // Eye is the single restore control when HUD is collapsed. Lock/menu/league all disappear.
-        hudToggleTouch?.visibility = if (enabled) View.VISIBLE else View.GONE
-        hudLockTouch?.visibility = if (enabled && !hudCollapsed) View.VISIBLE else View.GONE
-        (hudLockTouch as? TextView)?.text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
-        quickMenu?.setVisible(enabled && !hudCollapsed)
+        val chromeEnabled = settingsRepo.overlayEnabled && !appUiVisible
+        hudToggleTouch?.visibility = if (chromeEnabled) View.VISIBLE else View.GONE
+        hudLockTouch?.visibility = if (chromeEnabled && !hudCollapsed) View.VISIBLE else View.GONE
+        quickMenu?.setVisible(chromeEnabled && !hudCollapsed)
         if (!hudCollapsed) quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()
     }
