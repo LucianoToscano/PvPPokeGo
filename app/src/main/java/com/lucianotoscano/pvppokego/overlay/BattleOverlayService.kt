@@ -484,7 +484,6 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         editTouchLayer = layer
         wm.addView(layer, params)
         if (settingsRepo.editMode) attachEditToolbar() else removeEditToolbar()
-        bringHudControlsToFront()
         quickMenu?.bringToFront()
     }
 
@@ -524,7 +523,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             "L" to { selected()?.let { settingsRepo.setBlockLocked(it, !settingsRepo.isBlockLocked(it)); refresh() } },
             "H" to { selected()?.let { settingsRepo.setBlockHidden(it, !settingsRepo.isBlockHidden(it)); refresh() } },
             "↶" to { lastEditSnapshot?.let { (block,x,y) -> settingsRepo.setPosition(block,x,y); overlayView?.setEditTarget(block); rebuildTouchableZones(); refresh() } },
-            "✓" to { settingsRepo.editMode=false; overlayView?.setEditTarget(null); rebuildTouchableZones(); redraw() },
+            "✓" to {\n                settingsRepo.editMode = false\n                overlayView?.setEditTarget(null)\n                removeEditToolbar()\n                if (settingsRepo.layoutLocked) removeEditTouchLayer()\n                rebuildTouchableZones()\n                redraw()\n            },
             "↺" to { settingsRepo.resetHudCustomization(); overlayView?.setEditTarget(null); rebuildTouchableZones(); redraw() }
         )
         actions.forEach { (label, action) ->
