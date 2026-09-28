@@ -1,9 +1,8 @@
-name: Build exact 0.5.8 canvas lock-eye
+name: Build exact 0.5.8 canvas lock-eye fixed touch
 
 on:
   push:
-    branches:
-      - v04-v03-stable-base
+    branches: [v04-v03-stable-base]
     paths:
       - '.github/workflows/build-exact-0.5.6-v2.yml'
   workflow_dispatch:
@@ -28,24 +27,153 @@ jobs:
           base64 -d .github/audit/0.5.6.patch.b64 | gzip -d > /tmp/audit.patch
           git apply --check /tmp/audit.patch
           git apply /tmp/audit.patch
-      - name: Apply 0.5.8 canvas lock-eye fix
+      - name: Apply 0.5.8 canvas icons while preserving touch
         run: |
-          perl -0pi -e 's/hudToggleTouch = TextView\(this\)\.apply \{\n\s*gravity = Gravity\.CENTER\n\s*text = if \(hudCollapsed\) "👁" else "🙈"\n\s*textSize = 20f\n\s*setTextColor\(Color\.WHITE\)\n\s*setShadowLayer\(3f, 0f, 1f, Color\.BLACK\)\n\s*background = controlButtonBackground\(\)/hudToggleTouch = View(this).apply {\n            setBackgroundColor(Color.TRANSPARENT)/s' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          perl -0pi -e 's/hudLockTouch = TextView\(this\)\.apply \{\n\s*gravity = Gravity\.CENTER\n\s*text = if \(settingsRepo\.layoutLocked\) "🔒" else "🔓"\n\s*textSize = 20f\n\s*setTextColor\(Color\.WHITE\)\n\s*setShadowLayer\(3f, 0f, 1f, Color\.BLACK\)\n\s*background = controlButtonBackground\(\)/hudLockTouch = View(this).apply {\n            setBackgroundColor(Color.TRANSPARENT)/s' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          sed -i '/(hudToggleTouch as? TextView)?.text = if (hudCollapsed)/d' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          sed -i '/(hudLockTouch as? TextView)?.text = if (settingsRepo.layoutLocked)/d' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          sed -i 's/versionCode = 11/versionCode = 13/' app/build.gradle.kts
-          sed -i 's/versionName = "0.5.6-post-audit"/versionName = "0.5.8-canvas-lock-eye"/' app/build.gradle.kts
-          grep -n 'hudToggleTouch =\|hudLockTouch =\|versionCode\|versionName' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt app/build.gradle.kts
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path("app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt")
+          s=p.read_text()
+          eye_pat=r'(?s)    private fun attachHudToggleTouch\(\) \{.*?\n    \}\n\n    private fun attachHudLockTouch'
+          eye='''    private fun attachHudToggleTouch() {
+          val wm = windowManager ?: return
+          if (hudToggleTouch != null) return
+          val params = hudControlParams(hudToggleAnchor())
+          hudToggleTouch = TextView(this).apply {
+              // Invisible touch target. The actual eye icon is drawn by BattleOverlayView Canvas.
+              text = ""
+              setTextColor(Color.TRANSPARENT)
+              setBackgroundColor(Color.TRANSPARENT)
+              contentDescription = "Ocultar ou mostrar HUD"
+              isClickable = true
+              isFocusable = false
+              installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_TOGGLE) {
+                  toggleHudCollapsed()
+              }
+          }.also { wm.addView(it, params) }
+      }
+
+      private fun attachHudLockTouch'''
+          s,n=re.subn(eye_pat,eye,s,count=1)
+          if n!=1: raise SystemExit("eye function replacement failed")
+          lock_pat=r'(?s)    private fun attachHudLockTouch\(\) \{.*?\n    \}\n\n    private fun hudControlParams'
+          lock='''    private fun attachHudLockTouch() {
+          val wm = windowManager ?: return
+          if (hudLockTouch != null) return
+          val params = hudControlParams(hudLockAnchor())
+          hudLockTouch = TextView(this).apply {
+              // Invisible touch target. The actual lock icon is drawn by BattleOverlayView Canvas.
+              text = ""
+              setTextColor(Color.TRANSPARENT)
+              setBackgroundColor(Color.TRANSPARENT)
+              contentDescription = "Travar ou destravar HUD"
+              isClickable = true
+              isFocusable = false
+              installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
+                  settingsRepo.layoutLocked = !settingsRepo.layoutLocked
+                  if (settingsRepo.layoutLocked) {
+                      overlayView?.setEditTarget(null)
+                      removeEditTouchLayer()
+                  } else {
+                      dismissMoveMenu()
+                  }
+                  redraw()
+              }
+          }.also { wm.addView(it, params) }
+      }
+
+      private fun hudControlParams'''
+          s,n=re.subn(lock_pat,lock,s,count=1)
+          if n!=1: raise SystemExit("lock function replacement failed")
+          # Keep 0.5.7's larger touch target.
+          s=s.replace('val size = (52f * unit).toInt().coerceAtLeast(44)',
+                      'val size = (56f * unit).toInt().coerceAtLeast(52)')
+          # Replace the touch listener with the known working 0.5.7 behavior.
+          touch_pat=r'(?s)    private fun installHudControlDrag\(view: View, params: WindowManager\.LayoutParams, block: String, onTap: \(\) -> Unit\) \{.*?\n    \}\n\n    private fun toggleHudCollapsed'
+          touch='''    private fun installHudControlDrag(view: View, params: WindowManager.LayoutParams, block: String, onTap: () -> Unit) {
+          val touchSlop = android.view.ViewConfiguration.get(this)
+              .scaledTouchSlop.toFloat().coerceAtLeast(16f)
+          var downX = 0f
+          var downY = 0f
+          var startX = 0
+          var startY = 0
+          var dragging = false
+          view.isClickable = true
+          view.isFocusable = false
+          view.setOnTouchListener { v, event ->
+              when (event.actionMasked) {
+                  MotionEvent.ACTION_DOWN -> {
+                      downX = event.rawX
+                      downY = event.rawY
+                      startX = params.x
+                      startY = params.y
+                      dragging = false
+                      v.parent?.requestDisallowInterceptTouchEvent(true)
+                      true
+                  }
+                  MotionEvent.ACTION_MOVE -> {
+                      val dx = event.rawX - downX
+                      val dy = event.rawY - downY
+                      if (!settingsRepo.layoutLocked &&
+                          (abs(dx) >= touchSlop || abs(dy) >= touchSlop)) {
+                          dragging = true
+                      }
+                      if (dragging) {
+                          val maxX = (resources.displayMetrics.widthPixels - params.width).coerceAtLeast(0)
+                          val maxY = (resources.displayMetrics.heightPixels - params.height).coerceAtLeast(0)
+                          params.x = (startX + dx).toInt().coerceIn(0, maxX)
+                          params.y = (startY + dy).toInt().coerceIn(-params.height / 2, maxY)
+                          runCatching { windowManager?.updateViewLayout(view, params) }
+                      }
+                      true
+                  }
+                  MotionEvent.ACTION_UP -> {
+                      if (dragging) {
+                          val sx = resources.displayMetrics.widthPixels / 864f
+                          val sy = resources.displayMetrics.heightPixels / 1536f
+                          settingsRepo.setPosition(
+                              block,
+                              (params.x + params.width / 2f) / sx,
+                              (params.y + params.height / 2f) / sy
+                          )
+                          redraw()
+                      } else {
+                          onTap()
+                      }
+                      true
+                  }
+                  MotionEvent.ACTION_CANCEL -> {
+                      dragging = false
+                      true
+                  }
+                  else -> true
+              }
+          }
+      }
+
+      private fun toggleHudCollapsed'''
+          s,n=re.subn(touch_pat,touch,s,count=1)
+          if n!=1: raise SystemExit("touch function replacement failed")
+          # redraw must never assign emoji text.
+          s=re.sub(r'\n\s*\(hudToggleTouch as\? TextView\)\?\.text\s*=.*', '', s)
+          s=re.sub(r'\n\s*\(hudLockTouch as\? TextView\)\?\.text\s*=.*', '', s)
+          p.write_text(s)
+          g=Path("app/build.gradle.kts")
+          gs=g.read_text()
+          gs=re.sub(r'versionCode\s*=\s*\d+', 'versionCode = 13', gs, count=1)
+          gs=re.sub(r'versionName\s*=\s*"[^"]+"', 'versionName = "0.5.8-canvas-lock-eye"', gs, count=1)
+          g.write_text(gs)
+          PY
+          grep -n 'attachHudToggleTouch\|attachHudLockTouch\|touchSlop\|setTextColor(Color.TRANSPARENT)\|versionCode\|versionName' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt app/build.gradle.kts
       - name: Build APK
         run: gradle --no-daemon --stacktrace :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
       - name: Collect APK
         run: |
           mkdir -p artifact
-          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo_0.5.8-canvas-lock-eye-debug.apk
-          sha256sum artifact/PvPPokeGo_0.5.8-canvas-lock-eye-debug.apk > artifact/PvPPokeGo_0.5.8-canvas-lock-eye-debug.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo_0.5.8-canvas-lock-eye-fixed-debug.apk
+          sha256sum artifact/PvPPokeGo_0.5.8-canvas-lock-eye-fixed-debug.apk > artifact/PvPPokeGo_0.5.8-canvas-lock-eye-fixed-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: PvPPokeGo-0.5.8-canvas-lock-eye
+          name: PvPPokeGo-0.5.8-canvas-lock-eye-fixed
           path: artifact/
           retention-days: 14
