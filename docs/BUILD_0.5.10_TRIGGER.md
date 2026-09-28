@@ -1,0 +1,1 @@
+Build trigger for PvPPokeGo 0.5.10 after CI workflow registration on main.
