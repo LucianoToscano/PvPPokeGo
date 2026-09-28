@@ -1,0 +1,26 @@
+name: Package complete project ZIP
+
+on:
+  push:
+    branches:
+      - v04-v03-stable-base
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create project ZIP
+        run: |
+          zip -r ../PvPPokeGo_COMPLETE_PROJECT.zip . -x "./.git/*"
+      
+      - name: Upload project ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-COMPLETE-PROJECT
+          path: PvPPokeGo_COMPLETE_PROJECT.zip
+          if-no-files-found: error
+          retention-days: 30
