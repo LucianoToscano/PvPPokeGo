@@ -69,6 +69,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var charged2Touch: View? = null
     private var hudToggleTouch: View? = null
     private var hudLockTouch: View? = null
+    private var hudControlTouchLayer: View? = null
     private var editTouchLayer: View? = null
     private var editToolbarView: View? = null
     private var moveMenuView: View? = null
@@ -283,8 +284,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val wm = windowManager ?: return
         if (hudToggleTouch != null) return
         val params = hudControlParams(hudToggleAnchor())
-        hudToggleTouch = View(this).apply {
-            setBackgroundColor(Color.TRANSPARENT)
+        hudToggleTouch = TextView(this).apply {
+            gravity = Gravity.CENTER
+            text = "◉"
+            textSize = 21f
+            setTextColor(Color.WHITE)
+            setShadowLayer(3f, 0f, 1f, Color.BLACK)
+            background = controlButtonBackground()
+            contentDescription = "Ocultar ou mostrar HUD"
             isClickable = true
             installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_TOGGLE) { toggleHudCollapsed() }
         }.also { wm.addView(it, params) }
@@ -294,14 +301,17 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val wm = windowManager ?: return
         if (hudLockTouch != null) return
         val params = hudControlParams(hudLockAnchor())
-        hudLockTouch = View(this).apply {
-            setBackgroundColor(Color.TRANSPARENT)
+        hudLockTouch = TextView(this).apply {
+            gravity = Gravity.CENTER
+            text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            setShadowLayer(3f, 0f, 1f, Color.BLACK)
+            background = controlButtonBackground()
+            contentDescription = "Travar ou destravar HUD"
             isClickable = true
             installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
                 settingsRepo.layoutLocked = !settingsRepo.layoutLocked
-                // Global padlock is the single source of truth for free dragging.
-                // Rebuild the drag layer on the next UI turn so unlocking immediately
-                // makes every HUD block draggable without opening the legacy edit mode.
                 if (settingsRepo.layoutLocked) {
                     overlayView?.setEditTarget(null)
                     removeEditTouchLayer()
@@ -367,6 +377,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         overlayView?.setCollapsed(hudCollapsed)
         redraw()
     }
+
+    private fun controlButtonBackground(): GradientDrawable =
+        GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.argb(225, 18, 22, 29))
+            setStroke(2, Color.argb(235, 255, 255, 255))
+        }
 
     private fun smallTouchableParams(width: Int, height: Int): WindowManager.LayoutParams =
         WindowManager.LayoutParams(
@@ -984,6 +1001,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         // Eye is the single restore control when HUD is collapsed. Lock/menu/league all disappear.
         hudToggleTouch?.visibility = if (enabled) View.VISIBLE else View.GONE
         hudLockTouch?.visibility = if (enabled && !hudCollapsed) View.VISIBLE else View.GONE
+        (hudLockTouch as? TextView)?.text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
         quickMenu?.setVisible(enabled && !hudCollapsed)
         if (!hudCollapsed) quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()
