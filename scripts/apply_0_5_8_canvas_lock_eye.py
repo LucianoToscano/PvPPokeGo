@@ -4,7 +4,18 @@ import re
 p = Path("app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt")
 s = p.read_text()
 
-eye = r'''    private fun attachHudToggleTouch() {
+def replace_between(src, start_marker, end_marker, replacement):
+    a = src.find(start_marker)
+    if a < 0:
+        raise SystemExit("missing start marker: " + start_marker)
+    b = src.find(end_marker, a)
+    if b < 0:
+        raise SystemExit("missing end marker: " + end_marker)
+    return src[:a] + replacement + src[b:]
+
+eye_start = "    private fun attachHudToggleTouch() {"
+eye_end = "    private fun attachHudLockTouch() {"
+eye = """    private fun attachHudToggleTouch() {
         val wm = windowManager ?: return
         if (hudToggleTouch != null) return
         val params = hudControlParams(hudToggleAnchor())
@@ -22,14 +33,12 @@ eye = r'''    private fun attachHudToggleTouch() {
         }.also { wm.addView(it, params) }
     }
 
-'''
-s, n = re.subn(r"(?s)    private fun attachHudToggleTouch() {.*?
-    }
+"""
+s = replace_between(s, eye_start, eye_end, eye + eye_end)
 
-    private fun attachHudLockTouch", eye + "    private fun attachHudLockTouch", s, count=1)
-if n != 1: raise SystemExit("eye replacement failed")
-
-lock = r'''    private fun attachHudLockTouch() {
+lock_start = "    private fun attachHudLockTouch() {"
+lock_end = "    private fun hudControlParams"
+lock = """    private fun attachHudLockTouch() {
         val wm = windowManager ?: return
         if (hudLockTouch != null) return
         val params = hudControlParams(hudLockAnchor())
@@ -54,17 +63,15 @@ lock = r'''    private fun attachHudLockTouch() {
         }.also { wm.addView(it, params) }
     }
 
-'''
-s, n = re.subn(r"(?s)    private fun attachHudLockTouch() {.*?
-    }
-
-    private fun hudControlParams", lock + "    private fun hudControlParams", s, count=1)
-if n != 1: raise SystemExit("lock replacement failed")
+"""
+s = replace_between(s, lock_start, lock_end, lock + lock_end)
 
 s = s.replace("val size = (52f * unit).toInt().coerceAtLeast(44)",
               "val size = (56f * unit).toInt().coerceAtLeast(52)")
 
-touch = r'''    private fun installHudControlDrag(view: View, params: WindowManager.LayoutParams, block: String, onTap: () -> Unit) {
+touch_start = "    private fun installHudControlDrag("
+touch_end = "    private fun toggleHudCollapsed()"
+touch = """    private fun installHudControlDrag(view: View, params: WindowManager.LayoutParams, block: String, onTap: () -> Unit) {
         val touchSlop = android.view.ViewConfiguration.get(this)
             .scaledTouchSlop.toFloat().coerceAtLeast(16f)
         var downX = 0f
@@ -125,17 +132,13 @@ touch = r'''    private fun installHudControlDrag(view: View, params: WindowMana
         }
     }
 
-'''
-s, n = re.subn(r"(?s)    private fun installHudControlDrag(view: View, params: WindowManager.LayoutParams, block: String, onTap: () -> Unit) {.*?
-    }
+"""
+s = replace_between(s, touch_start, touch_end, touch + touch_end)
 
-    private fun toggleHudCollapsed", touch + "    private fun toggleHudCollapsed", s, count=1)
-if n != 1: raise SystemExit("touch replacement failed")
+# Remove any legacy emoji assignment from redraw; icons remain Canvas-only.
+s = re.sub(r'(?m)^\s*\(hudToggleTouch as\? TextView\)\?\.text\s*=.*$', '', s)
+s = re.sub(r'(?m)^\s*\(hudLockTouch as\? TextView\)\?\.text\s*=.*$', '', s)
 
-s = re.sub(r'
-s*(hudToggleTouch as? TextView)?.texts*=.*', '', s)
-s = re.sub(r'
-s*(hudLockTouch as? TextView)?.texts*=.*', '', s)
 p.write_text(s)
 
 g = Path("app/build.gradle.kts")
