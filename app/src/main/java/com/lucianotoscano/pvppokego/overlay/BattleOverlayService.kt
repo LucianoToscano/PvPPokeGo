@@ -944,6 +944,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             var consecutiveErrors = 0
 
             while (isActive) {
+                capture?.ensureMatchesCurrentDisplay()
                 val frame = capture?.acquireLatestBitmap()
                 if (frame != null) {
                     try {
