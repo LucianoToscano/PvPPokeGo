@@ -1,8 +1,9 @@
-name: Build exact 0.5.8 canvas lock-eye source
+name: Build exact 0.5.8 canvas lock-eye
 
 on:
   push:
-    branches: [v04-v03-stable-base]
+    branches:
+      - v04-v03-stable-base
     paths:
       - '.github/workflows/build-exact-0.5.6-v2.yml'
   workflow_dispatch:
@@ -22,90 +23,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Apply audited source patch
+      - name: Apply audited 0.5.6 source
         run: |
           base64 -d .github/audit/0.5.6.patch.b64 | gzip -d > /tmp/audit.patch
           git apply --check /tmp/audit.patch
           git apply /tmp/audit.patch
-          grep -n 'versionCode\|versionName' app/build.gradle.kts
       - name: Apply 0.5.8 canvas lock-eye fix
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt")
-          s = p.read_text()
-          old_eye = '''        hudToggleTouch = TextView(this).apply {
-            gravity = Gravity.CENTER
-            text = if (hudCollapsed) "👁" else "🙈"
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            setShadowLayer(3f, 0f, 1f, Color.BLACK)
-            background = controlButtonBackground()
-            contentDescription = "Ocultar ou mostrar HUD"
-            isClickable = true
-            isFocusable = false
-            installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_TOGGLE) { toggleHudCollapsed() }
-        }.also { wm.addView(it, params) }'''
-          new_eye = '''        hudToggleTouch = View(this).apply {
-            // Transparent touch target only; visible eye is drawn by BattleOverlayView Canvas.
-            setBackgroundColor(Color.TRANSPARENT)
-            contentDescription = "Ocultar ou mostrar HUD"
-            isClickable = true
-            isFocusable = false
-            installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_TOGGLE) { toggleHudCollapsed() }
-        }.also { wm.addView(it, params) }'''
-          old_lock = '''        hudLockTouch = TextView(this).apply {
-            gravity = Gravity.CENTER
-            text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            setShadowLayer(3f, 0f, 1f, Color.BLACK)
-            background = controlButtonBackground()
-            contentDescription = "Travar ou destravar HUD"
-            isClickable = true
-            isFocusable = false
-            installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
-                settingsRepo.layoutLocked = !settingsRepo.layoutLocked
-                if (settingsRepo.layoutLocked) {
-                    overlayView?.setEditTarget(null)
-                    removeEditTouchLayer()
-                } else {
-                    dismissMoveMenu()
-                }
-                // Immediate redraw so free-drag layer + lock/eye z-order update without delay.
-                redraw()
-            }
-        }.also { wm.addView(it, params) }'''
-          new_lock = '''        hudLockTouch = View(this).apply {
-            // Transparent touch target only; visible lock is drawn by BattleOverlayView Canvas.
-            setBackgroundColor(Color.TRANSPARENT)
-            contentDescription = "Travar ou destravar HUD"
-            isClickable = true
-            isFocusable = false
-            installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
-                settingsRepo.layoutLocked = !settingsRepo.layoutLocked
-                if (settingsRepo.layoutLocked) {
-                    overlayView?.setEditTarget(null)
-                    removeEditTouchLayer()
-                } else {
-                    dismissMoveMenu()
-                }
-                // Redraw Canvas so the delicate shackle changes between locked/open states.
-                redraw()
-            }
-        }.also { wm.addView(it, params) }'''
-          if old_eye not in s: raise SystemExit("eye block not found")
-          if old_lock not in s: raise SystemExit("lock block not found")
-          s = s.replace(old_eye, new_eye).replace(old_lock, new_lock)
-          s = s.replace('''        (hudToggleTouch as? TextView)?.text = if (hudCollapsed) "👁" else "🙈"
-''','')
-          s = s.replace('''        (hudLockTouch as? TextView)?.text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
-''','')
-          p.write_text(s)
-          g = Path("app/build.gradle.kts")
-          gs = g.read_text().replace('versionCode = 11','versionCode = 13').replace('versionName = "0.5.6-post-audit"','versionName = "0.5.8-canvas-lock-eye"')
-          g.write_text(gs)
-          PY
+          perl -0pi -e 's/hudToggleTouch = TextView\(this\)\.apply \{\n\s*gravity = Gravity\.CENTER\n\s*text = if \(hudCollapsed\) "👁" else "🙈"\n\s*textSize = 20f\n\s*setTextColor\(Color\.WHITE\)\n\s*setShadowLayer\(3f, 0f, 1f, Color\.BLACK\)\n\s*background = controlButtonBackground\(\)/hudToggleTouch = View(this).apply {\n            setBackgroundColor(Color.TRANSPARENT)/s' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          perl -0pi -e 's/hudLockTouch = TextView\(this\)\.apply \{\n\s*gravity = Gravity\.CENTER\n\s*text = if \(settingsRepo\.layoutLocked\) "🔒" else "🔓"\n\s*textSize = 20f\n\s*setTextColor\(Color\.WHITE\)\n\s*setShadowLayer\(3f, 0f, 1f, Color\.BLACK\)\n\s*background = controlButtonBackground\(\)/hudLockTouch = View(this).apply {\n            setBackgroundColor(Color.TRANSPARENT)/s' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          sed -i '/(hudToggleTouch as? TextView)?.text = if (hudCollapsed)/d' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          sed -i '/(hudLockTouch as? TextView)?.text = if (settingsRepo.layoutLocked)/d' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          sed -i 's/versionCode = 11/versionCode = 13/' app/build.gradle.kts
+          sed -i 's/versionName = "0.5.6-post-audit"/versionName = "0.5.8-canvas-lock-eye"/' app/build.gradle.kts
+          grep -n 'hudToggleTouch =\|hudLockTouch =\|versionCode\|versionName' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt app/build.gradle.kts
       - name: Build APK
         run: gradle --no-daemon --stacktrace :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
       - name: Collect APK
