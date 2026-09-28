@@ -1,0 +1,64 @@
+name: Build PvPPokeGo 0.5.6 post-audit
+
+on:
+  push:
+    branches: [v04-v03-stable-base]
+    paths:
+      - '.github/workflows/build-0.5.6-post-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Apply project audit patches
+        shell: bash
+        run: |
+          set -e
+          for f in \
+            .github/scripts/fix_v05_compile.py \
+            .github/scripts/apply_v05_ui.py \
+            .github/scripts/apply_free_drag_lock_league.py \
+            .github/scripts/patch_edit_mode.py \
+            .github/scripts/fix_v05_controls_audit.py \
+            .github/scripts/fix_v05_manual_menu.py \
+            .github/scripts/fix_auto_league_nullable.py \
+            .github/scripts/patch_go_style.py \
+            .github/scripts/fix_global_unlock_drag.py \
+            .github/scripts/fix_hud_control_front.py
+          do
+            echo "==> $f"
+            python3 "$f"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("app/build.gradle.kts")
+          s=p.read_text()
+          import re
+          s=re.sub(r'versionCode = \\d+', 'versionCode = 11', s, count=1)
+          s=re.sub(r'versionName = ".*?"', 'versionName = "0.5.6-post-audit"', s, count=1)
+          p.write_text(s)
+          PY
+      - name: Build debug APK
+        run: gradle --no-daemon --stacktrace :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
+      - name: Collect APK
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo_0.5.6-post-audit-debug.apk
+          sha256sum artifact/PvPPokeGo_0.5.6-post-audit-debug.apk > artifact/PvPPokeGo_0.5.6-post-audit-debug.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.6-post-audit
+          path: artifact/
+          retention-days: 14
