@@ -1103,7 +1103,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         // overlay instead of making every control disappear because battleActive can no
         // longer receive visual/OCR evidence.
         val enabled = settingsRepo.overlayEnabled && !appUiVisible && (battleActive || !settingsRepo.autoRecognition || settingsRepo.editMode)
-        view.visibility = if (enabled) View.VISIBLE else View.GONE
+        val chromeEnabled = settingsRepo.overlayEnabled && !appUiVisible
+        view.visibility = if (enabled || chromeEnabled) View.VISIBLE else View.GONE
         view.setCollapsed(hudCollapsed)
         view.setNativeTopCardY(lastNativeTopCardY)
         view.setSwitchChoicePromptVisible(enabled && System.currentTimeMillis() <= switchChoicePromptUntilMs)
@@ -1118,7 +1119,6 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
         // Eye is the single restore control when HUD is collapsed. Lock/menu/league all disappear.
-        val chromeEnabled = settingsRepo.overlayEnabled && !appUiVisible
         hudToggleTouch?.visibility = if (chromeEnabled) View.VISIBLE else View.GONE
         hudLockTouch?.visibility = if (chromeEnabled && !hudCollapsed) View.VISIBLE else View.GONE
         quickMenu?.setVisible(chromeEnabled && !hudCollapsed)
