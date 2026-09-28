@@ -34,7 +34,7 @@ eye = """    private fun attachHudToggleTouch() {
     }
 
 """
-s = replace_between(s, eye_start, eye_end, eye + eye_end)
+s = replace_between(s, eye_start, eye_end, eye)
 
 lock_start = "    private fun attachHudLockTouch() {"
 lock_end = "    private fun hudControlParams"
@@ -64,7 +64,7 @@ lock = """    private fun attachHudLockTouch() {
     }
 
 """
-s = replace_between(s, lock_start, lock_end, lock + lock_end)
+s = replace_between(s, lock_start, lock_end, lock)
 
 s = s.replace("val size = (52f * unit).toInt().coerceAtLeast(44)",
               "val size = (56f * unit).toInt().coerceAtLeast(52)")
@@ -133,7 +133,7 @@ touch = """    private fun installHudControlDrag(view: View, params: WindowManag
     }
 
 """
-s = replace_between(s, touch_start, touch_end, touch + touch_end)
+s = replace_between(s, touch_start, touch_end, touch)
 
 # Remove any legacy emoji assignment from redraw; icons remain Canvas-only.
 s = re.sub(r'(?m)^\s*\(hudToggleTouch as\? TextView\)\?\.text\s*=.*$', '', s)
