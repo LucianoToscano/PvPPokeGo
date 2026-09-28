@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 putExtra(BattleOverlayService.EXTRA_RESULT_DATA, data)
                 // The permission result returns to this Activity. Keep the overlay hidden here;
                 // onPause below will reliably notify the service when the user goes back to GO.
-                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, true)
+                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, false)
             }
             ContextCompat.startForegroundService(this, service)
         }
