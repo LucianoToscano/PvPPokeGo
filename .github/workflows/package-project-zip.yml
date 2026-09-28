@@ -15,8 +15,8 @@ jobs:
 
       - name: Create project ZIP
         run: |
-          zip -r ../PvPPokeGo_COMPLETE_PROJECT.zip . -x "./.git/*"
-      
+          zip -r PvPPokeGo_COMPLETE_PROJECT.zip . -x "./.git/*"
+
       - name: Upload project ZIP
         uses: actions/upload-artifact@v4
         with:
