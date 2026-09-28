@@ -1,0 +1,53 @@
+name: Build PvPPokeGo 0.5.10 APK
+
+on:
+  push:
+    branches:
+      - build/0.5.10-v04-source
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Android platform and build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Debug APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Prepare APK
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/PvPPokeGo-0.5.10-original-icons-restored.apk
+          sha256sum dist/PvPPokeGo-0.5.10-original-icons-restored.apk | tee dist/SHA256.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.10-original-icons-restored
+          path: dist/*
+          if-no-files-found: error
