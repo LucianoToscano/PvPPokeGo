@@ -13,8 +13,8 @@ android {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.5.1-overlay-controls-fix"
+        versionCode = 7
+        versionName = "0.5.2-real-touch-controls"
     }
 
     buildFeatures { compose = true }
