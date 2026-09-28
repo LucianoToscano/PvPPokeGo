@@ -84,6 +84,24 @@ class ScreenCapture(
         )
     }
 
+    fun ensureMatchesCurrentDisplay() {
+        val wm = context.getSystemService(WindowManager::class.java)
+        val current = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = wm.currentWindowMetrics.bounds
+            b.width() to b.height()
+        } else {
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(metrics)
+            metrics.widthPixels to metrics.heightPixels
+        }
+        val dw = kotlin.math.abs(current.first - width)
+        val dh = kotlin.math.abs(current.second - height)
+        if (dw <= 2 && dh <= 2) return
+        stop()
+        start()
+    }
+
     /** Caller owns and must recycle the returned copy. */
     fun acquireLatestBitmap(): Bitmap? = synchronized(bitmapLock) {
         val src = latest.get() ?: return@synchronized null
