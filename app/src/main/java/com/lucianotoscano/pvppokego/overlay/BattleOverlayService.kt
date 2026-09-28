@@ -76,6 +76,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var quickMenu: QuickOverlayMenu? = null
     private var hudCollapsed = false
     private var appUiVisible = false
+    private var lastDragMode: String? = null
+    private val freeDragZones = mutableListOf<View>()
 
     private var battleActive = false
     private var lastBattleEvidenceAtMs = 0L
@@ -285,14 +287,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (hudToggleTouch != null) return
         val params = hudControlParams(hudToggleAnchor())
         hudToggleTouch = TextView(this).apply {
-            gravity = Gravity.CENTER
-            text = "◉"
-            textSize = 21f
-            setTextColor(Color.WHITE)
-            setShadowLayer(3f, 0f, 1f, Color.BLACK)
-            background = controlButtonBackground()
+            text = ""
+            setBackgroundColor(Color.TRANSPARENT)
             contentDescription = "Ocultar ou mostrar HUD"
             isClickable = true
+            isFocusable = false
             installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_TOGGLE) { toggleHudCollapsed() }
         }.also { wm.addView(it, params) }
     }
@@ -302,14 +301,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (hudLockTouch != null) return
         val params = hudControlParams(hudLockAnchor())
         hudLockTouch = TextView(this).apply {
-            gravity = Gravity.CENTER
-            text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            setShadowLayer(3f, 0f, 1f, Color.BLACK)
-            background = controlButtonBackground()
+            text = ""
+            setBackgroundColor(Color.TRANSPARENT)
             contentDescription = "Travar ou destravar HUD"
             isClickable = true
+            isFocusable = false
             installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
                 settingsRepo.layoutLocked = !settingsRepo.layoutLocked
                 if (settingsRepo.layoutLocked) {
@@ -318,7 +314,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 } else {
                     dismissMoveMenu()
                 }
-                hudLockTouch?.post { redraw() }
+                redraw()
             }
         }.also { wm.addView(it, params) }
     }
@@ -328,7 +324,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val sx = metrics.widthPixels / 864f
         val sy = metrics.heightPixels / 1536f
         val unit = min(sx, sy) * (settingsRepo.scale / .8f).coerceIn(.62f, 1.5f)
-        val size = (52f * unit).toInt().coerceAtLeast(44)
+        val size = (56f * unit).toInt().coerceAtLeast(52)
         val centerX = anchor.first * sx
         val centerY = anchor.second * sy
         return smallTouchableParams(size, size).apply {
@@ -338,20 +334,32 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     private fun installHudControlDrag(view: View, params: WindowManager.LayoutParams, block: String, onTap: () -> Unit) {
-        var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var dragging = false
-        view.setOnTouchListener { _, event ->
+        var downX = 0f
+        var downY = 0f
+        var startX = 0
+        var startY = 0
+        var dragging = false
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop.toFloat().coerceAtLeast(16f)
+        view.setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y; dragging = false; true
+                    downX = event.rawX
+                    downY = event.rawY
+                    startX = params.x
+                    startY = params.y
+                    dragging = false
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - downX; val dy = event.rawY - downY
-                    if (!settingsRepo.layoutLocked && abs(dx) + abs(dy) >= 6f) dragging = true
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (!settingsRepo.layoutLocked && (abs(dx) >= touchSlop || abs(dy) >= touchSlop)) dragging = true
                     if (dragging) {
                         val maxX = (resources.displayMetrics.widthPixels - params.width).coerceAtLeast(0)
                         val maxY = (resources.displayMetrics.heightPixels - params.height).coerceAtLeast(0)
                         params.x = (startX + dx).toInt().coerceIn(0, maxX)
-                        params.y = (startY + dy).toInt().coerceIn(0, maxY)
+                        params.y = (startY + dy).toInt().coerceIn(-params.height / 2, maxY)
                         runCatching { windowManager?.updateViewLayout(view, params) }
                     }
                     true
@@ -360,16 +368,20 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     if (dragging) {
                         val sx = resources.displayMetrics.widthPixels / 864f
                         val sy = resources.displayMetrics.heightPixels / 1536f
-                        settingsRepo.setPosition(block, (params.x + params.width/2f) / sx, (params.y + params.height/2f) / sy)
+                        settingsRepo.setPosition(block, (params.x + params.width / 2f) / sx, (params.y + params.height / 2f) / sy)
                         redraw()
                     } else onTap()
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    dragging = false
+                    true
+                }
                 else -> true
             }
         }
     }
+
 
     private fun toggleHudCollapsed() {
         hudCollapsed = !hudCollapsed
