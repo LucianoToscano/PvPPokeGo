@@ -12,6 +12,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.view.ViewConfiguration
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
