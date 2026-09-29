@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.view.ViewConfiguration
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
