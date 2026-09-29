@@ -524,7 +524,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             "L" to { selected()?.let { settingsRepo.setBlockLocked(it, !settingsRepo.isBlockLocked(it)); refresh() } },
             "H" to { selected()?.let { settingsRepo.setBlockHidden(it, !settingsRepo.isBlockHidden(it)); refresh() } },
             "↶" to { lastEditSnapshot?.let { (block,x,y) -> settingsRepo.setPosition(block,x,y); overlayView?.setEditTarget(block); rebuildTouchableZones(); refresh() } },
-            "✓" to {\n                settingsRepo.editMode = false\n                overlayView?.setEditTarget(null)\n                removeEditToolbar()\n                if (settingsRepo.layoutLocked) removeEditTouchLayer()\n                rebuildTouchableZones()\n                redraw()\n            },
+            "✓" to {
+                settingsRepo.editMode = false
+                overlayView?.setEditTarget(null)
+                removeEditToolbar()
+                if (settingsRepo.layoutLocked) removeEditTouchLayer()
+                rebuildTouchableZones()
+                redraw()
+            },
             "↺" to { settingsRepo.resetHudCustomization(); overlayView?.setEditTarget(null); rebuildTouchableZones(); redraw() }
         )
         actions.forEach { (label, action) ->
