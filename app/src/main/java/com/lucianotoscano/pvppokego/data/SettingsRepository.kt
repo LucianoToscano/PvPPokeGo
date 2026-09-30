@@ -118,6 +118,20 @@ class SettingsRepository(context: Context) {
      * V6 stops forcing a fixed top Y. The detector now anchors against GO's actual white cards.
      * We only clear legacy auto-generated high positions once; manual edits made after V6 persist.
      */
+    /** Reference layout requested for the battle controls/icons. Applied once per app version. */
+    fun ensureReferenceButtonPositionsV1() {
+        if (prefs.getInt("reference_button_positions_version", 0) >= 1) return
+        prefs.edit()
+            .putFloat("hud_enemy_moves_x", 688f)
+            .putFloat("hud_enemy_moves_y", 286f)
+            .putFloat("hud_toggle_x", 38f)
+            .putFloat("hud_toggle_y", 1492f)
+            .putFloat("hud_lock_x", 84f)
+            .putFloat("hud_lock_y", 1492f)
+            .putInt("reference_button_positions_version", 1)
+            .apply()
+    }
+
     fun ensureTopHudSafeV4() {
         if (prefs.getInt("top_hud_position_version", 0) >= 6) return
         val editor = prefs.edit()
