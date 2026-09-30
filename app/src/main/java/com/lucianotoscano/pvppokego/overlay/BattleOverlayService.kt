@@ -88,6 +88,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         super.onCreate()
         settingsRepo = SettingsRepository(this)
         settingsRepo.ensureTopHudSafeV4()
+        settingsRepo.ensureReferenceButtonPositionsV1()
         // A previously-running flag at process/service creation means the prior session
         // did not shut down cleanly. Only in that case clear legacy edit mode so an
         // invisible fullscreen drag layer cannot revive unexpectedly. On a clean start,
@@ -278,9 +279,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
 
         val (centerX, fastY) = enemyMoveAnchor()
-        fastTouch = zone(centerX, fastY + 15f, 106f, 116f) { showMoveMenu(MoveKind.FAST) }
-        charged1Touch = zone(centerX - 72f, fastY + 140f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_1) }
-        charged2Touch = zone(centerX + 72f, fastY + 140f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_2) }
+        fastTouch = zone(centerX, fastY, 106f, 116f) { showMoveMenu(MoveKind.FAST) }
+        charged1Touch = zone(centerX - 74f, fastY + 123f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_1) }
+        charged2Touch = zone(centerX + 74f, fastY + 123f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_2) }
     }
 
     private fun attachHudToggleTouch() {
