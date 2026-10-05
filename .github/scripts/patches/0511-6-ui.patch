@@ -1,0 +1,170 @@
+--- a/app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt
++++ b/app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt
+@@ -27,17 +27,26 @@
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.unit.dp
++import com.lucianotoscano.pvppokego.data.BattleHistoryEntry
++import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
+ import com.lucianotoscano.pvppokego.data.BattleLeagueMode
+ import com.lucianotoscano.pvppokego.data.SettingsRepository
++import java.text.SimpleDateFormat
++import java.util.Date
++import java.util.Locale
+ 
+ @Composable
+ fun SettingsScreen(
+     repository: SettingsRepository,
++    historyRepository: BattleHistoryRepository,
++    historyRevision: Int,
+     overlayPermissionGranted: Boolean,
+     onRequestOverlayPermission: () -> Unit,
+     onStartOverlay: () -> Unit,
+     onStopOverlay: () -> Unit,
+-    onResetBattle: () -> Unit
++    onResetBattle: () -> Unit,
++    onExportSettings: () -> Unit,
++    onImportSettings: () -> Unit
+ ) {
+     var overlay by remember { mutableStateOf(repository.overlayEnabled) }
+     var auto by remember { mutableStateOf(repository.autoRecognition) }
+@@ -55,6 +64,8 @@
+     var edit by remember { mutableStateOf(repository.editMode) }
+     var scale by remember { mutableFloatStateOf(repository.scale) }
+     var opacity by remember { mutableFloatStateOf(repository.opacity) }
++    var history by remember(historyRevision) { mutableStateOf(historyRepository.loadHistory()) }
++    var expandedBattleId by remember { mutableStateOf<Long?>(null) }
+ 
+     MaterialTheme {
+         Scaffold { padding ->
+@@ -111,7 +122,7 @@
+                         "• ◉ → mostrar / ocultar HUD\n" +
+                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
+                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
+-                        "Versão 0.5.7-stable-icons-no-flicker",
++                        "Versão 0.5.11",
+                     style = MaterialTheme.typography.bodySmall
+                 )
+ 
+@@ -243,6 +254,65 @@
+                 )
+ 
+                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
++                Text("Backup de configurações e posições", style = MaterialTheme.typography.titleMedium)
++                Text(
++                    "Salve suas opções, escala, opacidade e posições do HUD em um arquivo. " +
++                        "Ao importar, o layout volta para as posições salvas e permanece travado por segurança.",
++                    style = MaterialTheme.typography.bodySmall
++                )
++                Row(
++                    Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.spacedBy(8.dp)
++                ) {
++                    Button(onClick = onExportSettings, modifier = Modifier.weight(1f)) {
++                        Text("Exportar")
++                    }
++                    OutlinedButton(onClick = onImportSettings, modifier = Modifier.weight(1f)) {
++                        Text("Importar")
++                    }
++                }
++
++                HorizontalDivider(Modifier.padding(vertical = 8.dp))
++                Text("Histórico de batalhas", style = MaterialTheme.typography.titleMedium)
++                Text(
++                    "Registra Pokémon/PC e a linha do tempo dos ataques detectados. " +
++                        "Os tempos são contados desde o início da batalha.",
++                    style = MaterialTheme.typography.bodySmall
++                )
++                Row(
++                    Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.spacedBy(8.dp)
++                ) {
++                    OutlinedButton(
++                        onClick = { history = historyRepository.loadHistory() },
++                        modifier = Modifier.weight(1f)
++                    ) { Text("Atualizar") }
++                    OutlinedButton(
++                        onClick = {
++                            historyRepository.clear()
++                            history = emptyList()
++                            expandedBattleId = null
++                        },
++                        modifier = Modifier.weight(1f),
++                        enabled = history.isNotEmpty()
++                    ) { Text("Limpar") }
++                }
++
++                if (history.isEmpty()) {
++                    Text("Nenhuma batalha registrada ainda.", style = MaterialTheme.typography.bodySmall)
++                } else {
++                    history.take(10).forEach { battle ->
++                        BattleHistoryCard(
++                            battle = battle,
++                            expanded = expandedBattleId == battle.id,
++                            onToggle = {
++                                expandedBattleId = if (expandedBattleId == battle.id) null else battle.id
++                            }
++                        )
++                    }
++                }
++
++                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
+                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
+                 Text(
+@@ -250,6 +320,55 @@
+                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
+                 )
+                 Spacer(Modifier.height(24.dp))
++            }
++        }
++    }
++}
++
++@Composable
++private fun BattleHistoryCard(
++    battle: BattleHistoryEntry,
++    expanded: Boolean,
++    onToggle: () -> Unit
++) {
++    val date = remember(battle.startedAtEpochMs) {
++        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(battle.startedAtEpochMs))
++    }
++    val league = when (battle.leagueCp) {
++        2500 -> "Ultra"
++        10000 -> "Mestra"
++        else -> "Grande"
++    }
++    val player = battle.playerName ?: "Seu Pokémon"
++    val enemy = battle.opponentName ?: "Inimigo"
++    val playerCp = battle.playerCp?.let { " PC $it" }.orEmpty()
++    val enemyCp = battle.opponentCp?.let { " PC $it" }.orEmpty()
++    val duration = ((battle.endedAtEpochMs - battle.startedAtEpochMs).coerceAtLeast(0L) / 1000L)
++
++    Column(
++        Modifier
++            .fillMaxWidth()
++            .padding(vertical = 4.dp),
++        verticalArrangement = Arrangement.spacedBy(3.dp)
++    ) {
++        Text("$date • Liga $league • ${duration}s", style = MaterialTheme.typography.labelMedium)
++        Text("$player$playerCp  ×  $enemy$enemyCp")
++        Text("${battle.events.size} eventos registrados", style = MaterialTheme.typography.bodySmall)
++        OutlinedButton(onClick = onToggle, modifier = Modifier.fillMaxWidth()) {
++            Text(if (expanded) "Ocultar detalhes" else "Ver ataques e tempos")
++        }
++        if (expanded) {
++            if (battle.events.isEmpty()) {
++                Text("Nenhum ataque identificado nesta batalha.", style = MaterialTheme.typography.bodySmall)
++            } else {
++                battle.events.forEach { event ->
++                    val seconds = event.elapsedMs / 1000.0
++                    val count = if (event.count > 1) " ×${event.count}" else ""
++                    Text(
++                        "[+${"%.1f".format(Locale.US, seconds)}s] ${event.actor} • ${event.category} • ${event.moveName}$count",
++                        style = MaterialTheme.typography.bodySmall
++                    )
++                }
+             }
+         }
+     }
