@@ -115,6 +115,17 @@ fun SettingsScreen(
                     Text("RESET BATTLE")
                 }
 
+                Text(
+                    "Controles do overlay:\n" +
+                        "• 🔓 Cadeado aberto → arrasta os blocos do HUD (toques do jogo passam fora dos blocos)\n" +
+                        "• 🔒 Cadeado fechado → layout travado\n" +
+                        "• ◉ → mostrar / ocultar HUD\n" +
+                        "• ⚙ → menu rápido (liga, edição, opções)\n" +
+                        "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
+                        "Versão 0.5.11",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Toggle("Overlay", overlay) {
                     overlay = it
