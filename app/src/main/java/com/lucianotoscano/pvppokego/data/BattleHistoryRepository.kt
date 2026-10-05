@@ -12,7 +12,11 @@ data class BattleHistoryEvent(
     val actor: String,
     val category: String,
     val moveName: String,
-    val count: Int = 1
+    val count: Int = 1,
+    val pokemon: String? = null,
+    val confidence: String? = null,
+    val source: String? = null,
+    val reason: String? = null
 )
 
 @Serializable
@@ -87,19 +91,52 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         }
     }
 
-    fun recordFast(actor: String, moveName: String, count: Int, nowMs: Long = System.currentTimeMillis()) {
+    fun recordFast(
+        actor: String,
+        moveName: String,
+        count: Int,
+        nowMs: Long = System.currentTimeMillis(),
+        pokemon: String? = null,
+        confidence: String? = null,
+        source: String? = null
+    ) {
         if (count <= 0) return
-        addEvent(actor, "RÁPIDO", moveName, count, nowMs)
+        addEvent(actor, "RÁPIDO", moveName, count, nowMs, pokemon, confidence, source, null)
     }
 
-    fun recordCharged(actor: String, moveName: String, nowMs: Long = System.currentTimeMillis()) {
-        addEvent(actor, "CARREGADO", moveName, 1, nowMs)
+    fun recordCharged(
+        actor: String,
+        moveName: String,
+        nowMs: Long = System.currentTimeMillis(),
+        pokemon: String? = null,
+        confidence: String? = null,
+        source: String? = null
+    ) {
+        addEvent(actor, "CARREGADO", moveName, 1, nowMs, pokemon, confidence, source, null)
     }
 
-    private fun addEvent(actor: String, category: String, moveName: String, count: Int, nowMs: Long) {
+    fun recordDecision(title: String, detail: String, nowMs: Long = System.currentTimeMillis()) {
+        addEvent("ASSISTENTE", "DECISÃO", title, 1, nowMs, null, null, "BattleAssist", detail)
+    }
+
+    fun recordDiagnostic(label: String, detail: String, nowMs: Long = System.currentTimeMillis()) {
+        addEvent("APP", "DIAGNÓSTICO", label, 1, nowMs, null, null, "engine", detail)
+    }
+
+    private fun addEvent(
+        actor: String,
+        category: String,
+        moveName: String,
+        count: Int,
+        nowMs: Long,
+        pokemon: String?,
+        confidence: String?,
+        source: String?,
+        reason: String?
+    ) {
         val a = active ?: return
         val elapsed = (nowMs - a.startedAt).coerceAtLeast(0L)
-        a.events += BattleHistoryEvent(elapsed, actor, category, moveName, count)
+        a.events += BattleHistoryEvent(elapsed, actor, category, moveName, count, pokemon, confidence, source, reason)
     }
 
     fun finish(nowMs: Long = System.currentTimeMillis()) {
