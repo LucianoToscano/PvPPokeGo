@@ -25,6 +25,8 @@ import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
+import com.lucianotoscano.pvppokego.data.BattleHistoryRecorder
+import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MoveDef
@@ -51,6 +53,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var settingsRepo: SettingsRepository
     private lateinit var gameRepo: GameDataRepository
+    private lateinit var historyRecorder: BattleHistoryRecorder
     private var engine: BattleEngine? = null
     private var detector: BattleOcrDetector? = null
     private var frameDetector: BattleFrameEventDetector? = null
@@ -95,13 +98,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         settingsRepo.layoutLocked = true
         settingsRepo.overlayServiceRunning = true
         gameRepo = GameDataRepository(this)
+        historyRecorder = BattleHistoryRecorder(BattleHistoryRepository(this))
         startForeground(NOTIFICATION_ID, notification("Aguardando captura de tela"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
+            ACTION_STOP -> { historyRecorder.finish(); stopSelf(); return START_NOT_STICKY }
             ACTION_RESET -> {
+                historyRecorder.finish()
                 engine?.resetBattle()
                 frameDetector?.reset()
                 battleActive = false
@@ -863,6 +868,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     visualConfidence = event.battleConfidence,
                                     nowMs = now
                                 )
+                                historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
                                 e.onBattleConfidence(presenceTracker.confidence)
                                 if (event.battleUiVisible) markBattleEvidence(now)
                                 if (battleActive || event.battleUiVisible) {
@@ -870,9 +876,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 }
                                 if (event.fastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
                                     e.onFastDetected(event.fastMoveCount, event.confidence, event.source, event.hpRatio, event.motion)
+                                    e.uiState().fastMove?.let { move ->
+                                        historyRecorder.recordFast("INIMIGO", gameRepo.localizedMoveName(move), event.fastMoveCount, now)
+                                    }
                                 }
                                 if (event.ownFastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
                                     e.onOwnFastDetected(event.ownFastMoveCount, event.confidence, event.source, event.opponentHpRatio)
+                                    e.uiState().ownFastMove?.let { move ->
+                                        historyRecorder.recordFast("VOCÊ", gameRepo.localizedMoveName(move), event.ownFastMoveCount, now)
+                                    }
                                 }
                             }
                         }
@@ -900,6 +912,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                         switchPrompt = switchPrompt,
                                         nowMs = now
                                     )
+                                    historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
                                     e?.onBattleConfidence(presenceTracker.confidence)
                                     markBattleEvidence(now)
                                 }
@@ -907,12 +920,21 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
                                 val changes = e?.onDetection(d)
+                                if (battleActive) historyRecorder.observeDetection(d, currentLeagueCp, now)
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
                                 val textEvent = e?.onBattleText(d.battleText, now)
-                                if (textEvent != null) when {
-                                    textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
-                                    textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
+                                if (textEvent != null) {
+                                    textEvent.enemyChargedMove?.let { move ->
+                                        historyRecorder.recordCharged("INIMIGO", gameRepo.localizedMoveName(move), now)
+                                    }
+                                    textEvent.ownChargedMove?.let { move ->
+                                        historyRecorder.recordCharged("VOCÊ", gameRepo.localizedMoveName(move), now)
+                                    }
+                                    when {
+                                        textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
+                                        textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
+                                    }
                                 }
                             }
                             lastOcrAt = now
@@ -928,11 +950,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         if (engine?.maybeConfirmPendingCharged(now) == true) {
+                            historyRecorder.recordCharged("INIMIGO", "Ataque carregado (não identificado)", now)
                             markBattleEvidence(now)
                             frameDetector?.freezeForCharged(now, 1_800L)
                         }
 
                         battleActive = presenceTracker.tick(now)
+                        historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
                         engine?.onBattleConfidence(presenceTracker.confidence)
                         if (!battleActive) switchChoicePromptUntilMs = 0L
 
@@ -1012,6 +1036,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onCharged1Tapped() { showMoveMenu(MoveKind.CHARGED_1) }
     override fun onCharged2Tapped() { showMoveMenu(MoveKind.CHARGED_2) }
     override fun onResetTapped() {
+        historyRecorder.finish()
         engine?.resetBattle()
         frameDetector?.reset()
         presenceTracker.reset()
@@ -1071,6 +1096,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     override fun onDestroy() {
+        if (::historyRecorder.isInitialized) historyRecorder.finish()
         scanJob?.cancel()
         dismissMoveMenu()
         quickMenu?.destroy()
