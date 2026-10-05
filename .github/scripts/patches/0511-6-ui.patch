@@ -37,15 +37,6 @@
  
      MaterialTheme {
          Scaffold { padding ->
-@@ -111,7 +122,7 @@
-                         "• ◉ → mostrar / ocultar HUD\n" +
-                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
-                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
--                        "Versão 0.5.7-stable-icons-no-flicker",
-+                        "Versão 0.5.11",
-                     style = MaterialTheme.typography.bodySmall
-                 )
- 
 @@ -243,6 +254,65 @@
                  )
  
