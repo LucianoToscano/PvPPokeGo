@@ -129,6 +129,59 @@ class SettingsRepository(context: Context) {
         editor.putInt("top_hud_position_version", 6).apply()
     }
 
+    /**
+     * 0.5.13 layout preset based on the user's approved screenshots/config.
+     * Existing manual positions are preserved. The only migration performed on
+     * an existing layout is to make reserve #1 the upper native card and
+     * reserve #2 the lower card while keeping the same two screen positions.
+     */
+    fun ensureApprovedLayoutV13() {
+        if (prefs.getInt("layout_preset_version", 0) >= 13) return
+        val editor = prefs.edit()
+
+        fun putPositionIfMissing(block: String, x: Float, y: Float) {
+            if (!prefs.contains("${block}_x")) editor.putFloat("${block}_x", x)
+            if (!prefs.contains("${block}_y")) editor.putFloat("${block}_y", y)
+        }
+        fun putFloatIfMissing(key: String, value: Float) {
+            if (!prefs.contains(key)) editor.putFloat(key, value)
+        }
+
+        putPositionIfMissing("hud_player_matchup", 430.97968f, 28.51471f)
+        putPositionIfMissing("hud_strong_types", 710.88904f, 12.45274f)
+        putPositionIfMissing("hud_enemy_moves", 698.45935f, 184.32745f)
+        putPositionIfMissing("hud_battle_assist", 418.4f, 169.02563f)
+        putPositionIfMissing("hud_enemy_history", 816f, 782.44104f)
+        putPositionIfMissing("hud_toggle", 44.10156f, 1495.1797f)
+        putPositionIfMissing("hud_lock", 90.11641f, 1493.2362f)
+
+        val hasR1 = prefs.contains("hud_reserve_1_x") && prefs.contains("hud_reserve_1_y")
+        val hasR2 = prefs.contains("hud_reserve_2_x") && prefs.contains("hud_reserve_2_y")
+        if (hasR1 && hasR2) {
+            val r1x = prefs.getFloat("hud_reserve_1_x", 686.4f)
+            val r1y = prefs.getFloat("hud_reserve_1_y", 894.03076f)
+            val r2x = prefs.getFloat("hud_reserve_2_x", 686.4f)
+            val r2y = prefs.getFloat("hud_reserve_2_y", 1039.0974f)
+            if (r1y > r2y) {
+                editor.putFloat("hud_reserve_1_x", r2x)
+                editor.putFloat("hud_reserve_1_y", r2y)
+                editor.putFloat("hud_reserve_2_x", r1x)
+                editor.putFloat("hud_reserve_2_y", r1y)
+            }
+        } else {
+            putPositionIfMissing("hud_reserve_1", 686.4f, 894.03076f)
+            putPositionIfMissing("hud_reserve_2", 686.4f, 1039.0974f)
+        }
+
+        putFloatIfMissing("league_badge_x_frac", 0.49793816f)
+        putFloatIfMissing("league_badge_y_frac", 0.07623319f)
+        putFloatIfMissing("quick_menu_x_frac", 0.9786802f)
+        putFloatIfMissing("quick_menu_y_frac", 0.9933185f)
+
+        editor.putInt("layout_preset_version", 13)
+        editor.apply()
+    }
+
     var showSwitchTimer: Boolean
         get() = prefs.getBoolean("show_switch_timer", false)
         set(v) = prefs.edit().putBoolean("show_switch_timer", v).apply()
@@ -223,7 +276,7 @@ class SettingsRepository(context: Context) {
         val root = JSONObject()
         root.put("format", "PvPPokeGo-settings")
         root.put("formatVersion", 1)
-        root.put("appVersion", "0.5.11")
+        root.put("appVersion", "0.5.13")
         val values = JSONObject()
         prefs.all.toSortedMap().forEach { (key, value) ->
             if (!isBackupKeyAllowed(key) || value == null) return@forEach
@@ -291,7 +344,7 @@ class SettingsRepository(context: Context) {
             "show_current_indicator", "analyze_reserves", "show_reserve_types",
             "show_enemy_moves", "show_charged_counter", "show_energy_progress",
             "show_hud_text", "show_enemy_history", "show_switch_timer", "debug_mode",
-            "layout_locked", "overlay_scale", "overlay_opacity", "top_hud_position_version"
+            "layout_locked", "overlay_scale", "overlay_opacity", "top_hud_position_version", "layout_preset_version"
         )
         val HUD_BLOCKS = listOf(
             "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
