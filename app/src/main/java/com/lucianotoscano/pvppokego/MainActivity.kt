@@ -73,9 +73,11 @@ class MainActivity : ComponentActivity() {
             val service = Intent(this, BattleOverlayService::class.java).apply {
                 putExtra(BattleOverlayService.EXTRA_RESULT_CODE, result.resultCode)
                 putExtra(BattleOverlayService.EXTRA_RESULT_DATA, data)
-                // The permission result returns to this Activity. Keep the overlay hidden here;
-                // onPause below will reliably notify the service when the user goes back to GO.
-                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, true)
+                // Do NOT mark the app UI as visible here. The projection dialog returns to this
+                // Activity, but the user is about to switch to Pokemon GO. Starting with
+                // appUiVisible=true hides lock/eye/HUD until BACKGROUND arrives and was a
+                // common cause of "untappable" controls.
+                putExtra(BattleOverlayService.EXTRA_APP_VISIBLE, false)
             }
             ContextCompat.startForegroundService(this, service)
         }
