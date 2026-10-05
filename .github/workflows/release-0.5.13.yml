@@ -1,0 +1,64 @@
+name: Build PvPPokeGo 0.5.13
+
+on:
+  push:
+    branches: [release/0.5.13]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate 0.5.13 invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.13"' app/build.gradle.kts
+          grep -q 'EXTRA_APP_VISIBLE, false' app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
+          grep -q 'ensureMatchesCurrentDisplay' app/src/main/java/com/lucianotoscano/pvppokego/capture/ScreenCapture.kt
+          grep -q 'freeDragZones' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'text = ""' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'DelicateGearView' app/src/main/java/com/lucianotoscano/pvppokego/overlay/QuickOverlayMenu.kt
+          grep -q 'ensureApprovedLayoutV13' app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
+          grep -q 'MoveKnowledgeConfidence' app/src/main/java/com/lucianotoscano/pvppokego/data/Models.kt
+          grep -q 'orderedOwnReserves' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'resolveChargedPair' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'recordDecision' app/src/main/java/com/lucianotoscano/pvppokego/data/BattleHistoryRepository.kt
+          grep -q 'Moveset das reservas' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          if grep -q '(hudLockTouch as? TextView)?.text' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt; then
+            echo "Legacy emoji lock setter returned"
+            exit 1
+          fi
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Test and build APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Package APK
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo-0.5.13.apk
+          shasum -a 256 artifact/PvPPokeGo-0.5.13.apk > artifact/PvPPokeGo-0.5.13.apk.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.13
+          path: artifact/
+          retention-days: 14
