@@ -14,6 +14,7 @@ import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
+import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
 import com.lucianotoscano.pvppokego.engine.TypeChart
@@ -324,20 +325,25 @@ class BattleOverlayView(
         val spread=rx(74f)*bs; val fastRadius=31f*u()*bs; val chargedRadius=41f*u()*bs
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)
-            drawMoveLabel(canvas,centerX,fastY+fastRadius+20f*u(),shortMoveName(m.name)+" ▼")
+            drawMoveLabel(
+                canvas,
+                centerX,
+                fastY+fastRadius+20f*u(),
+                shortMoveName(m.name)+" "+knowledgeMark(state.fastMoveKnowledge)+" ▼"
+            )
         }
         state.charged1?.let { p ->
             val cx=centerX-spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
             val labelY=chargedY+chargedRadius+22f*u()
-            drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
+            drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged1Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
         state.charged2?.let { p ->
             val cx=centerX+spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
             val labelY=chargedY+chargedRadius+22f*u()
-            drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" ▼")
+            drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged2Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
         if (settings.showHudText) {
@@ -606,6 +612,13 @@ class BattleOverlayView(
     private fun drawTypeGlyph(canvas: Canvas,cx: Float,cy: Float,type: String,size: Float) {
         paint.style=Paint.Style.FILL; paint.color=hudColor(Color.WHITE); val path=TypeGlyphPaths.build(type,cx,cy,size*1.18f)
         if(path!=null){canvas.drawPath(path,paint);return}; paint.textAlign=Paint.Align.CENTER; paint.textSize=size*1.05f; paint.typeface=Typeface.DEFAULT_BOLD; canvas.drawText(type.take(1).uppercase().ifBlank{"?"},cx,cy+size*.35f,paint)
+    }
+
+    private fun knowledgeMark(value: MoveKnowledgeConfidence): String = when (value) {
+        MoveKnowledgeConfidence.CONFIRMED -> "✓"
+        MoveKnowledgeConfidence.MANUAL -> "M"
+        MoveKnowledgeConfidence.RANKED -> "~"
+        MoveKnowledgeConfidence.UNKNOWN -> "?"
     }
 
     private fun currentPlayerTypes(): List<String> = gameRepo.pokemon(state.playerName)?.types.orEmpty()
