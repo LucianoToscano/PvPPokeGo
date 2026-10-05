@@ -10,10 +10,26 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate merged 0.5.11 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.11"' app/build.gradle.kts
+          grep -q 'EXTRA_APP_VISIBLE, false' app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
+          grep -q 'ensureMatchesCurrentDisplay' app/src/main/java/com/lucianotoscano/pvppokego/capture/ScreenCapture.kt
+          grep -q 'freeDragZones' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'text = ""' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'BattleHistoryRecorder' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'exportBackupJson' app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
+          if grep -q '(hudLockTouch as? TextView)?.text' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt; then
+            echo "Legacy emoji lock setter returned"
+            exit 1
+          fi
 
       - name: Java 17
         uses: actions/setup-java@v4
