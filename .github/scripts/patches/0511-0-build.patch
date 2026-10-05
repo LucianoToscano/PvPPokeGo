@@ -1,0 +1,13 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.lucianotoscano.pvppokego"
+         minSdk = 29
+         targetSdk = 36
+-        versionCode = 15
+-        versionName = "0.5.10-original-icons-restored"
++        versionCode = 16
++        versionName = "0.5.11"
+     }
+ 
+     buildFeatures { compose = true }
