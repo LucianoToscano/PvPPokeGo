@@ -9,6 +9,8 @@
 - Ícone de configurações mantém uma hitbox confortável, mas com desenho visível pequeno, próximo ao porte do olho/cadeado.
 - Mantidos menu reorganizado e controles rápidos de Pausar visão, Remover sobreposição e Parar serviço da 0.5.14.
 - Backup exportado passa a usar PvPPokeGo-0.5.15-config.json.
+- Corrigida contagem de energia dos carregados inimigos para ataques rápidos de baixo dano: microquedas de 1 px da barra de HP agora são acumuladas em vez de descartadas.
+- Rastreamento de energia agora rejeita Fast Move com ganho de energia zero e usa um Fast Move válido como fallback.
 
 
 ## 0.5.14
