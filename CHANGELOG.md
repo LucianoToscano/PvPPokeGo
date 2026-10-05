@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.13
+
+- Baseada no 0.5.11 validado, preservando ORIGINAL_ICONS, touch zones, rotação e controles entre batalhas.
+- Aplica como preset oficial as posições aprovadas pelo usuário sem sobrescrever posições manuais existentes.
+- Migração organiza os dois blocos de reserva por ordem visual (card superior = reserva 1, card inferior = reserva 2) sem mudar os lugares na tela.
+- Identidade estável dos três Pokémon do time por slot + nome + PC quando disponível.
+- Ordem das reservas passa a girar a partir do Pokémon ativo, acompanhando os cards reais do Pokémon GO após cada troca.
+- Golpes carregados são resolvidos como um par distinto; o segundo slot não duplica silenciosamente o primeiro.
+- Reservas usam o estado/moveset salvo do próprio Pokémon ao calcular matchup e recomendação.
+- Nível de confiança de golpe: ✓ confirmado, M manual, ~ estimado pelo ranking e ? desconhecido.
+- Histórico registra Pokémon, origem, confiança e justificativa das decisões do assistente.
+- Diagnóstico registra mudanças do moveset associado às reservas para facilitar investigação de erros.
+- Engrenagem substituída por desenho vetorial fino, no mesmo estilo visual do olho/cadeado.
+- Engrenagem mantém pequena margem do canto para não ficar cortada visualmente.
+- Backup exportado passa a usar o nome PvPPokeGo-0.5.13-config.json.
+
+
 ## 0.5.11
 
 ### Correções recuperadas da base ORIGINAL_ICONS

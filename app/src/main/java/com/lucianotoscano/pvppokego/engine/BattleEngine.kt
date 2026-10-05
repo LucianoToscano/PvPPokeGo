@@ -8,6 +8,7 @@ import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
+import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.ReserveState
 import java.text.Normalizer
 
@@ -45,7 +46,14 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var ownCharge1: MoveDef? = null
     private var ownCharge2: MoveDef? = null
 
+    private data class OwnTeamSlot(
+        val slot: Int,
+        var name: String,
+        var cp: Int?
+    )
+
     private val ownTeam = linkedMapOf<String, Int?>()
+    private val ownTeamSlots = mutableListOf<OwnTeamSlot>()
     private val reserveSlotVisible = arrayOfNulls<Boolean>(2)
     private val reserveMissingStreak = IntArray(2)
     private var ownSwitchReadyAtMs: Long = 0L
@@ -77,6 +85,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownCharge1 = null
         ownCharge2 = null
         ownTeam.clear()
+        ownTeamSlots.clear()
         reserveSlotVisible.fill(null)
         reserveMissingStreak.fill(0)
         ownSwitchReadyAtMs = 0L
@@ -128,10 +137,32 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     fun onOwnTeamDetected(team: List<DetectedPokemon>) {
-        team.forEach { p ->
-            val canonical = repo.canonicalPokemonName(p.name) ?: p.name
-            if (!canonical.equals(enemyName, ignoreCase = true)) rememberOwnPokemon(canonical, p.cp)
+        val canonical = team
+            .map { p -> Triple(repo.canonicalPokemonName(p.name) ?: p.name, p.cp, p.confidence) }
+            .filterNot { (name, _, _) -> name.equals(enemyName, ignoreCase = true) }
+            .distinctBy { (name, cp, _) -> "${normalize(name)}:${cp ?: 0}" }
+            .take(3)
+
+        // A complete team scan defines stable slot identities for the whole battle.
+        // Partial scans only enrich existing slots and never reorder them.
+        if (canonical.size >= 3) {
+            ownTeamSlots.clear()
+            canonical.forEachIndexed { index, (name, cp, _) ->
+                ownTeamSlots += OwnTeamSlot(index, name, cp)
+                rememberOwnPokemon(name, cp)
+            }
+        } else {
+            canonical.forEach { (name, cp, _) ->
+                rememberOwnPokemon(name, cp)
+                val existing = ownTeamSlots.firstOrNull { it.name.equals(name, true) && (cp == null || it.cp == null || it.cp == cp) }
+                if (existing != null) {
+                    if (cp != null) existing.cp = cp
+                } else if (ownTeamSlots.size < 3) {
+                    ownTeamSlots += OwnTeamSlot(ownTeamSlots.size, name, cp)
+                }
+            }
         }
+        rebindOwnActiveStateToStableSlot()
     }
 
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
@@ -149,7 +180,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         update(1, secondVisible)
     }
 
-    fun needsOwnTeamScan(): Boolean = ownTeam.size < 3
+    fun needsOwnTeamScan(): Boolean = ownTeamSlots.size < 3
     fun activePlayerName(): String? = playerName
     fun activeEnemyName(): String? = enemyName
     fun currentFastDurationMs(): Long = fast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
@@ -159,19 +190,63 @@ class BattleEngine(private val repo: GameDataRepository) {
         val existingKey = ownTeam.keys.firstOrNull { it.equals(name, ignoreCase = true) }
         if (existingKey == null && ownTeam.size < 3) ownTeam[name] = cp
         else if (existingKey != null && cp != null) ownTeam[existingKey] = cp
+
+        val slot = ownTeamSlots.firstOrNull {
+            it.name.equals(name, ignoreCase = true) && (cp == null || it.cp == null || it.cp == cp)
+        }
+        if (slot != null && cp != null) slot.cp = cp
+    }
+
+    private fun ownIdentityKey(name: String, cp: Int?): String {
+        val exact = ownTeamSlots.firstOrNull {
+            it.name.equals(name, ignoreCase = true) && (cp == null || it.cp == null || it.cp == cp)
+        }
+        return if (exact != null) {
+            "slot${exact.slot}:${normalize(exact.name)}:${exact.cp ?: cp ?: 0}"
+        } else {
+            "own:${normalize(name)}:${cp ?: 0}"
+        }
+    }
+
+    private fun rebindOwnActiveStateToStableSlot() {
+        val name = playerName ?: return
+        val old = ownActiveState ?: return
+        val stableKey = ownIdentityKey(name, playerCp)
+        if (old.key == stableKey) return
+        val target = ownStates.getOrCreate(stableKey, name)
+        target.fastMoveId = old.fastMoveId
+        target.chargedMove1Id = old.chargedMove1Id
+        target.chargedMove2Id = old.chargedMove2Id
+        target.fastMoveCount = old.fastMoveCount
+        target.estimatedEnergy = old.estimatedEnergy
+        target.minEnergy = old.minEnergy
+        target.maxEnergy = old.maxEnergy
+        target.energyUncertain = old.energyUncertain
+        target.lastChargedMoveId = old.lastChargedMoveId
+        target.charge1Confirmed = old.charge1Confirmed
+        target.charge2Confirmed = old.charge2Confirmed
+        target.fastMoveManual = old.fastMoveManual
+        target.charge1Manual = old.charge1Manual
+        target.charge2Manual = old.charge2Manual
+        target.observedChargedMoveIds.clear()
+        target.observedChargedMoveIds.addAll(old.observedChargedMoveIds)
+        target.lastSeenAtMs = old.lastSeenAtMs
+        ownActiveState = target
     }
 
     private fun onPlayerChanged(name: String, cp: Int?) {
         saveOwnActiveState()
         playerName = name
         playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value ?: playerCp
-        val key = normalize(name)
+        val key = ownIdentityKey(name, playerCp)
         ownActiveState = ownStates.getOrCreate(key, name)
         val saved = ownActiveState!!
         val likely = repo.likelyMoveset(name)
         ownFast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        ownCharge1 = repo.move(saved.chargedMove1Id) ?: likely.second ?: repo.possibleChargedMoves(name).getOrNull(0)
-        ownCharge2 = repo.move(saved.chargedMove2Id) ?: likely.third ?: repo.possibleChargedMoves(name).getOrNull(1)
+        resolveChargedPair(name, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
+            ownCharge1 = c1
+            ownCharge2 = c2
+        }
         val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
         val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
         ownTracker.restoreRange(minE, maxE, saved.fastMoveCount)
@@ -188,8 +263,10 @@ class BattleEngine(private val repo: GameDataRepository) {
         val saved = activeState!!
         val likely = repo.likelyMoveset(name)
         fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        charge1 = repo.move(saved.chargedMove1Id) ?: likely.second ?: repo.possibleChargedMoves(name).getOrNull(0)
-        charge2 = repo.move(saved.chargedMove2Id) ?: likely.third ?: repo.possibleChargedMoves(name).getOrNull(1)
+        resolveChargedPair(name, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
+            charge1 = c1
+            charge2 = c2
+        }
         val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
         val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
         tracker.restoreRange(minE, maxE, saved.fastMoveCount)
@@ -426,19 +503,39 @@ class BattleEngine(private val repo: GameDataRepository) {
         val f = fast
         val of = ownFast
 
-        val rawReserves = ownTeam.entries
-            .filterNot { it.key.equals(playerName, ignoreCase = true) }
+        val rawReserves = orderedOwnReserves()
             .take(2)
-            .mapIndexed { index, (name, cp) ->
+            .mapIndexed { index, slot ->
+                val name = slot.name
+                val cp = slot.cp
                 val types = repo.pokemon(name)?.types.orEmpty()
-                val score = reserveScore(name, types, eTypes)
+                val identity = ownIdentityKey(name, cp)
+                val saved = ownStates.find(identity)
+                val likely = repo.likelyMoveset(name)
+                val reserveFast = repo.move(saved?.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
+                val (reserveC1, reserveC2) = resolveChargedPair(
+                    name,
+                    saved?.chargedMove1Id,
+                    saved?.chargedMove2Id,
+                    likely.second,
+                    likely.third
+                )
+                val score = reserveScore(name, cp, types, eTypes)
                 ReserveState(
                     name = name,
                     cp = cp,
                     types = types,
                     matchup = classify(types, eTypes),
                     visible = reserveSlotVisible.getOrNull(index) != false,
-                    score = score
+                    score = score,
+                    teamSlot = slot.slot,
+                    identityKey = identity,
+                    fastMove = reserveFast,
+                    chargedMove1 = reserveC1,
+                    chargedMove2 = reserveC2,
+                    fastMoveKnowledge = moveKnowledge(saved, 0, reserveFast),
+                    chargedMove1Knowledge = moveKnowledge(saved, 1, reserveC1),
+                    chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2)
                 )
             }
         val bestVisibleScore = rawReserves.filter { it.visible }.maxOfOrNull { it.score }
@@ -479,9 +576,15 @@ class BattleEngine(private val repo: GameDataRepository) {
             fastMove = f,
             charged1 = if (f != null && charge1 != null) tracker.predict(charge1!!, f, enemyConf) else null,
             charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f, enemyConf) else null,
+            fastMoveKnowledge = moveKnowledge(activeState, 0, f),
+            charged1Knowledge = moveKnowledge(activeState, 1, charge1),
+            charged2Knowledge = moveKnowledge(activeState, 2, charge2),
             ownFastMove = of,
             ownCharged1 = if (of != null && ownCharge1 != null) ownTracker.predict(ownCharge1!!, of, ownConf) else null,
             ownCharged2 = if (of != null && ownCharge2 != null) ownTracker.predict(ownCharge2!!, of, ownConf) else null,
+            ownFastMoveKnowledge = moveKnowledge(ownActiveState, 0, of),
+            ownCharged1Knowledge = moveKnowledge(ownActiveState, 1, ownCharge1),
+            ownCharged2Knowledge = moveKnowledge(ownActiveState, 2, ownCharge2),
             ownSwitchSeconds = switchSeconds(ownSwitchReadyAtMs),
             opponentSwitchSeconds = switchSeconds(opponentSwitchReadyAtMs),
             chargedIncoming = chargedPendingSinceMs != null,
@@ -491,7 +594,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             debugText = if (debug) buildString {
                 val s = activeState
                 val os = ownActiveState
-                appendLine("Jogador: ${playerName ?: "?"} PC ${playerCp ?: "?"} | time=${ownTeam.keys.joinToString()}")
+                appendLine("Jogador: ${playerName ?: "?"} PC ${playerCp ?: "?"} | slots=${ownTeamSlots.joinToString { "#${it.slot + 1} ${it.name}/${it.cp ?: "?"}" }}")
                 appendLine("Own fast: ${of?.name ?: "?"} count=${ownTracker.fastMoveCount} E=${ownTracker.minEnergy}-${ownTracker.maxEnergy} src=$lastOwnAutoSource")
                 appendLine("Inimigo: ${enemyName ?: "?"} PC ${enemyCp ?: "?"}")
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
@@ -517,10 +620,13 @@ class BattleEngine(private val repo: GameDataRepository) {
         else -> EnergyConfidence.ESTIMATED
     }
 
-    private fun reserveScore(name: String, myTypes: List<String>, enemyTypes: List<String>): Double {
+    private fun reserveScore(name: String, cp: Int?, myTypes: List<String>, enemyTypes: List<String>): Double {
         if (myTypes.isEmpty() || enemyTypes.isEmpty()) return 0.0
+        val saved = ownStates.find(ownIdentityKey(name, cp))
         val likely = repo.likelyMoveset(name)
-        val myMoves = listOfNotNull(likely.first, likely.second, likely.third)
+        val resolvedFast = repo.move(saved?.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
+        val (resolvedC1, resolvedC2) = resolveChargedPair(name, saved?.chargedMove1Id, saved?.chargedMove2Id, likely.second, likely.third)
+        val myMoves = listOfNotNull(resolvedFast, resolvedC1, resolvedC2)
         val enemyLikely = enemyName?.let(repo::likelyMoveset)
         val enemyMoves = listOfNotNull(enemyLikely?.first, enemyLikely?.second, enemyLikely?.third)
         val offense = myMoves.maxOfOrNull { TypeChart.multiplier(it.type, enemyTypes) } ?: 1.0
@@ -531,6 +637,66 @@ class BattleEngine(private val repo: GameDataRepository) {
             else -> 0.0
         }
         return typeBase + (offense - 1.0) * .75 - (danger - 1.0) * .65
+    }
+
+    /**
+     * Pokemon GO rotates the two reserve cards after a switch. Keep the three team
+     * identities fixed, then derive the two visible reserves relative to the active slot.
+     */
+    private fun orderedOwnReserves(): List<OwnTeamSlot> {
+        val slots = if (ownTeamSlots.isNotEmpty()) ownTeamSlots.toList() else {
+            ownTeam.entries.mapIndexed { index, (name, cp) -> OwnTeamSlot(index, name, cp) }
+        }
+        if (slots.isEmpty()) return emptyList()
+        val active = playerName ?: return slots
+        val activeIndex = slots.indexOfFirst {
+            it.name.equals(active, ignoreCase = true) && (playerCp == null || it.cp == null || it.cp == playerCp)
+        }.let { if (it >= 0) it else slots.indexOfFirst { s -> s.name.equals(active, true) } }
+        if (activeIndex < 0) return slots.filterNot { it.name.equals(active, true) }
+        return (1 until slots.size).map { offset -> slots[(activeIndex + offset) % slots.size] }
+    }
+
+    /** Picks two distinct charged moves and never reuses slot #1 as slot #2. */
+    private fun resolveChargedPair(
+        speciesName: String,
+        savedMove1Id: String?,
+        savedMove2Id: String?,
+        preferred1: MoveDef?,
+        preferred2: MoveDef?
+    ): Pair<MoveDef?, MoveDef?> {
+        val candidates = linkedMapOf<String, MoveDef>()
+        fun add(move: MoveDef?) {
+            if (move != null) candidates.putIfAbsent(move.moveId, move)
+        }
+        val saved1 = repo.move(savedMove1Id)
+        val saved2 = repo.move(savedMove2Id)
+        add(saved1); add(saved2); add(preferred1); add(preferred2)
+        repo.possibleChargedMoves(speciesName).forEach(::add)
+
+        val first = saved1 ?: preferred1 ?: candidates.values.firstOrNull()
+        val second = saved2?.takeIf { it.moveId != first?.moveId }
+            ?: preferred2?.takeIf { it.moveId != first?.moveId }
+            ?: candidates.values.firstOrNull { it.moveId != first?.moveId }
+        return first to second
+    }
+
+    private fun moveKnowledge(state: BattlePokemonState?, slot: Int, move: MoveDef?): MoveKnowledgeConfidence {
+        if (move == null) return MoveKnowledgeConfidence.UNKNOWN
+        if (state == null) return MoveKnowledgeConfidence.RANKED
+        return when (slot) {
+            0 -> if (state.fastMoveManual) MoveKnowledgeConfidence.MANUAL else MoveKnowledgeConfidence.RANKED
+            1 -> when {
+                state.charge1Manual -> MoveKnowledgeConfidence.MANUAL
+                state.charge1Confirmed || move.moveId in state.observedChargedMoveIds -> MoveKnowledgeConfidence.CONFIRMED
+                else -> MoveKnowledgeConfidence.RANKED
+            }
+            2 -> when {
+                state.charge2Manual -> MoveKnowledgeConfidence.MANUAL
+                state.charge2Confirmed || move.moveId in state.observedChargedMoveIds -> MoveKnowledgeConfidence.CONFIRMED
+                else -> MoveKnowledgeConfidence.RANKED
+            }
+            else -> MoveKnowledgeConfidence.UNKNOWN
+        }
     }
 
     private fun classify(myTypes: List<String>, enemyTypes: List<String>): MatchupState {

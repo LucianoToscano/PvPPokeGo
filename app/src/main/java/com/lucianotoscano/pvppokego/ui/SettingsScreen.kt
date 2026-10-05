@@ -275,8 +275,8 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Histórico de batalhas", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Mostra Pokémon, PC e a linha do tempo dos ataques rápidos e carregados detectados. " +
-                        "Use os tempos para rever contagem de energia, pressão e decisões.",
+                    "Mostra Pokémon, PC, ataques, nível de confiança, decisões do assistente e o motivo de cada recomendação. " +
+                        "Use a linha do tempo para rever contagem de energia, trocas e possíveis erros de identificação.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Row(
@@ -315,7 +315,7 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("Versão 0.5.11")
+                Text("Versão 0.5.13")
                 Text(
                     "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
@@ -347,6 +347,7 @@ private fun BattleHistoryCard(
     val duration = ((battle.endedAtEpochMs - battle.startedAtEpochMs).coerceAtLeast(0L) / 1000L)
     val ownCharged = battle.events.count { it.actor == "VOCÊ" && it.category == "CARREGADO" }
     val enemyCharged = battle.events.count { it.actor == "INIMIGO" && it.category == "CARREGADO" }
+    val decisions = battle.events.count { it.category == "DECISÃO" }
 
     Column(
         Modifier
@@ -357,7 +358,7 @@ private fun BattleHistoryCard(
         Text("$date • Liga $league • ${duration}s", style = MaterialTheme.typography.labelMedium)
         Text("$player$playerCp  ×  $enemy$enemyCp")
         Text(
-            "Carregados: você $ownCharged • inimigo $enemyCharged • ${battle.events.size} eventos",
+            "Carregados: você $ownCharged • inimigo $enemyCharged • decisões $decisions • ${battle.events.size} eventos",
             style = MaterialTheme.typography.bodySmall
         )
         OutlinedButton(onClick = onToggle, modifier = Modifier.fillMaxWidth()) {
@@ -370,10 +371,16 @@ private fun BattleHistoryCard(
                 battle.events.forEach { event ->
                     val seconds = event.elapsedMs / 1000.0
                     val count = if (event.count > 1) " ×${event.count}" else ""
+                    val pokemon = event.pokemon?.let { " • $it" }.orEmpty()
+                    val confidence = event.confidence?.let { " • $it" }.orEmpty()
+                    val source = event.source?.let { " • fonte: $it" }.orEmpty()
                     Text(
-                        "[+${"%.1f".format(Locale.US, seconds)}s] ${event.actor} • ${event.category} • ${event.moveName}$count",
+                        "[+${"%.1f".format(Locale.US, seconds)}s] ${event.actor} • ${event.category} • ${event.moveName}$count$pokemon$confidence$source",
                         style = MaterialTheme.typography.bodySmall
                     )
+                    event.reason?.takeIf { it.isNotBlank() }?.let { reason ->
+                        Text("↳ $reason", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
