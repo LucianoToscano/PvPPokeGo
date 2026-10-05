@@ -162,6 +162,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 }
             }
         }
+        rebindOwnActiveStateToStableSlot()
     }
 
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
@@ -205,6 +206,32 @@ class BattleEngine(private val repo: GameDataRepository) {
         } else {
             "own:${normalize(name)}:${cp ?: 0}"
         }
+    }
+
+    private fun rebindOwnActiveStateToStableSlot() {
+        val name = playerName ?: return
+        val old = ownActiveState ?: return
+        val stableKey = ownIdentityKey(name, playerCp)
+        if (old.key == stableKey) return
+        val target = ownStates.getOrCreate(stableKey, name)
+        target.fastMoveId = old.fastMoveId
+        target.chargedMove1Id = old.chargedMove1Id
+        target.chargedMove2Id = old.chargedMove2Id
+        target.fastMoveCount = old.fastMoveCount
+        target.estimatedEnergy = old.estimatedEnergy
+        target.minEnergy = old.minEnergy
+        target.maxEnergy = old.maxEnergy
+        target.energyUncertain = old.energyUncertain
+        target.lastChargedMoveId = old.lastChargedMoveId
+        target.charge1Confirmed = old.charge1Confirmed
+        target.charge2Confirmed = old.charge2Confirmed
+        target.fastMoveManual = old.fastMoveManual
+        target.charge1Manual = old.charge1Manual
+        target.charge2Manual = old.charge2Manual
+        target.observedChargedMoveIds.clear()
+        target.observedChargedMoveIds.addAll(old.observedChargedMoveIds)
+        target.lastSeenAtMs = old.lastSeenAtMs
+        ownActiveState = target
     }
 
     private fun onPlayerChanged(name: String, cp: Int?) {
