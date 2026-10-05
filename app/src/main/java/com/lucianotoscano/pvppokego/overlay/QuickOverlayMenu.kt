@@ -37,7 +37,7 @@ class QuickOverlayMenu(
         fun currentBattleModeLabel(): String
     }
 
-    private var gearView: TextView? = null
+    private var gearView: View? = null
     private var gearParams: WindowManager.LayoutParams? = null
     private var leagueView: LeagueBadgeView? = null
     private var leagueParams: WindowManager.LayoutParams? = null
@@ -54,13 +54,8 @@ class QuickOverlayMenu(
         settings.ensureQuickMenuBottomRightV2()
         settings.ensureQuickMenuStyleV3()
 
-        val gear = TextView(context).apply {
-            text = "⚙"
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            textSize = 19f
+        val gear = DelicateGearView(context).apply {
             contentDescription = "Menu PvPPokeGo"
-            setShadowLayer(2f, 0f, 1f, Color.BLACK)
             background = roundLauncherBackground()
             visibility = View.GONE
         }
@@ -358,8 +353,10 @@ class QuickOverlayMenu(
         return floatingParams(size, size).apply {
             val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
             val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
-            x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(0, maxX)
-            y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(0, maxY)
+            val margin = dp(6).coerceAtMost(maxX / 2).coerceAtLeast(0)
+            val bottomMargin = dp(8).coerceAtMost(maxY / 2).coerceAtLeast(0)
+            x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(margin, (maxX - margin).coerceAtLeast(margin))
+            y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(bottomMargin, (maxY - bottomMargin).coerceAtLeast(bottomMargin))
         }
     }
 
@@ -385,8 +382,10 @@ class QuickOverlayMenu(
         val p = gearParams ?: return
         val maxX = (metrics.widthPixels - p.width).coerceAtLeast(0)
         val maxY = (metrics.heightPixels - p.height).coerceAtLeast(0)
-        p.x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(0, maxX)
-        p.y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(0, maxY)
+        val margin = dp(6).coerceAtMost(maxX / 2).coerceAtLeast(0)
+        val bottomMargin = dp(8).coerceAtMost(maxY / 2).coerceAtLeast(0)
+        p.x = (settings.quickMenuXFraction * maxX).toInt().coerceIn(margin, (maxX - margin).coerceAtLeast(margin))
+        p.y = (settings.quickMenuYFraction * maxY).toInt().coerceIn(bottomMargin, (maxY - bottomMargin).coerceAtLeast(bottomMargin))
         runCatching { windowManager.updateViewLayout(view, p) }
     }
 
@@ -458,6 +457,53 @@ class QuickOverlayMenu(
                 }
                 else -> true
             }
+        }
+    }
+
+    /**
+     * Thin vector gear so the launcher belongs to the same visual family as the
+     * canvas-drawn eye and padlock, instead of using the heavy system emoji glyph.
+     */
+    private inner class DelicateGearView(ctx: Context) : View(ctx) {
+        private val softFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.argb(20, 255, 255, 255)
+        }
+        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = Color.argb(235, 245, 247, 250)
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val cx = width / 2f
+            val cy = height / 2f
+            val base = min(width, height).toFloat()
+            val ring = base * .245f
+            val toothInner = base * .30f
+            val toothOuter = base * .375f
+            val sw = (base * .045f).coerceAtLeast(1.5f)
+
+            canvas.drawCircle(cx, cy, toothOuter + sw * .25f, softFill)
+            line.strokeWidth = sw
+            repeat(8) { index ->
+                val angle = Math.toRadians(index * 45.0 + 22.5)
+                val cos = kotlin.math.cos(angle).toFloat()
+                val sin = kotlin.math.sin(angle).toFloat()
+                canvas.drawLine(
+                    cx + cos * toothInner,
+                    cy + sin * toothInner,
+                    cx + cos * toothOuter,
+                    cy + sin * toothOuter,
+                    line
+                )
+            }
+            line.strokeWidth = sw * 1.05f
+            canvas.drawCircle(cx, cy, ring, line)
+            line.strokeWidth = sw * .88f
+            canvas.drawCircle(cx, cy, ring * .40f, line)
         }
     }
 
