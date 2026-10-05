@@ -27,6 +27,8 @@ import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
 import com.lucianotoscano.pvppokego.data.BattleHistoryRecorder
+import com.lucianotoscano.pvppokego.data.BattleUiState
+import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.GameDataRepository
@@ -35,6 +37,7 @@ import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.detect.BattleFrameEventDetector
 import com.lucianotoscano.pvppokego.detect.BattleOcrDetector
 import com.lucianotoscano.pvppokego.detect.BattlePresenceTracker
+import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
 import com.lucianotoscano.pvppokego.engine.BattleEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +70,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var overlayView: BattleOverlayView? = null
     private var scanJob: Job? = null
     private var currentLeagueCp: Int = 1500
+    private var lastRecordedAdviceKey: String? = null
+    private var lastReserveDiagnosticKey: String? = null
 
     private var fastTouch: View? = null
     private var charged1Touch: View? = null
@@ -90,6 +95,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         super.onCreate()
         settingsRepo = SettingsRepository(this)
         settingsRepo.ensureTopHudSafeV4()
+        settingsRepo.ensureApprovedLayoutV13()
         // A previously-running flag at process/service creation means the prior session
         // did not shut down cleanly. Only in that case clear legacy edit mode so an
         // invisible fullscreen drag layer cannot revive unexpectedly. On a clean start,
@@ -109,6 +115,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             ACTION_STOP -> { historyRecorder.finish(); stopSelf(); return START_NOT_STICKY }
             ACTION_RESET -> {
                 historyRecorder.finish()
+                lastRecordedAdviceKey = null
+                lastReserveDiagnosticKey = null
                 engine?.resetBattle()
                 frameDetector?.reset()
                 battleActive = false
@@ -1027,14 +1035,32 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 }
                                 if (event.fastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
                                     e.onFastDetected(event.fastMoveCount, event.confidence, event.source, event.hpRatio, event.motion)
-                                    e.uiState().fastMove?.let { move ->
-                                        historyRecorder.recordFast("INIMIGO", gameRepo.localizedMoveName(move), event.fastMoveCount, now)
+                                    val snapshot = e.uiState()
+                                    snapshot.fastMove?.let { move ->
+                                        historyRecorder.recordFast(
+                                            "INIMIGO",
+                                            gameRepo.localizedMoveName(move),
+                                            event.fastMoveCount,
+                                            now,
+                                            pokemon = snapshot.opponentName,
+                                            confidence = knowledgeLabel(snapshot.fastMoveKnowledge),
+                                            source = event.source
+                                        )
                                     }
                                 }
                                 if (event.ownFastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
                                     e.onOwnFastDetected(event.ownFastMoveCount, event.confidence, event.source, event.opponentHpRatio)
-                                    e.uiState().ownFastMove?.let { move ->
-                                        historyRecorder.recordFast("VOCÊ", gameRepo.localizedMoveName(move), event.ownFastMoveCount, now)
+                                    val snapshot = e.uiState()
+                                    snapshot.ownFastMove?.let { move ->
+                                        historyRecorder.recordFast(
+                                            "VOCÊ",
+                                            gameRepo.localizedMoveName(move),
+                                            event.ownFastMoveCount,
+                                            now,
+                                            pokemon = snapshot.playerName,
+                                            confidence = knowledgeLabel(snapshot.ownFastMoveKnowledge),
+                                            source = event.source
+                                        )
                                     }
                                 }
                             }
@@ -1077,10 +1103,26 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 val textEvent = e?.onBattleText(d.battleText, now)
                                 if (textEvent != null) {
                                     textEvent.enemyChargedMove?.let { move ->
-                                        historyRecorder.recordCharged("INIMIGO", gameRepo.localizedMoveName(move), now)
+                                        val snapshot = e.uiState()
+                                        historyRecorder.recordCharged(
+                                            "INIMIGO",
+                                            gameRepo.localizedMoveName(move),
+                                            now,
+                                            pokemon = snapshot.opponentName,
+                                            confidence = chargedKnowledgeLabel(snapshot, move.moveId, own = false),
+                                            source = "OCR"
+                                        )
                                     }
                                     textEvent.ownChargedMove?.let { move ->
-                                        historyRecorder.recordCharged("VOCÊ", gameRepo.localizedMoveName(move), now)
+                                        val snapshot = e.uiState()
+                                        historyRecorder.recordCharged(
+                                            "VOCÊ",
+                                            gameRepo.localizedMoveName(move),
+                                            now,
+                                            pokemon = snapshot.playerName,
+                                            confidence = chargedKnowledgeLabel(snapshot, move.moveId, own = true),
+                                            source = "OCR"
+                                        )
                                     }
                                     when {
                                         textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
@@ -1101,7 +1143,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         if (engine?.maybeConfirmPendingCharged(now) == true) {
-                            historyRecorder.recordCharged("INIMIGO", "Ataque carregado (não identificado)", now)
+                            historyRecorder.recordCharged(
+                                "INIMIGO",
+                                "Ataque carregado (não identificado)",
+                                now,
+                                pokemon = engine?.activeEnemyName(),
+                                confidence = "DESCONHECIDO",
+                                source = "energia/faixa"
+                            )
                             markBattleEvidence(now)
                             frameDetector?.freezeForCharged(now, 1_800L)
                         }
@@ -1139,6 +1188,57 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         }
     }
 
+    private fun knowledgeLabel(value: MoveKnowledgeConfidence): String = when (value) {
+        MoveKnowledgeConfidence.CONFIRMED -> "CONFIRMADO"
+        MoveKnowledgeConfidence.MANUAL -> "MANUAL"
+        MoveKnowledgeConfidence.RANKED -> "ESTIMADO"
+        MoveKnowledgeConfidence.UNKNOWN -> "DESCONHECIDO"
+    }
+
+    private fun chargedKnowledgeLabel(ui: BattleUiState, moveId: String, own: Boolean): String {
+        return if (own) {
+            when (moveId) {
+                ui.ownCharged1?.move?.moveId -> knowledgeLabel(ui.ownCharged1Knowledge)
+                ui.ownCharged2?.move?.moveId -> knowledgeLabel(ui.ownCharged2Knowledge)
+                else -> "DESCONHECIDO"
+            }
+        } else {
+            when (moveId) {
+                ui.charged1?.move?.moveId -> knowledgeLabel(ui.charged1Knowledge)
+                ui.charged2?.move?.moveId -> knowledgeLabel(ui.charged2Knowledge)
+                else -> "DESCONHECIDO"
+            }
+        }
+    }
+
+    private fun recordUiDiagnostics(ui: BattleUiState, nowMs: Long = System.currentTimeMillis()) {
+        if (!battleActive) {
+            lastRecordedAdviceKey = null
+            lastReserveDiagnosticKey = null
+            return
+        }
+
+        BattleAssistAdvisor.advise(ui, gameRepo)?.let { advice ->
+            val key = "${advice.title}|${advice.detail}"
+            if (key != lastRecordedAdviceKey) {
+                historyRecorder.recordDecision(advice.title, advice.detail, nowMs)
+                lastRecordedAdviceKey = key
+            }
+        }
+
+        val reserveKey = ui.reserves.joinToString(" | ") { reserve ->
+            val c1 = reserve.chargedMove1?.let { gameRepo.localizedMoveName(it) } ?: "?"
+            val c2 = reserve.chargedMove2?.let { gameRepo.localizedMoveName(it) } ?: "?"
+            "#${(reserve.teamSlot ?: -1) + 1} ${reserve.name ?: "?"}/PC${reserve.cp ?: "?"}: " +
+                "$c1[${knowledgeLabel(reserve.chargedMove1Knowledge)}] + " +
+                "$c2[${knowledgeLabel(reserve.chargedMove2Knowledge)}]"
+        }
+        if (reserveKey.isNotBlank() && reserveKey != lastReserveDiagnosticKey) {
+            historyRecorder.recordDiagnostic("Moveset das reservas", reserveKey, nowMs)
+            lastReserveDiagnosticKey = reserveKey
+        }
+    }
+
     private suspend fun reloadLeague(cp: Int) {
         if (cp == currentLeagueCp) return
         withContext(Dispatchers.IO) { gameRepo.load(cp) }
@@ -1169,7 +1269,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         view.setSwitchChoicePromptVisible(enabled && System.currentTimeMillis() <= switchChoicePromptUntilMs)
 
         val ui = engine?.uiState(settingsRepo.debugMode)
-        ui?.let(view::render)
+        ui?.let {
+            view.render(it)
+            recordUiDiagnostics(it)
+        }
 
         val dragHostEnabled = settingsRepo.overlayEnabled && !appUiVisible && (
             enabled || !settingsRepo.layoutLocked || settingsRepo.editMode
@@ -1193,6 +1296,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onCharged2Tapped() { showMoveMenu(MoveKind.CHARGED_2) }
     override fun onResetTapped() {
         historyRecorder.finish()
+        lastRecordedAdviceKey = null
+        lastReserveDiagnosticKey = null
         engine?.resetBattle()
         frameDetector?.reset()
         presenceTracker.reset()
