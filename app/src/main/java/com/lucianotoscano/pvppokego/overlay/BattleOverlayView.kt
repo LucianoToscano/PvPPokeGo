@@ -321,7 +321,7 @@ class BattleOverlayView(
     private fun drawMoveTriangle(canvas: Canvas) {
         val (centerRefX, fastRefY) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
         val bs = settings.blockScale(BLOCK_ENEMY_MOVES)
-        val centerX=rx(centerRefX); val fastY=ry(fastRefY); val chargedY=fastY+ry(123f)*bs
+        val centerX=rx(centerRefX); val fastY=ry(fastRefY); val chargedY=fastY+ry(112f)*bs
         val spread=rx(74f)*bs; val fastRadius=31f*u()*bs; val chargedRadius=41f*u()*bs
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)

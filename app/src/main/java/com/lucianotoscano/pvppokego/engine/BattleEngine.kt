@@ -183,7 +183,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun needsOwnTeamScan(): Boolean = ownTeamSlots.size < 3
     fun activePlayerName(): String? = playerName
     fun activeEnemyName(): String? = enemyName
-    fun currentFastDurationMs(): Long = fast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
+    fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
     fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
     private fun rememberOwnPokemon(name: String, cp: Int?) {
@@ -339,7 +339,11 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastMotion = motion
         if (count <= 0) return
         if (System.currentTimeMillis() < ignoreFastUntilMs) { lastAutoSource = "charged-guard"; return }
-        val f = fast ?: return
+        val f = effectiveEnemyFastMove() ?: return
+        if (fast?.moveId != f.moveId) {
+            fast = f
+            activeState?.fastMoveId = f.moveId
+        }
         tracker.onFastMove(f, count)
         saveActiveState()
     }
@@ -485,6 +489,20 @@ class BattleEngine(private val repo: GameDataRepository) {
             return false
         }
         return observedUnknownChargedUsed(nowMs)
+    }
+
+    /**
+     * Defensive fallback: energy tracking must use an actual Fast Move with positive
+     * energy gain. If ranking/default data selected an invalid/zero-energy move,
+     * use the first valid Fast Move available for that species.
+     */
+    private fun effectiveEnemyFastMove(): MoveDef? {
+        fast?.takeIf { it.energyGain > 0 }?.let { return it }
+        val fallback = enemyName
+            ?.let(repo::possibleFastMoves)
+            .orEmpty()
+            .firstOrNull { it.energyGain > 0 }
+        return fallback
     }
 
     fun possibleFastMoves(): List<MoveDef> = enemyName?.let(repo::possibleFastMoves).orEmpty()

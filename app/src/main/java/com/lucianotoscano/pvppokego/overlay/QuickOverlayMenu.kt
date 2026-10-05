@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -59,8 +60,14 @@ class QuickOverlayMenu(
         settings.ensureQuickMenuBottomRightV2()
         settings.ensureQuickMenuStyleV3()
 
-        val gear = DelicateGearView(context).apply {
-            contentDescription = "Menu PvPPokeGo"
+        val gear = ImageView(context).apply {
+            // Use Android's standard settings/preferences symbol so it is immediately
+            // recognizable as configuration instead of resembling a sun.
+            setImageResource(android.R.drawable.ic_menu_preferences)
+            setColorFilter(Color.argb(238, 245, 247, 250))
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            contentDescription = "Configurações PvPPokeGo"
             background = null
             visibility = View.GONE
         }
@@ -476,7 +483,7 @@ class QuickOverlayMenu(
 
     private fun gearLayoutParams(): WindowManager.LayoutParams {
         // Touch target remains comfortable while the visible vector stays as small as eye/lock.
-        val size = min(dp(34), (metrics.widthPixels * .078f).toInt()).coerceAtLeast(dp(32))
+        val size = min(dp(32), (metrics.widthPixels * .074f).toInt()).coerceAtLeast(dp(30))
         return floatingParams(size, size).apply {
             val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
             val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
@@ -584,53 +591,6 @@ class QuickOverlayMenu(
                 }
                 else -> true
             }
-        }
-    }
-
-    /**
-     * Thin vector gear so the launcher belongs to the same visual family as the
-     * canvas-drawn eye and padlock, instead of using the heavy system emoji glyph.
-     */
-    private inner class DelicateGearView(ctx: Context) : View(ctx) {
-        private val softFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = Color.argb(20, 255, 255, 255)
-        }
-        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            color = Color.argb(235, 245, 247, 250)
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val cx = width / 2f
-            val cy = height / 2f
-            val base = min(width, height).toFloat()
-            val ring = base * .19f
-            val toothInner = base * .235f
-            val toothOuter = base * .30f
-            val sw = (base * .036f).coerceAtLeast(1.25f)
-
-            canvas.drawCircle(cx, cy, toothOuter + sw * .18f, softFill)
-            line.strokeWidth = sw
-            repeat(8) { index ->
-                val angle = Math.toRadians(index * 45.0 + 22.5)
-                val cos = kotlin.math.cos(angle).toFloat()
-                val sin = kotlin.math.sin(angle).toFloat()
-                canvas.drawLine(
-                    cx + cos * toothInner,
-                    cy + sin * toothInner,
-                    cx + cos * toothOuter,
-                    cy + sin * toothOuter,
-                    line
-                )
-            }
-            line.strokeWidth = sw * 1.05f
-            canvas.drawCircle(cx, cy, ring, line)
-            line.strokeWidth = sw * .88f
-            canvas.drawCircle(cx, cy, ring * .40f, line)
         }
     }
 

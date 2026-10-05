@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.15
+
+- As posições do HUD passam a usar como preset oficial as coordenadas exportadas no arquivo PvPPokeGo-0.5.14-config.json enviado pelo usuário.
+- Ataque ágil do inimigo aproximado levemente dos dois ataques carregados: distância vertical reduzida de 123 para 112 unidades de referência.
+- Áreas de toque dos ataques carregados reposicionadas junto com o visual para manter clique e desenho alinhados.
+- Engrenagem customizada removida; launcher passa a usar o ícone padrão de Configurações/Preferências do Android.
+- Ícone de configurações mantém uma hitbox confortável, mas com desenho visível pequeno, próximo ao porte do olho/cadeado.
+- Mantidos menu reorganizado e controles rápidos de Pausar visão, Remover sobreposição e Parar serviço da 0.5.14.
+- Backup exportado passa a usar PvPPokeGo-0.5.15-config.json.
+- Corrigida contagem de energia dos carregados inimigos para ataques rápidos de baixo dano: microquedas de 1 px da barra de HP agora são acumuladas em vez de descartadas.
+- Rastreamento de energia agora rejeita Fast Move com ganho de energia zero e usa um Fast Move válido como fallback.
+
+
 ## 0.5.14
 
 - Engrenagem redesenhada novamente: menor, sem o círculo grande e com proporção visual próxima ao olho/cadeado.

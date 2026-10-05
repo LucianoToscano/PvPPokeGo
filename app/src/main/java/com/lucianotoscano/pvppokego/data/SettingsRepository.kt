@@ -182,6 +182,40 @@ class SettingsRepository(context: Context) {
         editor.apply()
     }
 
+    /**
+     * 0.5.15 position preset taken directly from the user's exported 0.5.14 config.
+     * This migration intentionally applies the approved coordinates once so the next
+     * APK opens aligned with the layout the user validated on-device.
+     */
+    fun ensureApprovedLayoutV15() {
+        if (prefs.getInt("layout_preset_version", 0) >= 15) return
+        prefs.edit()
+            .putFloat("hud_battle_assist_x", 429.6000061f)
+            .putFloat("hud_battle_assist_y", 237.9487152f)
+            .putFloat("hud_enemy_history_x", 832.3187256f)
+            .putFloat("hud_enemy_history_y", 793.2551880f)
+            .putFloat("hud_enemy_moves_x", 723.6773682f)
+            .putFloat("hud_enemy_moves_y", 233.8441772f)
+            .putFloat("hud_lock_x", 90.1164093f)
+            .putFloat("hud_lock_y", 1493.2362061f)
+            .putFloat("hud_player_matchup_x", 430.9796753f)
+            .putFloat("hud_player_matchup_y", 28.5147095f)
+            .putFloat("hud_reserve_1_x", 686.4000244f)
+            .putFloat("hud_reserve_1_y", 894.0307617f)
+            .putFloat("hud_reserve_2_x", 686.4000244f)
+            .putFloat("hud_reserve_2_y", 1039.0974121f)
+            .putFloat("hud_strong_types_x", 710.8890381f)
+            .putFloat("hud_strong_types_y", 12.4527397f)
+            .putFloat("hud_toggle_x", 44.1015587f)
+            .putFloat("hud_toggle_y", 1495.1796875f)
+            .putFloat("league_badge_x_frac", 0.49793816f)
+            .putFloat("league_badge_y_frac", 0.07623319f)
+            .putFloat("quick_menu_x_frac", 1f)
+            .putFloat("quick_menu_y_frac", 1f)
+            .putInt("layout_preset_version", 15)
+            .apply()
+    }
+
     var showSwitchTimer: Boolean
         get() = prefs.getBoolean("show_switch_timer", false)
         set(v) = prefs.edit().putBoolean("show_switch_timer", v).apply()
@@ -276,7 +310,7 @@ class SettingsRepository(context: Context) {
         val root = JSONObject()
         root.put("format", "PvPPokeGo-settings")
         root.put("formatVersion", 1)
-        root.put("appVersion", "0.5.14")
+        root.put("appVersion", "0.5.15")
         val values = JSONObject()
         prefs.all.toSortedMap().forEach { (key, value) ->
             if (!isBackupKeyAllowed(key) || value == null) return@forEach

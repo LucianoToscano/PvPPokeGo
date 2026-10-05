@@ -40,6 +40,8 @@ class BattleFrameEventDetector {
     private var motionEma = 0f
     private var lastFastAtMs = 0L
     private var lastOwnFastAtMs = 0L
+    private var pendingEnemyHpDropPx = 0
+    private var pendingOwnHpDropPx = 0
     private var frozenUntilMs = 0L
 
     private val reserveVisibility = arrayOfNulls<Boolean>(2)
@@ -55,6 +57,8 @@ class BattleFrameEventDetector {
         motionEma = 0f
         lastFastAtMs = 0L
         lastOwnFastAtMs = 0L
+        pendingEnemyHpDropPx = 0
+        pendingOwnHpDropPx = 0
         frozenUntilMs = 0L
         reserveVisibility.fill(null)
         reserveHitStreak.fill(0)
@@ -65,6 +69,8 @@ class BattleFrameEventDetector {
         frozenUntilMs = max(frozenUntilMs, nowMs + durationMs)
         previousHpRun = null
         previousOpponentHpRun = null
+        pendingEnemyHpDropPx = 0
+        pendingOwnHpDropPx = 0
         previousMotionSamples = null
     }
 
@@ -131,19 +137,35 @@ class BattleFrameEventDetector {
             if (old != null) {
                 if (hpRun > old + max(7, maximumHpRun / 30)) {
                     maximumHpRun = max(maximumHpRun, hpRun)
+                    pendingEnemyHpDropPx = 0
                     source = "player-hp-reset"
                 } else {
                     val drop = old - hpRun
-                    val threshold = max(2, maximumHpRun / 95)
-                    if (drop >= threshold && nowMs - lastFastAtMs >= enemyMinGap) {
+                    when {
+                        drop > 0 -> pendingEnemyHpDropPx = (pendingEnemyHpDropPx + drop).coerceAtMost(maximumHpRun.coerceAtLeast(12))
+                        drop < -1 -> pendingEnemyHpDropPx = 0
+                    }
+
+                    // Low-damage Fast Moves can move the rendered HP bar only one pixel.
+                    // The old threshold discarded those tiny drops forever, freezing enemy energy.
+                    val threshold = max(1, maximumHpRun / 145)
+                    val elapsed = nowMs - lastFastAtMs
+                    val cadenceFallback = pendingEnemyHpDropPx > 0 &&
+                        elapsed >= (expectedEnemyFastDurationMs * .70f).toLong().coerceAtLeast(enemyMinGap)
+                    if ((pendingEnemyHpDropPx >= threshold || cadenceFallback) && elapsed >= enemyMinGap) {
                         lastFastAtMs = nowMs
                         enemyFast = 1
-                        source = "player-hp-drop"
-                        confidence = .98f
+                        source = if (pendingEnemyHpDropPx >= threshold) "player-hp-drop" else "player-hp-microdrop"
+                        confidence = if (source == "player-hp-drop") .98f else .90f
+                        pendingEnemyHpDropPx = 0
                     }
                 }
             }
-        } else previousHpRun = null
+        } else {
+            // Do not invent Fast Moves while the HP bar is temporarily hidden by VFX.
+            previousHpRun = null
+            pendingEnemyHpDropPx = 0
+        }
 
         if (opponentHpRun != null) {
             val old = previousOpponentHpRun
@@ -151,19 +173,35 @@ class BattleFrameEventDetector {
             if (old != null) {
                 if (opponentHpRun > old + max(7, maximumOpponentHpRun / 30)) {
                     maximumOpponentHpRun = max(maximumOpponentHpRun, opponentHpRun)
+                    pendingOwnHpDropPx = 0
                     if (enemyFast == 0) source = "opponent-hp-reset"
                 } else {
                     val drop = old - opponentHpRun
-                    val threshold = max(2, maximumOpponentHpRun / 95)
-                    if (drop >= threshold && nowMs - lastOwnFastAtMs >= ownMinGap) {
+                    when {
+                        drop > 0 -> pendingOwnHpDropPx = (pendingOwnHpDropPx + drop).coerceAtMost(maximumOpponentHpRun.coerceAtLeast(12))
+                        drop < -1 -> pendingOwnHpDropPx = 0
+                    }
+                    val threshold = max(1, maximumOpponentHpRun / 145)
+                    val elapsed = nowMs - lastOwnFastAtMs
+                    val cadenceFallback = pendingOwnHpDropPx > 0 &&
+                        elapsed >= (expectedOwnFastDurationMs * .70f).toLong().coerceAtLeast(ownMinGap)
+                    if ((pendingOwnHpDropPx >= threshold || cadenceFallback) && elapsed >= ownMinGap) {
                         lastOwnFastAtMs = nowMs
                         ownFast = 1
-                        source = if (enemyFast > 0) "both-hp-drop" else "opponent-hp-drop"
-                        confidence = .98f
+                        source = when {
+                            enemyFast > 0 -> "both-hp-drop"
+                            pendingOwnHpDropPx >= threshold -> "opponent-hp-drop"
+                            else -> "opponent-hp-microdrop"
+                        }
+                        confidence = if (source.endsWith("microdrop")) .90f else .98f
+                        pendingOwnHpDropPx = 0
                     }
                 }
             }
-        } else previousOpponentHpRun = null
+        } else {
+            previousOpponentHpRun = null
+            pendingOwnHpDropPx = 0
+        }
 
         return Event(
             fastMoveCount = enemyFast,

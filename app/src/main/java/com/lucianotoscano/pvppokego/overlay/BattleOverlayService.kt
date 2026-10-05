@@ -98,6 +98,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         settingsRepo = SettingsRepository(this)
         settingsRepo.ensureTopHudSafeV4()
         settingsRepo.ensureApprovedLayoutV13()
+        settingsRepo.ensureApprovedLayoutV15()
         // A previously-running flag at process/service creation means the prior session
         // did not shut down cleanly. Only in that case clear legacy edit mode so an
         // invisible fullscreen drag layer cannot revive unexpectedly. On a clean start,
@@ -205,7 +206,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("0.5.14 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                startForeground(NOTIFICATION_ID, notification("0.5.15 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -329,8 +330,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         val (centerX, fastY) = enemyMoveAnchor()
         fastTouch = zone(centerX, fastY + 15f, 106f, 116f) { showMoveMenu(MoveKind.FAST) }
-        charged1Touch = zone(centerX - 72f, fastY + 140f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_1) }
-        charged2Touch = zone(centerX + 72f, fastY + 140f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_2) }
+        charged1Touch = zone(centerX - 72f, fastY + 129f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_1) }
+        charged2Touch = zone(centerX + 72f, fastY + 129f, 120f, 130f) { showMoveMenu(MoveKind.CHARGED_2) }
     }
 
     private fun attachHudToggleTouch() {
@@ -1286,7 +1287,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("0.5.14 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            startForeground(NOTIFICATION_ID, notification("0.5.15 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
