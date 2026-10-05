@@ -26,6 +26,9 @@ jobs:
           grep -q 'chargedY=fastY+ry(112f)' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt
           grep -q 'fastY + 129f' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
           grep -q 'android.R.drawable.ic_menu_preferences' app/src/main/java/com/lucianotoscano/pvppokego/overlay/QuickOverlayMenu.kt
+          grep -q 'pendingEnemyHpDropPx' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleFrameEventDetector.kt
+          grep -q 'player-hp-microdrop' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleFrameEventDetector.kt
+          grep -q 'effectiveEnemyFastMove' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
           if grep -q 'DelicateGearView' app/src/main/java/com/lucianotoscano/pvppokego/overlay/QuickOverlayMenu.kt; then
             echo "Old custom sun-like gear still present"
             exit 1
