@@ -1,0 +1,21 @@
+--- a/app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
++++ b/app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
+@@ -268,6 +268,9 @@
+         // Always return to a safe state after an import. Positions/customizations remain restored.
+         editor.putBoolean("edit_mode", false)
+         editor.putBoolean("layout_locked", true)
++        // Prevent the top-HUD migration from clearing restored manual positions
++        // on the next overlay start.
++        editor.putInt("top_hud_position_version", 6)
+         editor.remove("overlay_service_running")
+         editor.apply()
+         return restored
+@@ -287,7 +290,7 @@
+             "show_current_indicator", "analyze_reserves", "show_reserve_types",
+             "show_enemy_moves", "show_charged_counter", "show_energy_progress",
+             "show_hud_text", "show_enemy_history", "show_switch_timer", "debug_mode",
+-            "layout_locked", "overlay_scale", "overlay_opacity"
++            "layout_locked", "overlay_scale", "overlay_opacity", "top_hud_position_version"
+         )
+         val HUD_BLOCKS = listOf(
+             "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
