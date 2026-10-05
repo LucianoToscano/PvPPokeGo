@@ -159,7 +159,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportSettings() {
-        exportSettingsLauncher.launch("PvPPokeGo-0.5.14-config.json")
+        exportSettingsLauncher.launch("PvPPokeGo-0.5.15-config.json")
     }
 
     private fun importSettings() {
