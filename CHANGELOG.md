@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.14
+
+- Engrenagem redesenhada novamente: menor, sem o círculo grande e com proporção visual próxima ao olho/cadeado.
+- Área de toque da engrenagem continua confortável, mas o desenho visível fica discreto.
+- Menu da engrenagem reorganizado em seções: Batalha, HUD/Visual, Análise e Sistema.
+- Painel do menu ganhou fundo arredondado, espaçamento e hierarquia visual mais limpa.
+- Ações destrutivas/operacionais ficam separadas e destacadas no menu.
+- Nova ação **Pausar visão/análise**: interrompe OCR/detecção temporariamente sem encerrar o serviço.
+- Nova ação **Remover sobreposição**: oculta HUD, ícones, liga e touch targets sem encerrar a captura; pode ser restaurada pela notificação.
+- Nova ação **Parar serviço PvPPokeGo** disponível no menu.
+- Notificação persistente passa a oferecer três ações: Pausar/Retomar visão, Remover/Mostrar sobreposição e Parar serviço.
+- Estado da notificação muda conforme visão pausada ou sobreposição oculta.
+- Mantidas as correções e recursos da 0.5.13: layout aprovado, identidade estável do time, confiança de golpes e histórico explicável.
+
+
 ## 0.5.13
 
 - Baseada no 0.5.11 validado, preservando ORIGINAL_ICONS, touch zones, rotação e controles entre batalhas.

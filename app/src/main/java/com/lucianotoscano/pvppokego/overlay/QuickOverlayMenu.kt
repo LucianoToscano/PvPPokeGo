@@ -35,6 +35,11 @@ class QuickOverlayMenu(
         fun isLayoutLocked(): Boolean
         fun onResetHudPositions()
         fun currentBattleModeLabel(): String
+        fun isVisionPaused(): Boolean
+        fun onToggleVision()
+        fun isOverlaySuppressed(): Boolean
+        fun onToggleOverlaySuppressed()
+        fun onStopService()
     }
 
     private var gearView: View? = null
@@ -56,7 +61,7 @@ class QuickOverlayMenu(
 
         val gear = DelicateGearView(context).apply {
             contentDescription = "Menu PvPPokeGo"
-            background = roundLauncherBackground()
+            background = null
             visibility = View.GONE
         }
         val gp = gearLayoutParams()
@@ -142,8 +147,8 @@ class QuickOverlayMenu(
         val labels = settings.quickMenuShowLabels
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(2), dp(3), dp(2), dp(3))
-            setBackgroundColor(Color.TRANSPARENT)
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = panelBackground()
         }
         if (labels) buildLabeledMenu(content) else buildIconMenu(content)
 
@@ -157,9 +162,9 @@ class QuickOverlayMenu(
         val gear = gearParams ?: return
         val screenW = metrics.widthPixels
         val screenH = metrics.heightPixels
-        val width = if (labels) min((screenW * .62f).toInt(), dp(245)) else min((screenW * .46f).toInt(), dp(176))
-        val desiredHeight = if (labels) dp(470) else dp(245)
-        val height = min((screenH * if (labels) .64f else .36f).toInt(), desiredHeight)
+        val width = if (labels) min((screenW * .72f).toInt(), dp(282)) else min((screenW * .50f).toInt(), dp(190))
+        val desiredHeight = if (labels) dp(540) else dp(285)
+        val height = min((screenH * if (labels) .70f else .40f).toInt(), desiredHeight)
         val margin = dp(5)
         val rightX = gear.x + gear.width + margin
         val x = if (rightX + width <= screenW) rightX else (gear.x - width - margin).coerceAtLeast(0)
@@ -197,10 +202,14 @@ class QuickOverlayMenu(
                 IconItem("↔","Editar HUD",settings.editMode){settings.editMode=!settings.editMode;callbacks.onSettingsChanged(true);if(settings.editMode)dismissPanel()else refreshPanel()}
             )
             row(
-                IconItem("T","Textos HUD",settings.showHudText){settings.showHudText=!settings.showHudText;changed()},
+                IconItem(if(callbacks.isVisionPaused())"▶" else "Ⅱ","Visão",!callbacks.isVisionPaused()){callbacks.onToggleVision();refreshPanel()},
                 IconItem("…","Avançado",null){settings.quickMenuAdvanced=true;refreshPanel()},
                 IconItem("≡","Mostrar textos",null){settings.quickMenuShowLabels=true;refreshPanel()},
                 IconItem("×","Fechar",null){dismissPanel()}
+            )
+            row(
+                IconItem("□","Overlay",!callbacks.isOverlaySuppressed()){callbacks.onToggleOverlaySuppressed();dismissPanel()},
+                IconItem("■","Parar",null){callbacks.onStopService()}
             )
         } else {
             row(
@@ -227,40 +236,137 @@ class QuickOverlayMenu(
                 IconItem("▦","Textos",null){settings.quickMenuShowLabels=true;refreshPanel()},
                 IconItem("×","Fechar",null){dismissPanel()}
             )
+            row(
+                IconItem(if(callbacks.isVisionPaused())"▶" else "Ⅱ","Visão",!callbacks.isVisionPaused()){callbacks.onToggleVision();refreshPanel()},
+                IconItem("□","Overlay",!callbacks.isOverlaySuppressed()){callbacks.onToggleOverlaySuppressed();dismissPanel()},
+                IconItem("■","Parar",null){callbacks.onStopService()}
+            )
         }
     }
 
-    /** PGSharp-like list: compact icon cell at left and text at right. */
+    /** Organized quick menu with clear sections and destructive actions separated. */
     private fun buildLabeledMenu(parent: LinearLayout) {
-        if (!settings.quickMenuAdvanced) {
-            addRow(parent,"◉","HUD",!callbacks.isHudCollapsed()){callbacks.onToggleHud();refreshPanel()}
-            addRow(parent,"★","Modo Batalha Assistido",settings.battleAssistEnabled){settings.battleAssistEnabled=!settings.battleAssistEnabled;changed()}
-            addRow(parent,"△","Liga: ${leagueShort(settings.leagueMode)}",null){cycleLeague()}
-            addRow(parent,"↔","Modo edição",settings.editMode){settings.editMode=!settings.editMode;callbacks.onSettingsChanged(true);if(settings.editMode)dismissPanel()else refreshPanel()}
-            addRow(parent,"T","Textos do HUD",settings.showHudText){settings.showHudText=!settings.showHudText;changed()}
-            addRow(parent,"…","Configurações avançadas",null){settings.quickMenuAdvanced=true;refreshPanel()}
-            addRow(parent,"▦","Somente ícones",null){settings.quickMenuShowLabels=false;refreshPanel()}
-            addRow(parent,"×","Fechar",null){dismissPanel()}
-        } else {
-            addRow(parent,"A","Reconhecimento automático",settings.autoRecognition){settings.autoRecognition=!settings.autoRecognition;changed()}
-            addRow(parent,"◇","Fraquezas do inimigo",settings.showStrongTypes){settings.showStrongTypes=!settings.showStrongTypes;changed()}
-            addRow(parent,"✓","Indicador Pokémon atual",settings.showCurrentIndicator){settings.showCurrentIndicator=!settings.showCurrentIndicator;changed()}
-            addRow(parent,"2","Analisar reservas",settings.analyzeReserves){settings.analyzeReserves=!settings.analyzeReserves;changed()}
-            addRow(parent,"T","Tipos das reservas",settings.showReserveTypes){settings.showReserveTypes=!settings.showReserveTypes;changed()}
-            addRow(parent,"⚔","Ataques do inimigo",settings.showEnemyMoves){settings.showEnemyMoves=!settings.showEnemyMoves;changed()}
-            addRow(parent,"••","Pontos de carregamento",settings.showChargedCounter){settings.showChargedCounter=!settings.showChargedCounter;changed()}
-            addRow(parent,"⚡","Progresso de energia",settings.showEnergyProgress){settings.showEnergyProgress=!settings.showEnergyProgress;changed()}
-            addRow(parent,"↻","Timer de troca",settings.showSwitchTimer){settings.showSwitchTimer=!settings.showSwitchTimer;changed()}
-            addRow(parent,"H","Histórico do inimigo",settings.showEnemyHistory){settings.showEnemyHistory=!settings.showEnemyHistory;changed()}
-            addRow(parent,"S","Escala ${(settings.scale*100).toInt()}%",null){settings.scale=if(settings.scale>=1.19f).5f else settings.scale+.1f;callbacks.onSettingsChanged(true);refreshPanel()}
-            addRow(parent,"◐","Opacidade ${(settings.opacity*100).toInt()}%",null){settings.opacity=if(settings.opacity>=.99f).3f else settings.opacity+.1f;callbacks.onSettingsChanged(false);refreshPanel()}
-            addRow(parent,"D","DEBUG",settings.debugMode){settings.debugMode=!settings.debugMode;changed()}
-            addRow(parent,"U","Mostrar todos os blocos",null){SettingsRepository.HUD_BLOCKS.forEach{settings.setBlockHidden(it,false)};changed(true)}
-            addRow(parent,"‹","Voltar ao menu básico",null){settings.quickMenuAdvanced=false;refreshPanel()}
-            addRow(parent,"↺","Restaurar posições/layout",null){settings.resetHudCustomization();resetPositions()}
-            addRow(parent,"▦","Somente ícones",null){settings.quickMenuShowLabels=false;refreshPanel()}
-            addRow(parent,"×","Fechar",null){dismissPanel()}
+        addSectionHeader(parent, "BATALHA")
+        addRow(parent, "◉", if (callbacks.isHudCollapsed()) "Mostrar HUD" else "Ocultar HUD", !callbacks.isHudCollapsed()) {
+            callbacks.onToggleHud()
+            refreshPanel()
         }
+        addRow(parent, "★", "Modo batalha assistido", settings.battleAssistEnabled) {
+            settings.battleAssistEnabled = !settings.battleAssistEnabled
+            changed()
+        }
+        addRow(parent, "△", "Liga: ${leagueShort(settings.leagueMode)}", null) { cycleLeague() }
+        addRow(parent, "↔", "Editar posições do HUD", settings.editMode) {
+            settings.editMode = !settings.editMode
+            callbacks.onSettingsChanged(true)
+            if (settings.editMode) dismissPanel() else refreshPanel()
+        }
+
+        addSectionHeader(parent, "HUD / VISUAL")
+        addRow(parent, "T", "Textos do HUD", settings.showHudText) {
+            settings.showHudText = !settings.showHudText
+            changed()
+        }
+        addRow(parent, "S", "Escala ${(settings.scale * 100).toInt()}%", null) {
+            settings.scale = if (settings.scale >= 1.19f) .5f else settings.scale + .1f
+            callbacks.onSettingsChanged(true)
+            refreshPanel()
+        }
+        addRow(parent, "◐", "Opacidade ${(settings.opacity * 100).toInt()}%", null) {
+            settings.opacity = if (settings.opacity >= .99f) .3f else settings.opacity + .1f
+            callbacks.onSettingsChanged(false)
+            refreshPanel()
+        }
+        addRow(parent, "↺", "Restaurar posições/layout", null) {
+            settings.resetHudCustomization()
+            resetPositions()
+        }
+
+        if (settings.quickMenuAdvanced) {
+            addSectionHeader(parent, "ANÁLISE")
+            addRow(parent, "A", "Reconhecimento automático", settings.autoRecognition) {
+                settings.autoRecognition = !settings.autoRecognition
+                changed()
+            }
+            addRow(parent, "◇", "Fraquezas do inimigo", settings.showStrongTypes) {
+                settings.showStrongTypes = !settings.showStrongTypes
+                changed()
+            }
+            addRow(parent, "✓", "Indicador Pokémon atual", settings.showCurrentIndicator) {
+                settings.showCurrentIndicator = !settings.showCurrentIndicator
+                changed()
+            }
+            addRow(parent, "2", "Analisar reservas", settings.analyzeReserves) {
+                settings.analyzeReserves = !settings.analyzeReserves
+                changed()
+            }
+            addRow(parent, "T", "Tipos das reservas", settings.showReserveTypes) {
+                settings.showReserveTypes = !settings.showReserveTypes
+                changed()
+            }
+            addRow(parent, "⚔", "Ataques do inimigo", settings.showEnemyMoves) {
+                settings.showEnemyMoves = !settings.showEnemyMoves
+                changed()
+            }
+            addRow(parent, "••", "Contagem de carregados", settings.showChargedCounter) {
+                settings.showChargedCounter = !settings.showChargedCounter
+                changed()
+            }
+            addRow(parent, "⚡", "Progresso de energia", settings.showEnergyProgress) {
+                settings.showEnergyProgress = !settings.showEnergyProgress
+                changed()
+            }
+            addRow(parent, "↻", "Timer de troca", settings.showSwitchTimer) {
+                settings.showSwitchTimer = !settings.showSwitchTimer
+                changed()
+            }
+            addRow(parent, "H", "Histórico do inimigo", settings.showEnemyHistory) {
+                settings.showEnemyHistory = !settings.showEnemyHistory
+                changed()
+            }
+            addRow(parent, "D", "Diagnóstico / DEBUG", settings.debugMode) {
+                settings.debugMode = !settings.debugMode
+                changed()
+            }
+            addRow(parent, "‹", "Ocultar opções avançadas", null) {
+                settings.quickMenuAdvanced = false
+                refreshPanel()
+            }
+        } else {
+            addRow(parent, "…", "Mostrar opções avançadas", null) {
+                settings.quickMenuAdvanced = true
+                refreshPanel()
+            }
+        }
+
+        addSectionHeader(parent, "SISTEMA")
+        addRow(
+            parent,
+            if (callbacks.isVisionPaused()) "▶" else "Ⅱ",
+            if (callbacks.isVisionPaused()) "Retomar visão/análise" else "Pausar visão/análise",
+            !callbacks.isVisionPaused()
+        ) {
+            callbacks.onToggleVision()
+            refreshPanel()
+        }
+        addRow(
+            parent,
+            if (callbacks.isOverlaySuppressed()) "□" else "×",
+            if (callbacks.isOverlaySuppressed()) "Mostrar sobreposição" else "Remover sobreposição",
+            null,
+            danger = !callbacks.isOverlaySuppressed()
+        ) {
+            callbacks.onToggleOverlaySuppressed()
+            dismissPanel()
+        }
+        addRow(parent, "■", "Parar serviço PvPPokeGo", null, danger = true) {
+            callbacks.onStopService()
+        }
+        addRow(parent, "▦", "Modo somente ícones", null) {
+            settings.quickMenuShowLabels = false
+            refreshPanel()
+        }
+        addRow(parent, "×", "Fechar menu", null) { dismissPanel() }
     }
 
     private fun addIconCell(parent: LinearLayout, item: IconItem) {
@@ -281,30 +387,50 @@ class QuickOverlayMenu(
         })
     }
 
-    private fun addRow(parent: LinearLayout, icon: String, label: String, enabled: Boolean?, onTap: () -> Unit) {
+    private fun addSectionHeader(parent: LinearLayout, title: String) {
+        parent.addView(TextView(context).apply {
+            text = title
+            setTextColor(Color.argb(185, 201, 209, 221))
+            textSize = 10f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(dp(4), dp(8), dp(4), dp(4))
+            letterSpacing = .08f
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    private fun addRow(
+        parent: LinearLayout,
+        icon: String,
+        label: String,
+        enabled: Boolean?,
+        danger: Boolean = false,
+        onTap: () -> Unit
+    ) {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, dp(6), 0)
+            setPadding(dp(5), dp(3), dp(8), dp(3))
             isClickable = true
+            background = menuRowBackground(danger)
             setOnClickListener { onTap() }
         }
         row.addView(TextView(context).apply {
             text = icon
             gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            textSize = 16f
+            setTextColor(if (danger) Color.rgb(255, 124, 124) else Color.WHITE)
+            textSize = if (icon.length > 1) 12f else 16f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            background = squareIconBackground(enabled)
-        }, LinearLayout.LayoutParams(dp(38), dp(38)).apply { marginEnd = dp(8) })
+            background = squareIconBackground(enabled, danger)
+        }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(9) })
         row.addView(TextView(context).apply {
             text = label
-            setTextColor(Color.WHITE)
+            setTextColor(if (danger) Color.rgb(255, 126, 126) else Color.rgb(245, 247, 250))
             textSize = 13f
             maxLines = 1
-            setShadowLayer(2f, 0f, 1f, Color.BLACK)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(41)))
+        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
+            bottomMargin = dp(3)
+        })
     }
 
     private fun changed(rebuildTouches: Boolean = false) {
@@ -349,7 +475,8 @@ class QuickOverlayMenu(
     }
 
     private fun gearLayoutParams(): WindowManager.LayoutParams {
-        val size = min(dp(38), (metrics.widthPixels * .088f).toInt()).coerceAtLeast(40)
+        // Touch target remains comfortable while the visible vector stays as small as eye/lock.
+        val size = min(dp(34), (metrics.widthPixels * .078f).toInt()).coerceAtLeast(dp(32))
         return floatingParams(size, size).apply {
             val maxX = (metrics.widthPixels - size).coerceAtLeast(0)
             val maxY = (metrics.heightPixels - size).coerceAtLeast(0)
@@ -481,12 +608,12 @@ class QuickOverlayMenu(
             val cx = width / 2f
             val cy = height / 2f
             val base = min(width, height).toFloat()
-            val ring = base * .245f
-            val toothInner = base * .30f
-            val toothOuter = base * .375f
-            val sw = (base * .045f).coerceAtLeast(1.5f)
+            val ring = base * .19f
+            val toothInner = base * .235f
+            val toothOuter = base * .30f
+            val sw = (base * .036f).coerceAtLeast(1.25f)
 
-            canvas.drawCircle(cx, cy, toothOuter + sw * .25f, softFill)
+            canvas.drawCircle(cx, cy, toothOuter + sw * .18f, softFill)
             line.strokeWidth = sw
             repeat(8) { index ->
                 val angle = Math.toRadians(index * 45.0 + 22.5)
@@ -513,14 +640,28 @@ class QuickOverlayMenu(
         setStroke(dp(1), Color.argb(225, 238, 241, 246))
     }
 
-    private fun squareIconBackground(enabled: Boolean?): GradientDrawable = GradientDrawable().apply {
+    private fun panelBackground(): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
-        cornerRadius = dp(2).toFloat()
-        setColor(Color.argb(165, 23, 27, 33))
-        setStroke(dp(1), when (enabled) {
-            true -> Color.rgb(111, 220, 146)
-            false -> Color.argb(120, 170, 177, 188)
-            null -> Color.argb(150, 235, 238, 244)
+        cornerRadius = dp(15).toFloat()
+        setColor(Color.argb(235, 19, 23, 31))
+        setStroke(dp(1), Color.argb(125, 225, 230, 238))
+    }
+
+    private fun menuRowBackground(danger: Boolean): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = dp(9).toFloat()
+        setColor(if (danger) Color.argb(72, 130, 24, 30) else Color.argb(92, 255, 255, 255))
+    }
+
+    private fun squareIconBackground(enabled: Boolean?, danger: Boolean = false): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = dp(7).toFloat()
+        setColor(if (danger) Color.argb(78, 145, 26, 32) else Color.argb(120, 34, 39, 49))
+        setStroke(dp(1), when {
+            danger -> Color.argb(210, 235, 90, 97)
+            enabled == true -> Color.rgb(111, 220, 146)
+            enabled == false -> Color.argb(120, 170, 177, 188)
+            else -> Color.argb(150, 235, 238, 244)
         })
     }
 

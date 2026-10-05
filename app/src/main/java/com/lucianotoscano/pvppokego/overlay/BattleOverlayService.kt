@@ -86,6 +86,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var quickMenu: QuickOverlayMenu? = null
     private var hudCollapsed = false
     private var appUiVisible = false
+    private var visionPaused = false
+    private var overlaySuppressed = false
 
     private var battleActive = false
     private var lastBattleEvidenceAtMs = 0L
@@ -113,6 +115,19 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> { historyRecorder.finish(); stopSelf(); return START_NOT_STICKY }
+            ACTION_TOGGLE_VISION -> {
+                visionPaused = !visionPaused
+                refreshForegroundNotification()
+                redraw()
+                return START_STICKY
+            }
+            ACTION_TOGGLE_OVERLAY -> {
+                overlaySuppressed = !overlaySuppressed
+                dismissMoveMenu()
+                refreshForegroundNotification()
+                redraw()
+                return START_STICKY
+            }
             ACTION_RESET -> {
                 historyRecorder.finish()
                 lastRecordedAdviceKey = null
@@ -190,7 +205,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("V05 FIX • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                startForeground(NOTIFICATION_ID, notification("0.5.14 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -245,6 +260,23 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 }
 
                 override fun currentBattleModeLabel(): String = currentBattleModeLabelText()
+                override fun isVisionPaused(): Boolean = visionPaused
+                override fun onToggleVision() {
+                    visionPaused = !visionPaused
+                    refreshForegroundNotification()
+                    redraw()
+                }
+                override fun isOverlaySuppressed(): Boolean = overlaySuppressed
+                override fun onToggleOverlaySuppressed() {
+                    overlaySuppressed = !overlaySuppressed
+                    dismissMoveMenu()
+                    refreshForegroundNotification()
+                    redraw()
+                }
+                override fun onStopService() {
+                    historyRecorder.finish()
+                    stopSelf()
+                }
             }
         ).also { it.attach() }
         redraw()
@@ -991,6 +1023,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             var consecutiveErrors = 0
 
             while (isActive) {
+                if (visionPaused) {
+                    delay(250L)
+                    continue
+                }
                 runCatching { capture?.ensureMatchesCurrentDisplay() }
                 val frame = capture?.acquireLatestBitmap()
                 if (frame != null) {
@@ -1250,7 +1286,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("V05 FIX • ${leagueLabel(cp)} • HUD PvP ativo"))
+            startForeground(NOTIFICATION_ID, notification("0.5.14 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -1260,7 +1296,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         // With automatic recognition disabled, keep the HUD available as a manual
         // overlay instead of making every control disappear because battleActive can no
         // longer receive visual/OCR evidence.
-        val enabled = settingsRepo.overlayEnabled && !appUiVisible && (
+        val enabled = !overlaySuppressed && settingsRepo.overlayEnabled && !appUiVisible && (
             battleActive || !settingsRepo.autoRecognition || settingsRepo.editMode
         )
         view.visibility = if (enabled) View.VISIBLE else View.GONE
@@ -1274,7 +1310,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             recordUiDiagnostics(it)
         }
 
-        val dragHostEnabled = settingsRepo.overlayEnabled && !appUiVisible && (
+        val dragHostEnabled = !overlaySuppressed && settingsRepo.overlayEnabled && !appUiVisible && (
             enabled || !settingsRepo.layoutLocked || settingsRepo.editMode
         )
         syncEditTouchLayer(dragHostEnabled)
@@ -1282,7 +1318,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
-        val chromeEnabled = settingsRepo.overlayEnabled && !appUiVisible
+        val chromeEnabled = !overlaySuppressed && settingsRepo.overlayEnabled && !appUiVisible
         hudToggleTouch?.visibility = if (chromeEnabled) View.VISIBLE else View.GONE
         hudLockTouch?.visibility = if (chromeEnabled && !hudCollapsed) View.VISIBLE else View.GONE
         // Original lock/eye icons are drawn on the HUD canvas; touch views stay transparent.
@@ -1337,22 +1373,49 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         return if (settingsRepo.battleAssistEnabled) "$league • ASSIST" else league
     }
 
+    private fun serviceAction(requestCode: Int, action: String): PendingIntent =
+        PendingIntent.getService(
+            this,
+            requestCode,
+            Intent(this, BattleOverlayService::class.java).setAction(action),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    private fun refreshForegroundNotification(baseText: String? = null) {
+        val state = when {
+            overlaySuppressed -> "Sobreposição oculta"
+            visionPaused -> "Visão pausada"
+            else -> baseText ?: "${leagueLabel(currentLeagueCp)} • HUD PvP ativo"
+        }
+        startForeground(NOTIFICATION_ID, notification(state))
+    }
+
     private fun notification(text: String): Notification {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val stop = PendingIntent.getService(
-            this, 1, Intent(this, BattleOverlayService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val vision = serviceAction(1, ACTION_TOGGLE_VISION)
+        val overlay = serviceAction(2, ACTION_TOGGLE_OVERLAY)
+        val stop = serviceAction(3, ACTION_STOP)
         return NotificationCompat.Builder(this, PvPPokeGoApp.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("PvPPokeGo")
             .setContentText(text)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(0, "Parar", stop)
+            .addAction(
+                android.R.drawable.ic_media_pause,
+                if (visionPaused) "Retomar visão" else "Pausar visão",
+                vision
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                if (overlaySuppressed) "Mostrar sobreposição" else "Remover sobreposição",
+                overlay
+            )
+            .addAction(android.R.drawable.ic_menu_delete, "Parar serviço", stop)
             .build()
     }
 
@@ -1404,6 +1467,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         const val EXTRA_APP_VISIBLE = "pvppokego_app_visible"
         const val ACTION_STOP = "com.lucianotoscano.pvppokego.STOP"
         const val ACTION_RESET = "com.lucianotoscano.pvppokego.RESET"
+        const val ACTION_TOGGLE_VISION = "com.lucianotoscano.pvppokego.TOGGLE_VISION"
+        const val ACTION_TOGGLE_OVERLAY = "com.lucianotoscano.pvppokego.TOGGLE_OVERLAY"
         const val ACTION_APP_FOREGROUND = "com.lucianotoscano.pvppokego.APP_FOREGROUND"
         const val ACTION_APP_BACKGROUND = "com.lucianotoscano.pvppokego.APP_BACKGROUND"
         private const val NOTIFICATION_ID = 1107
