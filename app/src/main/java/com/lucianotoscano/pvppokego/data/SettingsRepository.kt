@@ -267,6 +267,9 @@ class SettingsRepository(context: Context) {
         // Always return to a safe state after an import. Positions/customizations remain restored.
         editor.putBoolean("edit_mode", false)
         editor.putBoolean("layout_locked", true)
+        // Mark the current top-HUD migration as applied so restored manual positions
+        // are not cleared on the next overlay start.
+        editor.putInt("top_hud_position_version", 6)
         editor.remove("overlay_service_running")
         editor.apply()
         return restored
@@ -288,7 +291,7 @@ class SettingsRepository(context: Context) {
             "show_current_indicator", "analyze_reserves", "show_reserve_types",
             "show_enemy_moves", "show_charged_counter", "show_energy_progress",
             "show_hud_text", "show_enemy_history", "show_switch_timer", "debug_mode",
-            "layout_locked", "overlay_scale", "overlay_opacity"
+            "layout_locked", "overlay_scale", "overlay_opacity", "top_hud_position_version"
         )
         val HUD_BLOCKS = listOf(
             "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
