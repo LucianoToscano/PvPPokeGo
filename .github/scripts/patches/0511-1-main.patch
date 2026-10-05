@@ -1,0 +1,111 @@
+--- a/app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
++++ b/app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
+@@ -8,6 +8,7 @@
+ import android.os.Build
+ import android.os.Bundle
+ import android.provider.Settings
++import android.widget.Toast
+ import androidx.activity.ComponentActivity
+ import androidx.activity.result.contract.ActivityResultContracts
+ import androidx.activity.compose.setContent
+@@ -15,13 +16,16 @@
+ import androidx.compose.runtime.getValue
+ import androidx.compose.runtime.mutableStateOf
+ import androidx.compose.runtime.setValue
++import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
+ import com.lucianotoscano.pvppokego.data.SettingsRepository
+ import com.lucianotoscano.pvppokego.overlay.BattleOverlayService
+ import com.lucianotoscano.pvppokego.ui.SettingsScreen
+ 
+ class MainActivity : ComponentActivity() {
+     private lateinit var settingsRepo: SettingsRepository
++    private lateinit var historyRepo: BattleHistoryRepository
+     private var overlayGranted by mutableStateOf(false)
++    private var historyRevision by mutableStateOf(0)
+     /** True after capture permission succeeds until the service-running flag catches up. */
+     private var overlayStarting = false
+     private val projectionManager by lazy {
+@@ -30,6 +34,35 @@
+ 
+     private val notificationPermission =
+         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
++
++    private val exportSettingsLauncher =
++        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
++            if (uri == null || !::settingsRepo.isInitialized) return@registerForActivityResult
++            runCatching {
++                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
++                    writer.write(settingsRepo.exportBackupJson())
++                } ?: error("Não foi possível abrir o arquivo")
++            }.onSuccess {
++                Toast.makeText(this, "Configurações exportadas", Toast.LENGTH_SHORT).show()
++            }.onFailure {
++                Toast.makeText(this, "Falha ao exportar: ${it.message}", Toast.LENGTH_LONG).show()
++            }
++        }
++
++    private val importSettingsLauncher =
++        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
++            if (uri == null || !::settingsRepo.isInitialized) return@registerForActivityResult
++            runCatching {
++                val raw = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
++                    ?: error("Não foi possível abrir o arquivo")
++                settingsRepo.importBackupJson(raw)
++            }.onSuccess { restored ->
++                Toast.makeText(this, "$restored configurações restauradas", Toast.LENGTH_SHORT).show()
++                recreate()
++            }.onFailure {
++                Toast.makeText(this, "Backup inválido: ${it.message}", Toast.LENGTH_LONG).show()
++            }
++        }
+ 
+     private val projectionLauncher =
+         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+@@ -53,6 +86,7 @@
+     override fun onCreate(savedInstanceState: Bundle?) {
+         super.onCreate(savedInstanceState)
+         settingsRepo = SettingsRepository(this)
++        historyRepo = BattleHistoryRepository(this)
+         overlayGranted = Settings.canDrawOverlays(this)
+ 
+         if (Build.VERSION.SDK_INT >= 33) {
+@@ -62,11 +96,15 @@
+         setContent {
+             SettingsScreen(
+                 repository = settingsRepo,
++                historyRepository = historyRepo,
++                historyRevision = historyRevision,
+                 overlayPermissionGranted = overlayGranted,
+                 onRequestOverlayPermission = ::requestOverlayPermission,
+                 onStartOverlay = ::startOverlay,
+                 onStopOverlay = ::stopOverlay,
+-                onResetBattle = ::resetBattle
++                onResetBattle = ::resetBattle,
++                onExportSettings = ::exportSettings,
++                onImportSettings = ::importSettings
+             )
+         }
+     }
+@@ -74,6 +112,7 @@
+     override fun onResume() {
+         super.onResume()
+         overlayGranted = Settings.canDrawOverlays(this)
++        historyRevision++
+         if (::settingsRepo.isInitialized && settingsRepo.overlayServiceRunning) {
+             overlayStarting = false
+             startService(
+@@ -120,6 +159,14 @@
+         )
+     }
+ 
++    private fun exportSettings() {
++        exportSettingsLauncher.launch("PvPPokeGo-0.5.11-config.json")
++    }
++
++    private fun importSettings() {
++        importSettingsLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
++    }
++
+     private fun resetBattle() {
+         startService(
+             Intent(this, BattleOverlayService::class.java)
