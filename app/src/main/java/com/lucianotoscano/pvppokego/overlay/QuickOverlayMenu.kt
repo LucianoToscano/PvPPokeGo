@@ -10,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
@@ -420,7 +421,9 @@ class QuickOverlayMenu(
         onMoved: (Float, Float) -> Unit,
         onTap: () -> Unit
     ) {
+        val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat().coerceAtLeast(16f)
         var downRawX = 0f; var downRawY = 0f; var startX = 0; var startY = 0; var dragging = false
+        view.isClickable = true
         view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -428,7 +431,8 @@ class QuickOverlayMenu(
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX; val dy = event.rawY - downRawY
-                    if (canDrag() && abs(dx) + abs(dy) >= 6f) dragging = true
+                    // Require movement past system touch-slop so taps still open the menu.
+                    if (canDrag() && (abs(dx) >= touchSlop || abs(dy) >= touchSlop)) dragging = true
                     if (dragging) {
                         removePanel(false)
                         val maxX = (metrics.widthPixels - params.width).coerceAtLeast(0)
@@ -448,7 +452,10 @@ class QuickOverlayMenu(
                     } else onTap()
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    dragging = false
+                    true
+                }
                 else -> true
             }
         }
