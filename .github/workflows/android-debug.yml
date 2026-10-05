@@ -1,6 +1,5 @@
-name: Build Android V05 audited controls
+name: Build PvPPokeGo 0.5.11
 
-# build trigger: V05 FIX2 final audited controls + manual move menu + lint/tests
 on:
   push:
     branches: [v04-v03-stable-base]
@@ -21,6 +20,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Apply 0.5.11 staged patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in .github/scripts/patches/0511-*.patch; do
+            echo "Applying $f"
+            patch -p1 < "$f"
+          done
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -53,15 +61,15 @@ jobs:
             cp app/build/reports/lint-results-debug.html artifact/lint-results-debug.html
           fi
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk artifact/PVPPokeGo_V05_FIX2-audited-debug.apk
-            sha256sum artifact/PVPPokeGo_V05_FIX2-audited-debug.apk > artifact/PVPPokeGo_V05_FIX2-audited-debug.apk.sha256
+            cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo-0.5.11.apk
+            sha256sum artifact/PvPPokeGo-0.5.11.apk > artifact/PvPPokeGo-0.5.11.apk.sha256
           fi
 
       - name: Upload APK and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PVPPokeGo-V05-FIX2-audited-build
+          name: PvPPokeGo-0.5.11-build
           path: artifact/
           if-no-files-found: error
           retention-days: 14
