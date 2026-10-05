@@ -64,6 +64,12 @@ data class BattleDetection(
 enum class MatchupState { FAVORABLE, NEUTRAL, UNFAVORABLE, UNKNOWN }
 enum class EnergyConfidence { CONFIRMED, ESTIMATED, RANGE }
 
+/**
+ * How the app knows a move. CONFIRMED = observed in battle, MANUAL = user choice,
+ * RANKED = PvPoke/default inference, UNKNOWN = no trustworthy move yet.
+ */
+enum class MoveKnowledgeConfidence { CONFIRMED, MANUAL, RANKED, UNKNOWN }
+
 data class ReserveState(
     val name: String?,
     val cp: Int?,
@@ -71,7 +77,15 @@ data class ReserveState(
     val matchup: MatchupState,
     val visible: Boolean = true,
     val recommendation: String? = null,
-    val score: Double = 0.0
+    val score: Double = 0.0,
+    val teamSlot: Int? = null,
+    val identityKey: String? = null,
+    val fastMove: MoveDef? = null,
+    val chargedMove1: MoveDef? = null,
+    val chargedMove2: MoveDef? = null,
+    val fastMoveKnowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
+    val chargedMove1Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
+    val chargedMove2Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN
 )
 
 data class BattlePokemonState(
@@ -129,10 +143,16 @@ data class BattleUiState(
     val fastMove: MoveDef? = null,
     val charged1: ChargedPrediction? = null,
     val charged2: ChargedPrediction? = null,
+    val fastMoveKnowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
+    val charged1Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
+    val charged2Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
     /** Player move/energy model, used only for recommendations. */
     val ownFastMove: MoveDef? = null,
     val ownCharged1: ChargedPrediction? = null,
     val ownCharged2: ChargedPrediction? = null,
+    val ownFastMoveKnowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
+    val ownCharged1Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
+    val ownCharged2Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
     val ownSwitchSeconds: Int? = null,
     val opponentSwitchSeconds: Int? = null,
     val chargedIncoming: Boolean = false,
