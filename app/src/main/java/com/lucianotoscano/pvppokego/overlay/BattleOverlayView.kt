@@ -108,14 +108,13 @@ class BattleOverlayView(
         settings.getPosition(block, defaultX, defaultY)
 
 
+    /**
+     * Default top-row Y. No status-bar/card safe floor: the user may place icons
+     * anywhere including the very top edge.
+     */
     private fun dynamicTopIconRefY(): Float {
-        val cardTop = nativeTopCardYpx ?: return TOP_ICON_Y
-        val statusId = resources.getIdentifier("status_bar_height", "dimen", "android")
-        val statusPx = if (statusId > 0) resources.getDimensionPixelSize(statusId) else (24f * resources.displayMetrics.density).toInt()
-        val radiusPx = 15f * u()
-        val preferred = cardTop.toFloat() - radiusPx - 5f * u()
-        val safe = max(statusPx + radiusPx + 2f * u(), preferred)
-        return refY(safe)
+        // Tracking nativeTopCardY every frame caused the top icons to jump/flicker.
+        return TOP_ICON_Y
     }
 
     private fun topPos(block: String, defaultX: Float): Pair<Float, Float> =

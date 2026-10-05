@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.11
+
+### Correções recuperadas da base ORIGINAL_ICONS
+- Hit-targets do olho e cadeado voltaram a ser transparentes; os ícones delicados são desenhados no canvas, sem emoji do sistema cobrindo o desenho.
+- Cadeado aberto usa zonas pequenas por bloco em vez de uma camada fullscreen, deixando ataques/escudos do jogo clicáveis fora do HUD.
+- Cadeado, olho, ⚙ e liga usam touch slop do sistema para distinguir toque de arraste.
+- Ao iniciar a captura, `EXTRA_APP_VISIBLE=false` evita que os controles fiquem ocultos/sem resposta.
+- Barra de edição ✓/↺ é recriada/elevada corretamente e sai do modo edição de forma segura.
+- Olho, cadeado e ⚙ continuam acessíveis entre batalhas.
+- Posição do topo deixa de seguir o card detectado a cada frame, evitando salto/flicker.
+- Captura recria o VirtualDisplay quando a resolução/orientação muda.
+- Reinício sticky sem MediaProjection orienta o usuário a iniciar a captura novamente.
+- Removido uso inseguro de `windowManager!!` nesse fluxo.
+
+
+- Backup/restauração em JSON das configurações, escala, opacidade e posições personalizadas do HUD e menus.
+- Importação retorna o layout travado por segurança e não restaura flags transitórias do serviço.
+- Histórico local das últimas 50 batalhas com Pokémon, PC, liga, duração e linha do tempo.
+- Registro dos ataques rápidos e carregados detectados dos dois lados com tempo relativo ao início.
+- Tela para atualizar, expandir detalhes e limpar o histórico.
+- Ícones e posições aprovados da base 0.5.10 preservados.
+- Convenção oficial: PvPPokeGo-0.5.10.apk, PvPPokeGo-0.5.11.apk, PvPPokeGo-0.5.12.apk e assim por diante.
+
 ## 0.3.0-v03-overlay-counter
 
 - Charged Moves reposicionados ~30 px para cima na referência 864x1536, aproximando-os do Fast Move.

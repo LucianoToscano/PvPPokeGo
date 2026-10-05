@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
@@ -25,6 +26,8 @@ import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
+import com.lucianotoscano.pvppokego.data.BattleHistoryRecorder
+import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MoveDef
@@ -51,6 +54,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var settingsRepo: SettingsRepository
     private lateinit var gameRepo: GameDataRepository
+    private lateinit var historyRecorder: BattleHistoryRecorder
     private var engine: BattleEngine? = null
     private var detector: BattleOcrDetector? = null
     private var frameDetector: BattleFrameEventDetector? = null
@@ -69,9 +73,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var charged2Touch: View? = null
     private var hudToggleTouch: View? = null
     private var hudLockTouch: View? = null
-    private var hudControlTouchLayer: View? = null
     private var editTouchLayer: View? = null
     private var editToolbarView: View? = null
+    /** Small per-block touch windows used when the padlock is open (does not cover the whole screen). */
+    private val freeDragZones = mutableListOf<View>()
     private var moveMenuView: View? = null
     private var quickMenu: QuickOverlayMenu? = null
     private var hudCollapsed = false
@@ -95,13 +100,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         settingsRepo.layoutLocked = true
         settingsRepo.overlayServiceRunning = true
         gameRepo = GameDataRepository(this)
+        historyRecorder = BattleHistoryRecorder(BattleHistoryRepository(this))
         startForeground(NOTIFICATION_ID, notification("Aguardando captura de tela"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
+            ACTION_STOP -> { historyRecorder.finish(); stopSelf(); return START_NOT_STICKY }
             ACTION_RESET -> {
+                historyRecorder.finish()
                 engine?.resetBattle()
                 frameDetector?.reset()
                 battleActive = false
@@ -143,7 +150,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             intent?.getParcelableExtra(EXTRA_RESULT_DATA)
         }
 
-        if (code != Int.MIN_VALUE && data != null && projection == null) startProjection(code, data)
+        if (code != Int.MIN_VALUE && data != null && projection == null) {
+            startProjection(code, data)
+        } else if (projection == null && overlayView == null && intent?.action == null) {
+            startForeground(NOTIFICATION_ID, notification("Toque em Iniciar overlay para reativar a captura"))
+        }
         return START_STICKY
     }
 
@@ -200,12 +211,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         attachMoveTouchZones()
         attachHudToggleTouch()
         attachHudLockTouch()
+        val wm = windowManager ?: return
         quickMenu = QuickOverlayMenu(
             this,
-            windowManager!!,
+            wm,
             settingsRepo,
             object : QuickOverlayMenu.Callbacks {
                 override fun onSettingsChanged(rebuildTouchZones: Boolean) {
+                    if (settingsRepo.editMode) removeEditToolbar()
                     if (rebuildTouchZones) rebuildTouchableZones()
                     redraw()
                 }
@@ -284,15 +297,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val wm = windowManager ?: return
         if (hudToggleTouch != null) return
         val params = hudControlParams(hudToggleAnchor())
+        // Transparent hit-target only. The delicate eye is drawn on the HUD canvas.
         hudToggleTouch = TextView(this).apply {
             gravity = Gravity.CENTER
-            text = "◉"
-            textSize = 21f
-            setTextColor(Color.WHITE)
-            setShadowLayer(3f, 0f, 1f, Color.BLACK)
-            background = controlButtonBackground()
+            text = ""
+            setBackgroundColor(Color.TRANSPARENT)
             contentDescription = "Ocultar ou mostrar HUD"
             isClickable = true
+            isFocusable = false
             installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_TOGGLE) { toggleHudCollapsed() }
         }.also { wm.addView(it, params) }
     }
@@ -301,15 +313,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val wm = windowManager ?: return
         if (hudLockTouch != null) return
         val params = hudControlParams(hudLockAnchor())
+        // Transparent hit-target only. The delicate padlock is drawn on the HUD canvas.
         hudLockTouch = TextView(this).apply {
             gravity = Gravity.CENTER
-            text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            setShadowLayer(3f, 0f, 1f, Color.BLACK)
-            background = controlButtonBackground()
+            text = ""
+            setBackgroundColor(Color.TRANSPARENT)
             contentDescription = "Travar ou destravar HUD"
             isClickable = true
+            isFocusable = false
             installHudControlDrag(this, params, BattleOverlayView.BLOCK_HUD_LOCK) {
                 settingsRepo.layoutLocked = !settingsRepo.layoutLocked
                 if (settingsRepo.layoutLocked) {
@@ -318,7 +329,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 } else {
                     dismissMoveMenu()
                 }
-                hudLockTouch?.post { redraw() }
+                redraw()
             }
         }.also { wm.addView(it, params) }
     }
@@ -328,7 +339,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val sx = metrics.widthPixels / 864f
         val sy = metrics.heightPixels / 1536f
         val unit = min(sx, sy) * (settingsRepo.scale / .8f).coerceIn(.62f, 1.5f)
-        val size = (52f * unit).toInt().coerceAtLeast(44)
+        val size = (56f * unit).toInt().coerceAtLeast(52)
         val centerX = anchor.first * sx
         val centerY = anchor.second * sy
         return smallTouchableParams(size, size).apply {
@@ -338,20 +349,25 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     private fun installHudControlDrag(view: View, params: WindowManager.LayoutParams, block: String, onTap: () -> Unit) {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop.toFloat().coerceAtLeast(16f)
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var dragging = false
-        view.setOnTouchListener { _, event ->
+        view.isClickable = true
+        view.isFocusable = false
+        view.setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y; dragging = false; true
+                    downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y; dragging = false
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downX; val dy = event.rawY - downY
-                    if (!settingsRepo.layoutLocked && abs(dx) + abs(dy) >= 6f) dragging = true
+                    if (!settingsRepo.layoutLocked && (abs(dx) >= touchSlop || abs(dy) >= touchSlop)) dragging = true
                     if (dragging) {
                         val maxX = (resources.displayMetrics.widthPixels - params.width).coerceAtLeast(0)
                         val maxY = (resources.displayMetrics.heightPixels - params.height).coerceAtLeast(0)
                         params.x = (startX + dx).toInt().coerceIn(0, maxX)
-                        params.y = (startY + dy).toInt().coerceIn(0, maxY)
+                        params.y = (startY + dy).toInt().coerceIn(-params.height / 2, maxY)
                         runCatching { windowManager?.updateViewLayout(view, params) }
                     }
                     true
@@ -360,12 +376,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     if (dragging) {
                         val sx = resources.displayMetrics.widthPixels / 864f
                         val sy = resources.displayMetrics.heightPixels / 1536f
-                        settingsRepo.setPosition(block, (params.x + params.width/2f) / sx, (params.y + params.height/2f) / sy)
+                        settingsRepo.setPosition(block, (params.x + params.width / 2f) / sx, (params.y + params.height / 2f) / sy)
                         redraw()
                     } else onTap()
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    dragging = false
+                    true
+                }
                 else -> true
             }
         }
@@ -392,8 +411,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.TOP or Gravity.START }
 
@@ -513,8 +531,21 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             "L" to { selected()?.let { settingsRepo.setBlockLocked(it, !settingsRepo.isBlockLocked(it)); refresh() } },
             "H" to { selected()?.let { settingsRepo.setBlockHidden(it, !settingsRepo.isBlockHidden(it)); refresh() } },
             "↶" to { lastEditSnapshot?.let { (block,x,y) -> settingsRepo.setPosition(block,x,y); overlayView?.setEditTarget(block); rebuildTouchableZones(); refresh() } },
-            "✓" to { settingsRepo.editMode=false; overlayView?.setEditTarget(null); rebuildTouchableZones(); redraw() },
-            "↺" to { settingsRepo.resetHudCustomization(); overlayView?.setEditTarget(null); rebuildTouchableZones(); redraw() }
+            "✓" to {
+                settingsRepo.editMode = false
+                overlayView?.setEditTarget(null)
+                removeEditToolbar()
+                if (settingsRepo.layoutLocked) removeEditTouchLayer()
+                rebuildTouchableZones()
+                redraw()
+            },
+            "↺" to {
+                settingsRepo.resetHudCustomization()
+                overlayView?.setEditTarget(null)
+                removeEditTouchLayer()
+                rebuildTouchableZones()
+                redraw()
+            }
         )
         actions.forEach { (label, action) ->
             bar.addView(button(label, action), LinearLayout.LayoutParams(0, dp(34), 1f).apply { marginStart=dp(2); marginEnd=dp(2) })
@@ -546,27 +577,151 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         overlayView?.setEditTarget(null)
     }
 
+    private var lastDragMode: String = "none"
+
     private fun syncEditTouchLayer(enabled: Boolean) {
-        val shouldDrag = enabled && !hudCollapsed && (settingsRepo.editMode || !settingsRepo.layoutLocked)
-        if (shouldDrag) {
-            attachEditTouchLayer()
-            if (settingsRepo.editMode) attachEditToolbar() else removeEditToolbar()
-            bringHudControlsToFront()
-            quickMenu?.bringToFront()
-        } else removeEditTouchLayer()
+        val inEdit = enabled && !hudCollapsed && settingsRepo.editMode
+        val freeDrag = enabled && !hudCollapsed && !settingsRepo.layoutLocked && !settingsRepo.editMode
+        val mode = when {
+            inEdit -> "edit"
+            freeDrag -> "free"
+            else -> "none"
+        }
+        val modeChanged = mode != lastDragMode
+        lastDragMode = mode
+
+        when {
+            inEdit -> {
+                removeFreeDragZones()
+                attachEditTouchLayer()
+                if (editToolbarView == null) attachEditToolbar()
+                if (modeChanged) {
+                    bringEditToolbarToFront()
+                    bringHudControlsToFront()
+                    quickMenu?.bringToFront()
+                }
+            }
+            freeDrag -> {
+                removeEditTouchLayer()
+                if (freeDragZones.isEmpty()) attachFreeDragZones()
+                if (modeChanged) {
+                    bringHudControlsToFront()
+                    quickMenu?.bringToFront()
+                }
+            }
+            else -> {
+                removeEditTouchLayer()
+                removeFreeDragZones()
+            }
+        }
+    }
+
+    private fun bringEditToolbarToFront() {
+        val bar = editToolbarView ?: return
+        val params = bar.layoutParams as? WindowManager.LayoutParams ?: return
+        runCatching { windowManager?.removeView(bar) }
+        runCatching { windowManager?.addView(bar, params) }
+    }
+
+    private fun attachFreeDragZones() {
+        val wm = windowManager ?: return
+        val view = overlayView ?: return
+        removeFreeDragZones()
+        val metrics = resources.displayMetrics
+        val sx = metrics.widthPixels / 864f
+        val sy = metrics.heightPixels / 1536f
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop.toFloat().coerceAtLeast(16f)
+        val blocks = listOf(
+            BattleOverlayView.BLOCK_PLAYER_MATCHUP,
+            BattleOverlayView.BLOCK_STRONG_TYPES,
+            BattleOverlayView.BLOCK_ENEMY_MOVES,
+            BattleOverlayView.BLOCK_RESERVE_1,
+            BattleOverlayView.BLOCK_RESERVE_2,
+            BattleOverlayView.BLOCK_BATTLE_ASSIST,
+            BattleOverlayView.BLOCK_ENEMY_HISTORY
+        )
+        for (block in blocks) {
+            if (settingsRepo.isBlockHidden(block)) continue
+            val pos = view.blockPosition(block) ?: continue
+            val half = when (block) {
+                BattleOverlayView.BLOCK_ENEMY_MOVES -> 90f
+                BattleOverlayView.BLOCK_STRONG_TYPES -> 70f
+                BattleOverlayView.BLOCK_BATTLE_ASSIST -> 80f
+                else -> 48f
+            }
+            val w = (half * 2f * sx).toInt().coerceAtLeast(48)
+            val h = (half * 2f * sy).toInt().coerceAtLeast(48)
+            val params = smallTouchableParams(w, h).apply {
+                x = (pos.first * sx - w / 2f).toInt()
+                y = (pos.second * sy - h / 2f).toInt()
+            }
+            var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var dragging = false
+            val zone = View(this).apply {
+                setBackgroundColor(Color.TRANSPARENT)
+                isClickable = true
+                contentDescription = "Arrastar $block"
+                setOnTouchListener { v, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            downX = event.rawX; downY = event.rawY
+                            startX = params.x; startY = params.y
+                            dragging = false
+                            view.setEditTarget(block)
+                            true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val dx = event.rawX - downX; val dy = event.rawY - downY
+                            if (abs(dx) >= touchSlop || abs(dy) >= touchSlop) dragging = true
+                            if (dragging) {
+                                val maxX = (metrics.widthPixels - params.width).coerceAtLeast(0)
+                                val maxY = (metrics.heightPixels - params.height).coerceAtLeast(0)
+                                params.x = (startX + dx).toInt().coerceIn(0, maxX)
+                                params.y = (startY + dy).toInt().coerceIn(-params.height / 2, maxY)
+                                runCatching { wm.updateViewLayout(v, params) }
+                                val cx = (params.x + params.width / 2f) / sx
+                                val cy = (params.y + params.height / 2f) / sy
+                                settingsRepo.setPosition(block, cx, cy)
+                                view.invalidate()
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            if (dragging) {
+                                val cx = (params.x + params.width / 2f) / sx
+                                val cy = (params.y + params.height / 2f) / sy
+                                settingsRepo.setPosition(block, cx, cy)
+                                rebuildTouchableZones()
+                                redraw()
+                            }
+                            view.setEditTarget(null)
+                            dragging = false
+                            true
+                        }
+                        else -> true
+                    }
+                }
+            }
+            runCatching { wm.addView(zone, params) }
+            freeDragZones += zone
+        }
+    }
+
+    private fun removeFreeDragZones() {
+        val wm = windowManager
+        freeDragZones.forEach { z -> runCatching { wm?.removeView(z) } }
+        freeDragZones.clear()
     }
 
     private fun bringHudControlsToFront() {
-        fun readd(view: View?) {
-            if (view == null) return
+        val wm = windowManager ?: return
+        fun raise(view: View?) {
+            if (view == null || view.windowToken == null) return
             val params = view.layoutParams as? WindowManager.LayoutParams ?: return
-            // Reuse the exact LayoutParams captured by the drag listener; creating a new object
-            // here would make the visible control move independently from its touch coordinates.
-            runCatching { windowManager?.removeView(view) }
-            runCatching { windowManager?.addView(view, params) }
+            runCatching { wm.removeView(view) }
+            runCatching { wm.addView(view, params) }
         }
-        readd(hudToggleTouch)
-        if (!hudCollapsed) readd(hudLockTouch)
+        raise(hudToggleTouch)
+        if (!hudCollapsed) raise(hudLockTouch)
     }
 
     private fun rebuildTouchableZones() {
@@ -828,6 +983,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             var consecutiveErrors = 0
 
             while (isActive) {
+                runCatching { capture?.ensureMatchesCurrentDisplay() }
                 val frame = capture?.acquireLatestBitmap()
                 if (frame != null) {
                     try {
@@ -863,6 +1019,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     visualConfidence = event.battleConfidence,
                                     nowMs = now
                                 )
+                                historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
                                 e.onBattleConfidence(presenceTracker.confidence)
                                 if (event.battleUiVisible) markBattleEvidence(now)
                                 if (battleActive || event.battleUiVisible) {
@@ -870,9 +1027,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 }
                                 if (event.fastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
                                     e.onFastDetected(event.fastMoveCount, event.confidence, event.source, event.hpRatio, event.motion)
+                                    e.uiState().fastMove?.let { move ->
+                                        historyRecorder.recordFast("INIMIGO", gameRepo.localizedMoveName(move), event.fastMoveCount, now)
+                                    }
                                 }
                                 if (event.ownFastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
                                     e.onOwnFastDetected(event.ownFastMoveCount, event.confidence, event.source, event.opponentHpRatio)
+                                    e.uiState().ownFastMove?.let { move ->
+                                        historyRecorder.recordFast("VOCÊ", gameRepo.localizedMoveName(move), event.ownFastMoveCount, now)
+                                    }
                                 }
                             }
                         }
@@ -900,6 +1063,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                         switchPrompt = switchPrompt,
                                         nowMs = now
                                     )
+                                    historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
                                     e?.onBattleConfidence(presenceTracker.confidence)
                                     markBattleEvidence(now)
                                 }
@@ -907,12 +1071,21 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
                                 val changes = e?.onDetection(d)
+                                if (battleActive) historyRecorder.observeDetection(d, currentLeagueCp, now)
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
                                 val textEvent = e?.onBattleText(d.battleText, now)
-                                if (textEvent != null) when {
-                                    textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
-                                    textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
+                                if (textEvent != null) {
+                                    textEvent.enemyChargedMove?.let { move ->
+                                        historyRecorder.recordCharged("INIMIGO", gameRepo.localizedMoveName(move), now)
+                                    }
+                                    textEvent.ownChargedMove?.let { move ->
+                                        historyRecorder.recordCharged("VOCÊ", gameRepo.localizedMoveName(move), now)
+                                    }
+                                    when {
+                                        textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
+                                        textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
+                                    }
                                 }
                             }
                             lastOcrAt = now
@@ -928,11 +1101,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         if (engine?.maybeConfirmPendingCharged(now) == true) {
+                            historyRecorder.recordCharged("INIMIGO", "Ataque carregado (não identificado)", now)
                             markBattleEvidence(now)
                             frameDetector?.freezeForCharged(now, 1_800L)
                         }
 
                         battleActive = presenceTracker.tick(now)
+                        historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
                         engine?.onBattleConfidence(presenceTracker.confidence)
                         if (!battleActive) switchChoicePromptUntilMs = 0L
 
@@ -985,7 +1160,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         // With automatic recognition disabled, keep the HUD available as a manual
         // overlay instead of making every control disappear because battleActive can no
         // longer receive visual/OCR evidence.
-        val enabled = settingsRepo.overlayEnabled && !appUiVisible && (battleActive || !settingsRepo.autoRecognition)
+        val enabled = settingsRepo.overlayEnabled && !appUiVisible && (
+            battleActive || !settingsRepo.autoRecognition || settingsRepo.editMode
+        )
         view.visibility = if (enabled) View.VISIBLE else View.GONE
         view.setCollapsed(hudCollapsed)
         view.setNativeTopCardY(lastNativeTopCardY)
@@ -994,16 +1171,19 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val ui = engine?.uiState(settingsRepo.debugMode)
         ui?.let(view::render)
 
-        syncEditTouchLayer(enabled)
+        val dragHostEnabled = settingsRepo.overlayEnabled && !appUiVisible && (
+            enabled || !settingsRepo.layoutLocked || settingsRepo.editMode
+        )
+        syncEditTouchLayer(dragHostEnabled)
         val selectorsEnabled = enabled && !hudCollapsed && settingsRepo.layoutLocked && !settingsRepo.editMode
         fastTouch?.visibility = if (selectorsEnabled && ui?.fastMove != null) View.VISIBLE else View.GONE
         charged1Touch?.visibility = if (selectorsEnabled && ui?.charged1 != null) View.VISIBLE else View.GONE
         charged2Touch?.visibility = if (selectorsEnabled && ui?.charged2 != null) View.VISIBLE else View.GONE
-        // Eye is the single restore control when HUD is collapsed. Lock/menu/league all disappear.
-        hudToggleTouch?.visibility = if (enabled) View.VISIBLE else View.GONE
-        hudLockTouch?.visibility = if (enabled && !hudCollapsed) View.VISIBLE else View.GONE
-        (hudLockTouch as? TextView)?.text = if (settingsRepo.layoutLocked) "🔒" else "🔓"
-        quickMenu?.setVisible(enabled && !hudCollapsed)
+        val chromeEnabled = settingsRepo.overlayEnabled && !appUiVisible
+        hudToggleTouch?.visibility = if (chromeEnabled) View.VISIBLE else View.GONE
+        hudLockTouch?.visibility = if (chromeEnabled && !hudCollapsed) View.VISIBLE else View.GONE
+        // Original lock/eye icons are drawn on the HUD canvas; touch views stay transparent.
+        quickMenu?.setVisible(chromeEnabled && !hudCollapsed)
         if (!hudCollapsed) quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()
     }
@@ -1012,6 +1192,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onCharged1Tapped() { showMoveMenu(MoveKind.CHARGED_1) }
     override fun onCharged2Tapped() { showMoveMenu(MoveKind.CHARGED_2) }
     override fun onResetTapped() {
+        historyRecorder.finish()
         engine?.resetBattle()
         frameDetector?.reset()
         presenceTracker.reset()
@@ -1071,11 +1252,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     override fun onDestroy() {
+        if (::historyRecorder.isInitialized) historyRecorder.finish()
         scanJob?.cancel()
         dismissMoveMenu()
         quickMenu?.destroy()
         quickMenu = null
         removeEditTouchLayer()
+        removeFreeDragZones()
         runCatching { overlayView?.let { windowManager?.removeView(it) } }
         runCatching { fastTouch?.let { windowManager?.removeView(it) } }
         runCatching { charged1Touch?.let { windowManager?.removeView(it) } }

@@ -13,8 +13,8 @@ android {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.5.2-real-touch-controls"
+        versionCode = 16
+        versionName = "0.5.11"
     }
 
     buildFeatures { compose = true }

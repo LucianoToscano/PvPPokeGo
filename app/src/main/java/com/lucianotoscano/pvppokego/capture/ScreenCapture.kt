@@ -24,6 +24,7 @@ class ScreenCapture(
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
     private var thread: HandlerThread? = null
+    private var handler: Handler? = null
 
     var width: Int = 0
         private set
@@ -31,23 +32,39 @@ class ScreenCapture(
         private set
 
     fun start() {
-        val wm = context.getSystemService(WindowManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = wm.currentWindowMetrics.bounds
-            width = bounds.width()
-            height = bounds.height()
-        } else {
-            // minSdk is 29: currentWindowMetrics does not exist on Android 10.
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.getRealMetrics(metrics)
-            width = metrics.widthPixels
-            height = metrics.heightPixels
-        }
-        val density = context.resources.displayMetrics.densityDpi
+        if (display != null) return
+        openCapture()
+    }
 
-        thread = HandlerThread("pvppokego-capture").also { it.start() }
-        val handler = Handler(thread!!.looper)
+    /**
+     * If the device rotated or the screen metrics changed, rebuild the virtual display
+     * so OCR ROIs stay aligned with the live Pokemon GO frame.
+     */
+    fun ensureMatchesCurrentDisplay(): Boolean {
+        val (w, h) = currentScreenSize()
+        if (w <= 0 || h <= 0) return false
+        if (display != null && kotlin.math.abs(w - width) <= 2 && kotlin.math.abs(h - height) <= 2) return false
+        closeCaptureSurfaces()
+        width = w
+        height = h
+        openCaptureSurfacesOnly()
+        return true
+    }
+
+    private fun openCapture() {
+        val (w, h) = currentScreenSize()
+        width = w
+        height = h
+        if (thread == null) {
+            thread = HandlerThread("pvppokego-capture").also { it.start() }
+            handler = Handler(thread!!.looper)
+        }
+        openCaptureSurfacesOnly()
+    }
+
+    private fun openCaptureSurfacesOnly() {
+        val density = context.resources.displayMetrics.densityDpi
+        val h = handler ?: return
         reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
         reader!!.setOnImageAvailableListener({ r ->
             val image = runCatching { r.acquireLatestImage() }.getOrNull() ?: return@setOnImageAvailableListener
@@ -70,7 +87,7 @@ class ScreenCapture(
             } finally {
                 image.close()
             }
-        }, handler)
+        }, h)
 
         display = projection.createVirtualDisplay(
             "PVPPokeGoCapture",
@@ -80,8 +97,30 @@ class ScreenCapture(
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader!!.surface,
             null,
-            handler
+            h
         )
+    }
+
+    private fun closeCaptureSurfaces() {
+        runCatching { display?.release() }
+        display = null
+        runCatching { reader?.close() }
+        reader = null
+        val last = synchronized(bitmapLock) { latest.getAndSet(null) }
+        last?.recycle()
+    }
+
+    private fun currentScreenSize(): Pair<Int, Int> {
+        val wm = context.getSystemService(WindowManager::class.java)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = wm.currentWindowMetrics.bounds
+            bounds.width() to bounds.height()
+        } else {
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(metrics)
+            metrics.widthPixels to metrics.heightPixels
+        }
     }
 
     /** Caller owns and must recycle the returned copy. */
@@ -91,10 +130,12 @@ class ScreenCapture(
     }
 
     fun stop() {
-        val last = synchronized(bitmapLock) { latest.getAndSet(null) }
-        last?.recycle()
-        display?.release(); display = null
-        reader?.close(); reader = null
-        thread?.quitSafely(); thread = null
+        closeCaptureSurfaces()
+        thread?.quitSafely()
+        thread = null
+        handler = null
+        width = 0
+        height = 0
     }
+
 }

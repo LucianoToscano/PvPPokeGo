@@ -20,7 +20,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     data class BattleTextResult(
         val newChargedPrompt: Boolean = false,
         val chargedMoveConfirmed: Boolean = false,
-        val ownChargedMoveConfirmed: Boolean = false
+        val ownChargedMoveConfirmed: Boolean = false,
+        val enemyChargedMove: MoveDef? = null,
+        val ownChargedMove: MoveDef? = null
     )
 
     private val enemyStates = BattleStateStore()
@@ -370,7 +372,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             val ownMatched = findMoveMention(text, ownCandidates)
             if (ownMatched != null) {
                 observedOwnChargedUsed(ownMatched)
-                return BattleTextResult(newPrompt, false, true)
+                return BattleTextResult(newPrompt, false, true, ownChargedMove = ownMatched)
             }
         }
 
@@ -380,7 +382,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             if (matched != null) {
                 if (nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
                     observedChargedUsed(matched, nowMs)
-                    return BattleTextResult(newPrompt, true, false)
+                    return BattleTextResult(newPrompt, true, false, enemyChargedMove = matched)
                 }
                 return BattleTextResult(newPrompt, false, false)
             }

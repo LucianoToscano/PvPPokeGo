@@ -27,17 +27,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.lucianotoscano.pvppokego.data.BattleHistoryEntry
+import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
 import com.lucianotoscano.pvppokego.data.SettingsRepository
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
     repository: SettingsRepository,
+    historyRepository: BattleHistoryRepository,
+    historyRevision: Int,
     overlayPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
-    onResetBattle: () -> Unit
+    onResetBattle: () -> Unit,
+    onExportSettings: () -> Unit,
+    onImportSettings: () -> Unit
 ) {
     var overlay by remember { mutableStateOf(repository.overlayEnabled) }
     var auto by remember { mutableStateOf(repository.autoRecognition) }
@@ -55,6 +64,8 @@ fun SettingsScreen(
     var edit by remember { mutableStateOf(repository.editMode) }
     var scale by remember { mutableFloatStateOf(repository.scale) }
     var opacity by remember { mutableFloatStateOf(repository.opacity) }
+    var history by remember(historyRevision) { mutableStateOf(historyRepository.loadHistory()) }
+    var expandedBattleId by remember { mutableStateOf<Long?>(null) }
 
     MaterialTheme {
         Scaffold { padding ->
@@ -103,6 +114,17 @@ fun SettingsScreen(
                 ) {
                     Text("RESET BATTLE")
                 }
+
+                Text(
+                    "Controles do overlay:\n" +
+                        "• 🔓 Cadeado aberto → arrasta os blocos do HUD (toques do jogo passam fora dos blocos)\n" +
+                        "• 🔒 Cadeado fechado → layout travado\n" +
+                        "• ◉ → mostrar / ocultar HUD\n" +
+                        "• ⚙ → menu rápido (liga, edição, opções)\n" +
+                        "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
+                        "Versão 0.5.11",
+                    style = MaterialTheme.typography.bodySmall
+                )
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Toggle("Overlay", overlay) {
@@ -232,13 +254,127 @@ fun SettingsScreen(
                 )
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Text("Backup de configurações e posições", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Salva opções, escala, opacidade e as posições personalizadas dos ícones, blocos e menus do HUD. " +
+                        "Ao importar, o layout volta para o backup e fica travado por segurança.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(onClick = onExportSettings, modifier = Modifier.weight(1f)) {
+                        Text("Exportar")
+                    }
+                    OutlinedButton(onClick = onImportSettings, modifier = Modifier.weight(1f)) {
+                        Text("Importar")
+                    }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Text("Histórico de batalhas", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Mostra Pokémon, PC e a linha do tempo dos ataques rápidos e carregados detectados. " +
+                        "Use os tempos para rever contagem de energia, pressão e decisões.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { history = historyRepository.loadHistory() },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Atualizar") }
+                    OutlinedButton(
+                        onClick = {
+                            historyRepository.clear()
+                            history = emptyList()
+                            expandedBattleId = null
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = history.isNotEmpty()
+                    ) { Text("Limpar") }
+                }
+
+                if (history.isEmpty()) {
+                    Text("Nenhuma batalha registrada ainda.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    history.take(10).forEach { battle ->
+                        BattleHistoryCard(
+                            battle = battle,
+                            expanded = expandedBattleId == battle.id,
+                            onToggle = {
+                                expandedBattleId = if (expandedBattleId == battle.id) null else battle.id
+                            }
+                        )
+                    }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
+                Text("Versão 0.5.11")
                 Text(
                     "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
                 )
                 Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BattleHistoryCard(
+    battle: BattleHistoryEntry,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val date = remember(battle.startedAtEpochMs) {
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(battle.startedAtEpochMs))
+    }
+    val league = when (battle.leagueCp) {
+        2500 -> "Ultra"
+        10000 -> "Mestra"
+        else -> "Grande"
+    }
+    val player = battle.playerName ?: "Seu Pokémon"
+    val enemy = battle.opponentName ?: "Inimigo"
+    val playerCp = battle.playerCp?.let { " PC $it" }.orEmpty()
+    val enemyCp = battle.opponentCp?.let { " PC $it" }.orEmpty()
+    val duration = ((battle.endedAtEpochMs - battle.startedAtEpochMs).coerceAtLeast(0L) / 1000L)
+    val ownCharged = battle.events.count { it.actor == "VOCÊ" && it.category == "CARREGADO" }
+    val enemyCharged = battle.events.count { it.actor == "INIMIGO" && it.category == "CARREGADO" }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text("$date • Liga $league • ${duration}s", style = MaterialTheme.typography.labelMedium)
+        Text("$player$playerCp  ×  $enemy$enemyCp")
+        Text(
+            "Carregados: você $ownCharged • inimigo $enemyCharged • ${battle.events.size} eventos",
+            style = MaterialTheme.typography.bodySmall
+        )
+        OutlinedButton(onClick = onToggle, modifier = Modifier.fillMaxWidth()) {
+            Text(if (expanded) "Ocultar detalhes" else "Ver ataques e tempos")
+        }
+        if (expanded) {
+            if (battle.events.isEmpty()) {
+                Text("Nenhum ataque identificado nesta batalha.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                battle.events.forEach { event ->
+                    val seconds = event.elapsedMs / 1000.0
+                    val count = if (event.count > 1) " ×${event.count}" else ""
+                    Text(
+                        "[+${"%.1f".format(Locale.US, seconds)}s] ${event.actor} • ${event.category} • ${event.moveName}$count",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
