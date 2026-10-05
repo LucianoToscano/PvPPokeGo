@@ -1,0 +1,37 @@
+name: Build PvPPokeGo 0.5.11 Windows
+on:
+  push:
+    branches: [build/0.5.11-windows]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patches
+        shell: pwsh
+        run: |
+          Get-ChildItem .github/scripts/patches/0511-*.patch | Sort-Object Name | ForEach-Object { git apply $_.FullName }
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build APK
+        shell: pwsh
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Package APK
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifact | Out-Null
+          Copy-Item app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo-0.5.11.apk
+          (Get-FileHash artifact/PvPPokeGo-0.5.11.apk -Algorithm SHA256).Hash.ToLower() | Out-File artifact/PvPPokeGo-0.5.11.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.11-windows
+          path: artifact/
+          retention-days: 14
