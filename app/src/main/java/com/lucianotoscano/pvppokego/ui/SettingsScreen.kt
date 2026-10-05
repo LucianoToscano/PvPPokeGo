@@ -315,7 +315,7 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("Versão 0.5.14")
+                Text("Versão 0.5.15")
                 Text(
                     "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
