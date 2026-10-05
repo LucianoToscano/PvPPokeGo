@@ -1,0 +1,93 @@
+--- a/app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
++++ b/app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
+@@ -1,6 +1,7 @@
+ package com.lucianotoscano.pvppokego.data
+ 
+ import android.content.Context
++import org.json.JSONObject
+ 
+ class SettingsRepository(context: Context) {
+     private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+@@ -213,8 +214,82 @@
+             .apply()
+     }
+ 
++    /**
++     * Portable backup of user-visible configuration, including HUD block positions.
++     * Runtime-only flags are deliberately excluded so importing a backup cannot revive
++     * a stale overlay/edit state.
++     */
++    fun exportBackupJson(): String {
++        val root = JSONObject()
++        root.put("format", "PvPPokeGo-settings")
++        root.put("formatVersion", 1)
++        root.put("appVersion", "0.5.11")
++        val values = JSONObject()
++        prefs.all.toSortedMap().forEach { (key, value) ->
++            if (!isBackupKeyAllowed(key) || value == null) return@forEach
++            val item = JSONObject()
++            when (value) {
++                is Boolean -> { item.put("type", "boolean"); item.put("value", value) }
++                is Int -> { item.put("type", "int"); item.put("value", value) }
++                is Long -> { item.put("type", "long"); item.put("value", value) }
++                is Float -> { item.put("type", "float"); item.put("value", value.toDouble()) }
++                is String -> { item.put("type", "string"); item.put("value", value) }
++                else -> return@forEach
++            }
++            values.put(key, item)
++        }
++        root.put("settings", values)
++        return root.toString(2)
++    }
++
++    /** Returns the number of restored values. */
++    fun importBackupJson(raw: String): Int {
++        val root = JSONObject(raw)
++        require(root.optString("format") == "PvPPokeGo-settings") { "Arquivo não é um backup do PvPPokeGo" }
++        val values = root.getJSONObject("settings")
++        val editor = prefs.edit()
++        var restored = 0
++        val keys = values.keys()
++        while (keys.hasNext()) {
++            val key = keys.next()
++            if (!isBackupKeyAllowed(key)) continue
++            val item = values.optJSONObject(key) ?: continue
++            when (item.optString("type")) {
++                "boolean" -> editor.putBoolean(key, item.getBoolean("value"))
++                "int" -> editor.putInt(key, item.getInt("value"))
++                "long" -> editor.putLong(key, item.getLong("value"))
++                "float" -> editor.putFloat(key, item.getDouble("value").toFloat())
++                "string" -> editor.putString(key, item.getString("value"))
++                else -> continue
++            }
++            restored++
++        }
++        // Always return to a safe state after an import. Positions/customizations remain restored.
++        editor.putBoolean("edit_mode", false)
++        editor.putBoolean("layout_locked", true)
++        editor.remove("overlay_service_running")
++        editor.apply()
++        return restored
++    }
++
++    private fun isBackupKeyAllowed(key: String): Boolean {
++        if (key == "overlay_service_running" || key == "edit_mode") return false
++        if (key.startsWith("hud_")) return true
++        if (key.startsWith("quick_menu_")) return true
++        if (key.startsWith("league_badge_")) return true
++        return key in BACKUP_KEYS
++    }
++
+     companion object {
+         private const val FILE = "pvppokego_prefs"
++        private val BACKUP_KEYS = setOf(
++            "overlay_enabled", "auto_recognition", "battle_assist_enabled",
++            "league_mode", "last_detected_league_cp", "show_strong_types",
++            "show_current_indicator", "analyze_reserves", "show_reserve_types",
++            "show_enemy_moves", "show_charged_counter", "show_energy_progress",
++            "show_hud_text", "show_enemy_history", "show_switch_timer", "debug_mode",
++            "layout_locked", "overlay_scale", "overlay_opacity"
++        )
+         val HUD_BLOCKS = listOf(
+             "hud_player_matchup", "hud_strong_types", "hud_enemy_moves",
+             "hud_reserve_1", "hud_reserve_2", "hud_reserves",
