@@ -1,0 +1,2 @@
+Temporary CI trigger for PvPPokeGo 0.5.10 ORIGINAL_ICONS APK build.
+No application source changes.
