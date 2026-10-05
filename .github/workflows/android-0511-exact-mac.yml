@@ -1,0 +1,54 @@
+name: Build PvPPokeGo 0.5.11 Exact macOS
+
+on:
+  push:
+    branches: [build/0.5.11-exact]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout exact 0.5.10 base
+        uses: actions/checkout@v4
+
+      - name: Apply 0.5.11 changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in .github/scripts/patches/0511-*.patch; do
+            echo "Applying $f"
+            patch -p1 < "$f"
+          done
+          grep -n 'versionName' app/build.gradle.kts
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build APK
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Package APK
+        shell: bash
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo-0.5.11.apk
+          shasum -a 256 artifact/PvPPokeGo-0.5.11.apk > artifact/PvPPokeGo-0.5.11.apk.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.11-exact-mac
+          path: artifact/
+          retention-days: 14
