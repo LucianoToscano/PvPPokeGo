@@ -136,7 +136,7 @@ fun SettingsScreen(
                         "• ◉ → mostrar / ocultar HUD\n" +
                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
-                        "Versão 0.5.16",
+                        "Versão 0.5.17",
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -340,7 +340,7 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("Versão 0.5.16")
+                Text("Versão 0.5.17")
                 Text(
                     "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
