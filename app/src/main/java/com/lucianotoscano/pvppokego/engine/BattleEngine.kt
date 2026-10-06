@@ -793,6 +793,8 @@ class BattleEngine(private val repo: GameDataRepository) {
         target.charge2Manual = old.charge2Manual
         target.observedChargedMoveIds.clear()
         target.observedChargedMoveIds.addAll(old.observedChargedMoveIds)
+        target.lastHpRatio = old.lastHpRatio
+        target.fainted = old.fainted
         target.lastSeenAtMs = old.lastSeenAtMs
         ownActiveState = target
     }
@@ -831,6 +833,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
         val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
         ownTracker.restoreRange(minE, maxE, saved.fastMoveCount)
+        lastHpRatio = saved.lastHpRatio
         saveOwnActiveState()
     }
 
@@ -1582,6 +1585,10 @@ class BattleEngine(private val repo: GameDataRepository) {
         state.minEnergy = ownTracker.minEnergy
         state.maxEnergy = ownTracker.maxEnergy
         state.energyUncertain = ownTracker.isRange
+        lastHpRatio?.let { hp ->
+            state.lastHpRatio = hp.coerceIn(0f, 1f)
+            if (hp <= .01f) state.fainted = true
+        }
         state.lastSeenAtMs = System.currentTimeMillis()
     }
 
