@@ -9,6 +9,11 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.text.Normalizer
 
+internal fun sanitizePokemonTypes(types: List<String>): List<String> =
+    types.map { it.lowercase() }
+        .filter { it.isNotBlank() && it != "none" }
+        .distinct()
+
 class GameDataRepository(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
@@ -36,10 +41,7 @@ class GameDataRepository(private val context: Context) {
         uniquePokemon = gameMaster?.pokemon
             ?.map { p ->
                 p.copy(
-                    types = p.types
-                        .map(String::lowercase)
-                        .filter { it.isNotBlank() && it != "none" }
-                        .distinct()
+                    types = sanitizePokemonTypes(p.types)
                 )
             }
             ?.distinctBy { normalizeName(it.speciesId) }
