@@ -1449,7 +1449,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
             .addAction(
-                android.R.drawable.presence_video_online,
+                android.R.drawable.ic_menu_camera,
                 if (screenRecorder?.isRecording == true) "Parar gravação" else "Gravar tela",
                 record
             )
