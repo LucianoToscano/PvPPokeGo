@@ -4,9 +4,12 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlin.math.floor
+import kotlin.math.pow
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -27,8 +30,12 @@ class GameDataRepository(private val context: Context) {
     @Volatile private var uniquePokemon: List<PokemonDef> = emptyList()
     @Volatile private var ranking: List<RankingEntry> = emptyList()
     @Volatile private var moveNamesPtBr: Map<String, String> = emptyMap()
+    @Volatile private var cpMultipliers: List<Double> = emptyList()
+    @Volatile var currentLeagueCp: Int = 1500
+        private set
 
     suspend fun load(leagueCp: Int = 1500) = withContext(Dispatchers.IO) {
+        currentLeagueCp = leagueCp
         val gmText = runCatching {
             context.assets.open("gamemaster.json").bufferedReader().use { it.readText() }
         }.getOrElse {
@@ -72,6 +79,16 @@ class GameDataRepository(private val context: Context) {
                 json.decodeFromString<Map<String, String>>(it.readText())
             }
         }.getOrDefault(emptyMap())
+
+        cpMultipliers = runCatching {
+            context.assets.open("pvpoke_cpms.json").bufferedReader().use { reader ->
+                json.parseToJsonElement(reader.readText())
+                    .jsonObject["cpms"]
+                    ?.jsonArray
+                    ?.mapNotNull { it.jsonPrimitive.contentOrNull?.toDoubleOrNull() }
+                    .orEmpty()
+            }
+        }.getOrDefault(emptyList())
     }
 
     fun move(id: String?): MoveDef? = id?.let { raw ->
@@ -188,6 +205,59 @@ class GameDataRepository(private val context: Context) {
                 generated?.takeIf { it.isNotBlank() }?.let { "snapshot:$it" }
             ).joinToString(" • ").takeIf { it.isNotBlank() }
         }.getOrNull()
+    }
+
+    fun estimatedBattleStats(nameOrSpeciesId: String?, observedCp: Int? = null): EstimatedBattleStats? {
+        val def = pokemon(nameOrSpeciesId) ?: return null
+        val base = def.baseStats
+        if (base.atk <= 0 || base.def <= 0 || base.hp <= 0 || cpMultipliers.isEmpty()) return null
+
+        val combo = if (currentLeagueCp >= 10_000) {
+            listOf(50.0, 15.0, 15.0, 15.0)
+        } else {
+            def.defaultIVs["cp$currentLeagueCp"]
+                ?: listOf(50.0, 15.0, 15.0, 15.0)
+        }
+        val preferredLevel = combo.getOrNull(0)?.coerceIn(1.0, 51.0) ?: 50.0
+        val atkIv = combo.getOrNull(1)?.toInt()?.coerceIn(0, 15) ?: 15
+        val defIv = combo.getOrNull(2)?.toInt()?.coerceIn(0, 15) ?: 15
+        val hpIv = combo.getOrNull(3)?.toInt()?.coerceIn(0, 15) ?: 15
+
+        fun levelForIndex(index: Int): Double = 1.0 + index * 0.5
+        fun cpAt(cpm: Double): Int = floor(
+            ((base.atk + atkIv) *
+                (base.def + defIv).toDouble().pow(0.5) *
+                (base.hp + hpIv).toDouble().pow(0.5) *
+                cpm.pow(2.0)) / 10.0
+        ).toInt().coerceAtLeast(10)
+
+        val preferredIndex = ((preferredLevel - 1.0) * 2.0).toInt()
+            .coerceIn(0, cpMultipliers.lastIndex)
+        val chosenIndex = observedCp
+            ?.takeIf { it >= 10 }
+            ?.let { target ->
+                val maxLevel = if (currentLeagueCp >= 10_000) 50.0 else preferredLevel.coerceAtLeast(1.0)
+                val maxIndex = ((maxLevel - 1.0) * 2.0).toInt().coerceIn(0, cpMultipliers.lastIndex)
+                (0..maxIndex).minByOrNull { index ->
+                    kotlin.math.abs(cpAt(cpMultipliers[index]) - target)
+                }
+            }
+            ?: preferredIndex
+
+        val cpm = cpMultipliers[chosenIndex]
+        val attack = cpm * (base.atk + atkIv)
+        val defense = cpm * (base.def + defIv)
+        val hp = floor(cpm * (base.hp + hpIv)).toInt().coerceAtLeast(10)
+        return EstimatedBattleStats(
+            attack = attack,
+            defense = defense,
+            hp = hp,
+            level = levelForIndex(chosenIndex),
+            atkIv = atkIv,
+            defIv = defIv,
+            hpIv = hpIv,
+            cp = cpAt(cpm)
+        )
     }
 
     fun localizedMoveName(move: MoveDef): String = moveNamesPtBr[normalizeId(move.moveId)] ?: move.name
