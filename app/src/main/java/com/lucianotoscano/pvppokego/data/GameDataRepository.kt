@@ -34,6 +34,14 @@ class GameDataRepository(private val context: Context) {
         gameMaster = runCatching { json.decodeFromString<GameMaster>(gmText) }.getOrNull()
         movesById = gameMaster?.moves?.associateBy { normalizeId(it.moveId) }.orEmpty()
         uniquePokemon = gameMaster?.pokemon
+            ?.map { p ->
+                p.copy(
+                    types = p.types
+                        .map(String::lowercase)
+                        .filter { it.isNotBlank() && it != "none" }
+                        .distinct()
+                )
+            }
             ?.distinctBy { normalizeName(it.speciesId) }
             .orEmpty()
         pokemonByName = uniquePokemon
