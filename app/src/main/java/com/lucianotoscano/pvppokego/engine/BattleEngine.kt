@@ -19,6 +19,13 @@ import java.text.Normalizer
  */
 class BattleEngine(private val repo: GameDataRepository) {
     data class DetectionChanges(val playerChanged: Boolean, val enemyChanged: Boolean)
+    data class DamageObservation(
+        val moveId: String,
+        val moveName: String,
+        val damagePercent: Float,
+        val damagePoints: Int,
+        val learnedSamples: Int
+    )
     data class BattleTextResult(
         val newChargedPrompt: Boolean = false,
         val chargedMoveConfirmed: Boolean = false,
@@ -96,6 +103,20 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var lastOpponentHpRatio: Float? = null
     private var lastMotion = 0f
 
+    private val incomingDamageTracker = ObservedDamageTracker()
+    private var pendingIncomingChargedHpBefore: Float? = null
+    private data class PendingIncomingChargedDamage(
+        val moveId: String,
+        val moveName: String,
+        val attackerKey: String,
+        val defenderKey: String,
+        val hpBefore: Float,
+        val armedAtMs: Long,
+        var minimumHpAfter: Float = hpBefore,
+        var firstDropAtMs: Long? = null
+    )
+    private var pendingIncomingChargedDamage: PendingIncomingChargedDamage? = null
+
     fun resetBattle() {
         playerName = null
         playerSpeciesId = null
@@ -142,6 +163,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastHpRatio = null
         lastOpponentHpRatio = null
         lastMotion = 0f
+        incomingDamageTracker.resetBattle()
+        pendingIncomingChargedHpBefore = null
+        pendingIncomingChargedDamage = null
         enemyStates.clearBattle()
         ownStates.clearBattle()
     }
@@ -744,6 +768,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private fun onPlayerChanged(name: String, cp: Int?, speciesId: String? = null) {
         saveOwnActiveState()
         ownChargedCycle.reset()
+        pendingIncomingChargedDamage = null
+        pendingIncomingChargedHpBefore = null
         playerName = name
         playerSpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         playerCp = cp
@@ -778,6 +804,8 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun onEnemyChanged(name: String, speciesId: String? = null) {
         saveActiveState()
+        pendingIncomingChargedDamage = null
+        pendingIncomingChargedHpBefore = null
         enemyName = name
         enemySpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         chargedPendingSinceMs = null
@@ -861,10 +889,17 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveActiveState()
     }
 
-    fun onFastDetected(count: Int, confidence: Float, source: String, hpRatio: Float?, motion: Float) {
+    fun onFastDetected(
+        count: Int,
+        confidence: Float,
+        source: String,
+        hpRatio: Float?,
+        motion: Float,
+        damageFraction: Float? = null
+    ) {
         lastDetectorConfidence = confidence
         lastAutoSource = source
-        lastHpRatio = hpRatio
+        hpRatio?.let { lastHpRatio = it.coerceIn(0f, 1f) }
         lastMotion = motion
         if (count <= 0) return
         if (System.currentTimeMillis() < ignoreFastUntilMs) { lastAutoSource = "charged-guard"; return }
@@ -873,6 +908,15 @@ class BattleEngine(private val repo: GameDataRepository) {
             fast = f
             activeState?.fastMoveId = f.moveId
         }
+        incomingDamageTracker.record(
+            attackerKey = currentEnemyDamageKey(),
+            defenderKey = currentPlayerDamageKey(),
+            moveKey = ObservedDamageTracker.FAST_MOVE_KEY,
+            totalDamageFraction = damageFraction,
+            hits = count,
+            confidence = confidence,
+            charged = false
+        )
         tracker.onFastMove(f, count)
         saveActiveState()
     }
@@ -886,6 +930,80 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownTracker.onFastMove(f, count)
         saveOwnActiveState()
     }
+
+    fun onHpObservation(
+        playerHpRatio: Float?,
+        opponentHpRatio: Float?,
+        nowMs: Long = System.currentTimeMillis()
+    ): DamageObservation? {
+        playerHpRatio?.let { lastHpRatio = it.coerceIn(0f, 1f) }
+        opponentHpRatio?.let { lastOpponentHpRatio = it.coerceIn(0f, 1f) }
+
+        val pending = pendingIncomingChargedDamage ?: return null
+        if (nowMs - pending.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS) {
+            pendingIncomingChargedDamage = null
+            return null
+        }
+
+        val hp = playerHpRatio ?: return null
+        if (hp < pending.minimumHpAfter) pending.minimumHpAfter = hp
+
+        val meaningfulDrop = pending.hpBefore - pending.minimumHpAfter
+        if (meaningfulDrop >= MIN_CHARGED_DAMAGE_SAMPLE_FRACTION && pending.firstDropAtMs == null) {
+            pending.firstDropAtMs = nowMs
+        }
+
+        val firstDropAt = pending.firstDropAtMs ?: return null
+        if (nowMs - firstDropAt < CHARGED_DAMAGE_SETTLE_MS) return null
+
+        val damage = (pending.hpBefore - pending.minimumHpAfter).coerceIn(0f, 1f)
+        val accepted = incomingDamageTracker.record(
+            attackerKey = pending.attackerKey,
+            defenderKey = pending.defenderKey,
+            moveKey = pending.moveId,
+            totalDamageFraction = damage,
+            hits = 1,
+            confidence = 1f,
+            charged = true
+        )
+        pendingIncomingChargedDamage = null
+        if (!accepted) return null
+
+        val estimate = incomingDamageTracker.estimate(
+            pending.attackerKey,
+            pending.defenderKey,
+            pending.moveId,
+            lastHpRatio
+        )
+        return DamageObservation(
+            moveId = pending.moveId,
+            moveName = pending.moveName,
+            damagePercent = damage * 100f,
+            damagePoints = (damage * 1000f).toInt(),
+            learnedSamples = estimate?.samples ?: 1
+        )
+    }
+
+    private fun armIncomingChargedDamage(move: MoveDef, nowMs: Long) {
+        val before = pendingIncomingChargedHpBefore ?: lastHpRatio ?: return
+        val attacker = currentEnemyDamageKey() ?: return
+        val defender = currentPlayerDamageKey() ?: return
+        pendingIncomingChargedDamage = PendingIncomingChargedDamage(
+            moveId = move.moveId,
+            moveName = move.name,
+            attackerKey = attacker,
+            defenderKey = defender,
+            hpBefore = before.coerceIn(0f, 1f),
+            armedAtMs = nowMs
+        )
+        pendingIncomingChargedHpBefore = null
+    }
+
+    private fun currentEnemyDamageKey(): String? =
+        (enemySpeciesId ?: enemyName)?.takeIf { it.isNotBlank() }?.let(::normalize)
+
+    private fun currentPlayerDamageKey(): String? =
+        (playerSpeciesId ?: playerName)?.takeIf { it.isNotBlank() }?.let(::normalize)
 
     fun chargedUsed(move: MoveDef): Boolean {
         val ok = tracker.onChargedMove(move)
@@ -980,6 +1098,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         if (CHARGED_PROMPTS.any { text.contains(it) }) {
             if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
+                pendingIncomingChargedHpBefore = lastHpRatio
                 newPrompt = true
             }
         }
@@ -1027,6 +1146,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     moveId = matched.moveId
                 )
                 if (enemyChargedCycle.observe(signature, nowMs)) {
+                    armIncomingChargedDamage(matched, nowMs)
                     observedChargedUsed(matched, nowMs)
                     return BattleTextResult(newPrompt, true, false, enemyChargedMove = matched)
                 }
@@ -1217,6 +1337,30 @@ class BattleEngine(private val repo: GameDataRepository) {
             ownSwitchSeconds = switchSeconds(ownSwitchReadyAtMs),
             opponentSwitchSeconds = switchSeconds(opponentSwitchReadyAtMs),
             chargedIncoming = chargedPendingSinceMs != null,
+            playerHpRatio = lastHpRatio,
+            opponentHpRatio = lastOpponentHpRatio,
+            incomingFastDamage = incomingDamageTracker.estimate(
+                currentEnemyDamageKey(),
+                currentPlayerDamageKey(),
+                ObservedDamageTracker.FAST_MOVE_KEY,
+                lastHpRatio
+            ),
+            incomingCharged1Damage = charge1?.let { move ->
+                incomingDamageTracker.estimate(
+                    currentEnemyDamageKey(),
+                    currentPlayerDamageKey(),
+                    move.moveId,
+                    lastHpRatio
+                )
+            },
+            incomingCharged2Damage = charge2?.let { move ->
+                incomingDamageTracker.estimate(
+                    currentEnemyDamageKey(),
+                    currentPlayerDamageKey(),
+                    move.moveId,
+                    lastHpRatio
+                )
+            },
             detectorConfidence = lastDetectorConfidence,
             battleConfidence = lastBattleConfidence,
             enemyHistory = enemyHistory,
@@ -1434,6 +1578,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         private const val UNKNOWN_CHARGED_DEBOUNCE_MS = 4_200L
         private const val SWITCH_COOLDOWN_MS = 50_000L
         private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
+        private const val CHARGED_DAMAGE_OBSERVATION_WINDOW_MS = 4_500L
+        private const val CHARGED_DAMAGE_SETTLE_MS = 420L
+        private const val MIN_CHARGED_DAMAGE_SAMPLE_FRACTION = 0.010f
         private const val CHARGED_FAST_GUARD_MS = 2_200L
         private const val PENDING_CONFIRM_DELAY_MS = 2_400L
 
