@@ -42,7 +42,10 @@ internal object BattleHistorySegmentMatcher {
         )
 
         val identityContinuity = ownOverlap || enemyOverlap || exactOwn || exactEnemy
-        if (identityContinuity && (next.startedMidBattle || previousLooksFragmented || gap <= 8_000L)) {
+        // Identity continuity alone is not enough: two quick rematches can start with
+        // the exact same Pokémon. Merge only when one side also carries evidence that
+        // the previous segment was interrupted or the next segment began mid-battle.
+        if (identityContinuity && (next.startedMidBattle || previousLooksFragmented)) {
             return true
         }
 
