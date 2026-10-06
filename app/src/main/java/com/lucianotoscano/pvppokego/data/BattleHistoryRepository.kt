@@ -278,6 +278,50 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         addEvent("APP", "DIAGNÓSTICO", label, 1, nowMs, null, null, "engine", detail)
     }
 
+    fun recordSwitch(
+        actor: String,
+        fromPokemon: String?,
+        toPokemon: String?,
+        cp: Int?,
+        nowMs: Long = System.currentTimeMillis(),
+        confidence: String? = null
+    ) {
+        val label = when {
+            fromPokemon != null && toPokemon != null -> "$fromPokemon → $toPokemon"
+            toPokemon != null -> "Entrou $toPokemon"
+            else -> "Troca detectada"
+        }
+        addEvent(
+            actor, "TROCA", label, 1, nowMs, toPokemon, confidence, "OCR", null,
+            buildMap {
+                fromPokemon?.let { put("de", it) }
+                toPokemon?.let { put("para", it) }
+                cp?.let { put("pc", it.toString()) }
+            }
+        )
+    }
+
+    fun recordState(
+        actor: String,
+        pokemon: String?,
+        hpRatio: Float?,
+        energyMin: Int?,
+        energyMax: Int?,
+        shields: Int? = null,
+        confidence: String? = null,
+        nowMs: Long = System.currentTimeMillis(),
+        source: String = "engine"
+    ) {
+        val details = buildMap {
+            hpRatio?.let { put("hpPercent", (it.coerceIn(0f, 1f) * 100f).toInt().toString()) }
+            energyMin?.let { put("energyMin", it.toString()) }
+            energyMax?.let { put("energyMax", it.toString()) }
+            shields?.let { put("shields", it.toString()) }
+        }
+        if (details.isEmpty()) return
+        addEvent(actor, "ESTADO", "Estado da batalha", 1, nowMs, pokemon, confidence, source, null, details)
+    }
+
     private fun addEvent(
         actor: String,
         category: String,
@@ -287,15 +331,34 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         pokemon: String?,
         confidence: String?,
         source: String?,
-        reason: String?
+        reason: String?,
+        details: Map<String, String> = emptyMap()
     ) {
         val a = active ?: return
         val elapsed = (nowMs - a.startedAt).coerceAtLeast(0L)
-        a.events += BattleHistoryEvent(elapsed, actor, category, moveName, count, pokemon, confidence, source, reason)
+        a.events += BattleHistoryEvent(
+            elapsed, actor, category, moveName, count, pokemon, confidence, source, reason, details
+        )
     }
 
-    fun finish(nowMs: Long = System.currentTimeMillis()) {
+    fun finish(
+        nowMs: Long = System.currentTimeMillis(),
+        reason: String = "Encerramento solicitado",
+        result: String? = null
+    ) {
         val a = active ?: return
+        result?.takeIf(String::isNotBlank)?.let { a.result = it }
+        addEvent(
+            actor = "PARTIDA",
+            category = "FIM",
+            moveName = a.result?.let { "Partida encerrada: $it" } ?: "Partida encerrada",
+            count = 1,
+            nowMs = nowMs,
+            pokemon = null,
+            confidence = null,
+            source = "session",
+            reason = reason
+        )
         active = null
         val useful = a.playerName != null || a.opponentName != null || a.events.isNotEmpty()
         if (!useful) return
@@ -309,8 +372,17 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
                 playerCp = a.playerCp,
                 opponentName = a.opponentName,
                 opponentCp = a.opponentCp,
+                appVersion = a.appVersion,
+                dataVersion = a.dataVersion,
+                startedMidBattle = a.startedMidBattle,
+                endReason = reason,
+                result = a.result,
                 events = a.events.toList()
             )
         )
+    }
+
+    companion object {
+        private const val SESSION_INACTIVITY_GRACE_MS = 12_000L
     }
 }
