@@ -51,8 +51,9 @@ internal object BattleContinuityPolicy {
         newCp: Int?
     ): Boolean {
         if (oldName.isNullOrBlank() || newName.isNullOrBlank()) return false
-        if (!oldName.equals(newName, ignoreCase = true)) return true
-        return oldCp != null && newCp != null && oldCp != newCp
+        // CP is deliberately ignored as a battle-boundary signal. A cropped frame can
+        // turn 1486 into 143/149 and must never split a session by itself.
+        return !oldName.equals(newName, ignoreCase = true)
     }
 
     fun confirmedTeamSelectionBoundary(
