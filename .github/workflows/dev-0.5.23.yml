@@ -1,0 +1,55 @@
+name: Dev PvPPokeGo 0.5.23
+
+on:
+  push:
+    branches: [dev/0.5.23-reserves]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pvppokego-dev-0523-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package offline PvPoke snapshot
+        run: |
+          python3 tools/package_offline_pvpoke_assets.py
+          test -s app/src/main/assets/gamemaster.json
+          test -s app/src/main/assets/rankings-1500.json
+          test -s app/src/main/assets/rankings-2500.json
+          test -s app/src/main/assets/rankings-10000.json
+
+      - name: Build visual bank and HUD icon atlas
+        run: |
+          python3 -m venv .venv-visual
+          . .venv-visual/bin/activate
+          python -m pip install --disable-pip-version-check pillow
+          python tools/package_visual_fingerprints.py
+          test -s app/src/main/assets/pokemon_visual_fingerprints.json
+          test -s app/src/main/assets/pokemon_icon_atlas.png
+          test -s app/src/main/assets/pokemon_icon_atlas.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Test and compile both variants
+        run: |
+          gradle --no-daemon --stacktrace             :app:testStandardDebugUnitTest             :app:testRecorderCompatDebugUnitTest             :app:assembleStandardDebug             :app:assembleRecorderCompatDebug
+
+      - name: APK sanity
+        run: |
+          unzip -t app/build/outputs/apk/standard/debug/app-standard-debug.apk
+          unzip -t app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk
