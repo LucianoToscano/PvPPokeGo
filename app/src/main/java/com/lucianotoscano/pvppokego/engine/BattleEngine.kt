@@ -575,6 +575,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     private fun clearReserveCardIdentity() {
+        reserveCardHpRatios.fill(null)
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
         reserveCpStreak.fill(0)
