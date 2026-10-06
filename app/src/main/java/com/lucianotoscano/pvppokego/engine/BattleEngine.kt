@@ -439,23 +439,74 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
         }
 
+        fun learnMissingMember(index: Int, evidence: ReserveCardEvidence) {
+            val stableSpeciesId = reserveCardSpeciesIds[index]
+            val stableDex = reserveCardDexes[index] ?: evidence.visualDex
+            val def = repo.pokemonForVisualIdentity(stableSpeciesId, stableDex ?: 0) ?: return
+            val confidence = evidence.visualConfidence ?: return
+            if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
+
+            // The native reserve cards belong to our team. Once the visual identity has
+            // passed the same confidence gate used by the matcher, it may fill a missing
+            // team slot even when the pre-battle team screen was never captured.
+            if (samePokemonIdentity(
+                    playerName,
+                    playerSpeciesId,
+                    def.speciesName,
+                    def.speciesId
+                )
+            ) {
+                return
+            }
+
+            val stableCp = reserveCardCps[index]
+            val existing = findOwnSlot(def.speciesName, stableCp, def.speciesId)
+            if (existing != null) {
+                if (stableCp != null) existing.cp = stableCp
+                existing.speciesId = def.speciesId
+                if (def.dex > 0) existing.dex = def.dex
+                existing.identityConfidence = maxOf(existing.identityConfidence, confidence)
+                rememberOwnPokemon(
+                    def.speciesName,
+                    stableCp,
+                    def.speciesId,
+                    def.dex.takeIf { it > 0 },
+                    confidence
+                )
+                return
+            }
+
+            if (ownTeamSlots.size >= 3) return
+            rememberOwnPokemon(
+                def.speciesName,
+                stableCp,
+                def.speciesId,
+                def.dex.takeIf { it > 0 },
+                confidence
+            )
+        }
+
         listOf(top, bottom).forEachIndexed { index, evidence ->
             updateCp(index, evidence.cp)
             updateSpecies(index, evidence)
             updateDex(index, evidence)
+            learnMissingMember(index, evidence)
         }
+        rebindOwnActiveStateToStableSlot()
     }
 
     fun onReserveCardCps(topCp: Int?, bottomCp: Int?) =
         onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
 
-    fun needsReserveCardScan(): Boolean =
-        ownTeamSlots.size >= 2 &&
-            reserveCardCps.indices.any { index ->
-                reserveCardCps[index] == null &&
-                    reserveCardSpeciesIds[index] == null &&
-                    reserveCardDexes[index] == null
-            }
+    fun needsReserveCardScan(): Boolean {
+        if (playerName.isNullOrBlank()) return false
+        if (ownTeamSlots.size < 3) return true
+        return reserveCardCps.indices.any { index ->
+            reserveCardCps[index] == null &&
+                reserveCardSpeciesIds[index] == null &&
+                reserveCardDexes[index] == null
+        }
+    }
 
     private fun clearReserveCardIdentity() {
         reserveCardCps.fill(null)
@@ -625,6 +676,23 @@ class BattleEngine(private val repo: GameDataRepository) {
                 slot.speciesId = def.speciesId
                 if (def.dex > 0) slot.dex = def.dex
             }
+        } else if (
+            ownTeamSlots.size < 3 &&
+            !speciesId.isNullOrBlank() &&
+            confidence >= ReserveMatchupPolicy.MIN_STABLE_TEAM_IDENTITY_CONFIDENCE
+        ) {
+            val nextSlot = (0..2).firstOrNull { candidate ->
+                ownTeamSlots.none { it.slot == candidate }
+            } ?: ownTeamSlots.size
+            val def = repo.pokemon(speciesId)
+            ownTeamSlots += OwnTeamSlot(
+                slot = nextSlot,
+                name = def?.speciesName ?: name,
+                cp = cp,
+                speciesId = def?.speciesId ?: speciesId,
+                dex = dex ?: def?.dex?.takeIf { it > 0 },
+                identityConfidence = confidence
+            )
         }
     }
 
