@@ -66,9 +66,32 @@ object BattleAssistAdvisor {
 
                 val eff = TypeChart.multiplier(threat.move.type, playerTypes)
                 val score = threat.move.power.toDouble() * eff
+                val observedDamage = incomingDamageForMove(state, threat.move.moveId)
+                val currentHpPercent = state.playerHpRatio?.times(100f)
+                val learnedEnough = (observedDamage?.samples ?: 0) >= 2
+                val observedLikelyLethal = learnedEnough &&
+                    currentHpPercent != null &&
+                    observedDamage != null &&
+                    observedDamage.averagePercent >= currentHpPercent - 1.5f
+                val observedLowDamage = learnedEnough &&
+                    observedDamage != null &&
+                    observedDamage.averagePercent <= 16f
+                val damageDetail = observedDamage?.let(::damageLabel)
                 val baitPossible = bait != null && bait.move.moveId != threat.move.moveId &&
                     bait.energyCost + 5 <= threat.energyCost && threat.maxEnergy >= threat.energyCost
                 return when {
+                    observedLikelyLethal -> Advice(
+                        "ESCUDO",
+                        listOfNotNull(shortName(threat.move.name), damageDetail, "pode nocautear").joinToString(" • "),
+                        Color.rgb(232, 61, 72),
+                        114
+                    )
+                    observedLowDamage && eff <= 1.01 -> Advice(
+                        "NÃO ESCUDE",
+                        listOfNotNull(shortName(threat.move.name), damageDetail, "dano observado baixo").joinToString(" • "),
+                        Color.rgb(46, 188, 105),
+                        110
+                    )
                     baitPossible && score >= 95.0 -> Advice(
                         "PODE SER BAIT",
                         "${shortName(bait!!.move.name)} ou ${shortName(threat.move.name)} • ${energyLabel(threat)}",
@@ -198,6 +221,18 @@ object BattleAssistAdvisor {
             EnergyConfidence.RANGE -> "${p.minEnergy}-${p.maxEnergy}E possíveis"
         }
     }
+
+    private fun incomingDamageForMove(
+        state: BattleUiState,
+        moveId: String
+    ) = when (moveId) {
+        state.charged1?.move?.moveId -> state.incomingCharged1Damage
+        state.charged2?.move?.moveId -> state.incomingCharged2Damage
+        else -> null
+    }
+
+    private fun damageLabel(value: com.lucianotoscano.pvppokego.data.ObservedDamageEstimate): String =
+        "~" + "%.0f".format(value.averagePercent) + "% HP obs. " + value.samples + "x"
 
     private fun enemyMoveKnowledge(state: BattleUiState, moveId: String): MoveKnowledgeConfidence = when (moveId) {
         state.charged1?.move?.moveId -> state.charged1Knowledge
