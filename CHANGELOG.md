@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.23 — em desenvolvimento
+
+- Corrigida a ausência dos dois Pokémon de reserva no HUD: as duas cartas nativas agora mantêm posições fixas mesmo com identificação parcial.
+- O HUD passa a usar miniaturas ao vivo recortadas das próprias cartas de reserva do Pokémon GO, sem depender de imagens externas para exibir o ícone.
+- Reservas confirmadas mostram explicitamente **FORTE**, **FRACO** ou **NEUTRO** contra o adversário atual; identidade insuficiente continua como **IDENTIFICANDO**, sem inventar matchup.
+- O reconhecimento das reservas pode iniciar no meio da batalha com apenas o Pokémon ativo conhecido; não depende mais de uma leitura perfeita da tela de seleção antes da luta.
+- Evidência visual forte/repetida de `speciesId`/Dex pode completar o time ausente de forma conservadora; leituras fracas não liberam recomendações específicas.
+- O matcher preserva o índice real de cada uma das duas cartas de reserva, inclusive quando só uma delas é conhecida.
+- O scan visual continua enquanto o time estiver incompleto e para quando o time completo já puder ser ligado às duas cartas por PC.
+- Nenhuma lógica existente de OCR, energia, continuidade, carregados, histórico ou seleção manual de golpes foi removida.
+
+
 ## 0.5.22
 
 - Corrigido o início do overlay no APK padrão após a separação do modo Recorder Compat.
