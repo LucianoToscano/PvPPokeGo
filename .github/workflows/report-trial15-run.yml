@@ -1,0 +1,37 @@
+name: Report trial15 build run id
+
+on:
+  push:
+    branches: [build/trial15-chatgpt-20261006]
+    paths:
+      - '.github/workflows/report-trial15-run.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find trial15 build run and publish its ID
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_ID=""
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            RUN_ID=$(gh run list               --repo "$REPO"               --branch "build/trial15-chatgpt-20261006"               --limit 30               --json databaseId,name,headSha,event               --jq '.[] | select(.name=="Build PvPPokeGo 0.5.15-trial15" and .headSha==env.HEAD_SHA) | .databaseId'               | head -1 || true)
+            if [ -n "$RUN_ID" ]; then break; fi
+            sleep 5
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "Could not locate build run" >&2
+            exit 1
+          fi
+          gh issue create             --repo "$REPO"             --title "[CI] PvPPokeGo trial15 run $RUN_ID"             --body "run_id=$RUN_ID"$'\n'"head_sha=$HEAD_SHA"$'\n'"artifact=PvPPokeGo-0.5.15-trial15-signed"
