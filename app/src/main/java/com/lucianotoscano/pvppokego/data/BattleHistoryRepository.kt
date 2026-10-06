@@ -174,11 +174,28 @@ class BattleHistoryRepository(context: Context) {
         prefs.edit().putString(KEY_HISTORY, json.encodeToString(next.take(MAX_BATTLES))).apply()
     }
 
-    fun clear() = prefs.edit().remove(KEY_HISTORY).apply()
+    fun saveActiveCheckpoint(entry: BattleHistoryEntry) {
+        prefs.edit().putString(KEY_ACTIVE_CHECKPOINT, json.encodeToString(entry)).apply()
+    }
+
+    fun loadActiveCheckpoint(): BattleHistoryEntry? = runCatching {
+        prefs.getString(KEY_ACTIVE_CHECKPOINT, null)
+            ?.let { json.decodeFromString<BattleHistoryEntry>(it) }
+    }.getOrNull()
+
+    fun clearActiveCheckpoint() {
+        prefs.edit().remove(KEY_ACTIVE_CHECKPOINT).apply()
+    }
+
+    fun clear() = prefs.edit()
+        .remove(KEY_HISTORY)
+        .remove(KEY_ACTIVE_CHECKPOINT)
+        .apply()
 
     companion object {
         private const val FILE = "pvppokego_battle_history"
         private const val KEY_HISTORY = "history_json"
+        private const val KEY_ACTIVE_CHECKPOINT = "active_checkpoint_json"
         private const val MAX_BATTLES = 50
     }
 }
@@ -203,6 +220,37 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
     private var active: Active? = null
     private var appVersion: String = "desconhecida"
     private var dataVersion: String? = null
+    private var lastCheckpointAtMs: Long = 0L
+
+    init {
+        val now = System.currentTimeMillis()
+        val checkpoint = repository.loadActiveCheckpoint()
+        if (
+            checkpoint != null &&
+            now - checkpoint.endedAtEpochMs in 0..RECOVERY_MAX_AGE_MS
+        ) {
+            active = Active(
+                id = checkpoint.id,
+                startedAt = checkpoint.startedAtEpochMs,
+                leagueCp = checkpoint.leagueCp,
+                playerName = checkpoint.playerName,
+                playerCp = checkpoint.playerCp,
+                opponentName = checkpoint.opponentName,
+                opponentCp = checkpoint.opponentCp,
+                appVersion = checkpoint.appVersion,
+                dataVersion = checkpoint.dataVersion,
+                startedMidBattle = true,
+                result = checkpoint.result,
+                lastEvidenceAtMs = checkpoint.endedAtEpochMs,
+                events = checkpoint.events.toMutableList()
+            )
+            appVersion = checkpoint.appVersion
+            dataVersion = checkpoint.dataVersion
+            lastCheckpointAtMs = now
+        } else {
+            repository.clearActiveCheckpoint()
+        }
+    }
 
     fun setMetadata(appVersion: String, dataVersion: String?) {
         this.appVersion = appVersion
@@ -446,6 +494,31 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         a.events += BattleHistoryEvent(
             elapsed, actor, category, moveName, count, pokemon, confidence, source, reason, details
         )
+        maybeCheckpoint(nowMs)
+    }
+
+    private fun maybeCheckpoint(nowMs: Long, force: Boolean = false) {
+        val a = active ?: return
+        if (!force && nowMs - lastCheckpointAtMs < CHECKPOINT_INTERVAL_MS) return
+        lastCheckpointAtMs = nowMs
+        repository.saveActiveCheckpoint(
+            BattleHistoryEntry(
+                id = a.id,
+                startedAtEpochMs = a.startedAt,
+                endedAtEpochMs = nowMs.coerceAtLeast(a.startedAt),
+                leagueCp = a.leagueCp,
+                playerName = a.playerName,
+                playerCp = a.playerCp,
+                opponentName = a.opponentName,
+                opponentCp = a.opponentCp,
+                appVersion = a.appVersion,
+                dataVersion = a.dataVersion,
+                startedMidBattle = a.startedMidBattle,
+                endReason = "checkpoint ativo",
+                result = a.result,
+                events = a.events.toList()
+            )
+        )
     }
 
     fun finish(
@@ -467,6 +540,7 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
             reason = reason
         )
         active = null
+        repository.clearActiveCheckpoint()
         val useful = a.playerName != null || a.opponentName != null || a.events.isNotEmpty()
         if (!useful) return
         repository.append(
@@ -491,5 +565,7 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
 
     companion object {
         private const val SESSION_INACTIVITY_GRACE_MS = 28_000L
+        private const val CHECKPOINT_INTERVAL_MS = 5_000L
+        private const val RECOVERY_MAX_AGE_MS = 180_000L
     }
 }
