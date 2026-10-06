@@ -1,0 +1,160 @@
+name: Build PvPPokeGo 0.5.22
+
+on:
+  push:
+    branches: [release/0.5.22]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pvppokego-0522-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate 0.5.22 invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.22"' app/build.gradle.kts
+          grep -q 'versionCode = 27' app/build.gradle.kts
+          grep -q 'create("standard")' app/build.gradle.kts
+          grep -q 'create("recorderCompat")' app/build.gradle.kts
+          grep -q 'RECORDER_COMPAT' app/build.gradle.kts
+          grep -q 'android:icon="@drawable/pvppokego_launcher"' app/src/main/AndroidManifest.xml
+          grep -q 'android:roundIcon="@drawable/pvppokego_launcher"' app/src/main/AndroidManifest.xml
+          test -s app/src/main/res/drawable-nodpi/pvppokego_launcher.png
+
+          if grep -q 'PvPPokeGoAccessibilityCaptureService' app/src/main/AndroidManifest.xml; then
+            echo "Accessibility service leaked into main manifest"
+            exit 1
+          fi
+          if grep -q 'FOREGROUND_SERVICE_SPECIAL_USE\|specialUse\|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' app/src/main/AndroidManifest.xml; then
+            echo "SPECIAL_USE leaked into standard/main manifest"
+            exit 1
+          fi
+          grep -q 'android:foregroundServiceType="mediaProjection"' app/src/main/AndroidManifest.xml
+          test -s app/src/standard/java/com/lucianotoscano/pvppokego/capture/AccessibilityScreenCapture.kt
+          test -s app/src/recorderCompat/java/com/lucianotoscano/pvppokego/capture/AccessibilityScreenCapture.kt
+          test -s app/src/recorderCompat/AndroidManifest.xml
+          test -s app/src/recorderCompat/res/xml/accessibility_capture_service.xml
+          grep -q 'PvPPokeGoAccessibilityCaptureService' app/src/recorderCompat/AndroidManifest.xml
+
+          grep -q 'MAX_OUTPUT_HEIGHT = 1280' app/src/main/java/com/lucianotoscano/pvppokego/capture/ScreenFrameRecorder.kt
+          grep -q 'validateMp4' app/src/main/java/com/lucianotoscano/pvppokego/capture/ScreenFrameRecorder.kt
+          grep -q 'MediaMetadataRetriever' app/src/main/java/com/lucianotoscano/pvppokego/capture/ScreenFrameRecorder.kt
+
+          grep -q 'BattleCorrespondenceTracker' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'PokemonVisualRecognizer' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
+          grep -q 'visualSpeciesId' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
+          grep -q 'cardSpeciesIds' app/src/main/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcher.kt
+          grep -q 'ChargedAnimationCycleGate' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'ChargedAnimationCycleGateTest' app/src/test/java/com/lucianotoscano/pvppokego/engine/ChargedAnimationCycleGateTest.kt
+          grep -q 'exportAnalysisText' app/src/main/java/com/lucianotoscano/pvppokego/data/BattleHistoryRepository.kt
+
+      - name: Package offline PvPoke snapshot
+        run: |
+          python3 tools/package_offline_pvpoke_assets.py
+          test -s app/src/main/assets/gamemaster.json
+          test -s app/src/main/assets/rankings-1500.json
+          test -s app/src/main/assets/rankings-2500.json
+          test -s app/src/main/assets/rankings-10000.json
+          test -s app/src/main/assets/pvpoke_snapshot.json
+
+      - name: Build visual Pokemon bank
+        run: |
+          python3 -m venv .venv-visual
+          . .venv-visual/bin/activate
+          python -m pip install --disable-pip-version-check pillow
+          python tools/package_visual_fingerprints.py
+          test -s app/src/main/assets/pokemon_visual_fingerprints.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open("app/src/main/assets/pokemon_visual_fingerprints.json"))
+          assert p["format"]=="PvPPokeGo-visual-fingerprints"
+          assert p.get("version", 0) >= 2
+          assert len(p["entries"]) >= 500
+          assert all(e.get("speciesId") for e in p["entries"])
+          assert any("_alolan" in e.get("speciesId","") for e in p["entries"])
+          print("visual bank", len(p["entries"]), "entries")
+          PY
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Test and build both variants
+        run: |
+          gradle --no-daemon --stacktrace             :app:testStandardDebugUnitTest             :app:testRecorderCompatDebugUnitTest             :app:assembleStandardDebug             :app:assembleRecorderCompatDebug
+
+      - name: Verify flavor manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          STD_MANIFEST="$(find app/build/intermediates/merged_manifests/standardDebug -name AndroidManifest.xml | head -1)"
+          COMPAT_MANIFEST="$(find app/build/intermediates/merged_manifests/recorderCompatDebug -name AndroidManifest.xml | head -1)"
+          test -n "$STD_MANIFEST"
+          test -n "$COMPAT_MANIFEST"
+          if grep -q 'PvPPokeGoAccessibilityCaptureService' "$STD_MANIFEST"; then
+            echo "Standard manifest contains AccessibilityService"
+            exit 1
+          fi
+          if grep -q 'FOREGROUND_SERVICE_SPECIAL_USE\|specialUse\|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$STD_MANIFEST"; then
+            echo "Standard manifest contains SPECIAL_USE"
+            exit 1
+          fi
+          grep -q 'android:foregroundServiceType="mediaProjection"' "$STD_MANIFEST"
+          grep -q 'PvPPokeGoAccessibilityCaptureService' "$COMPAT_MANIFEST"
+          grep -q 'FOREGROUND_SERVICE_SPECIAL_USE' "$COMPAT_MANIFEST"
+          grep -q 'specialUse' "$COMPAT_MANIFEST"
+          grep -q 'PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$COMPAT_MANIFEST"
+          grep -q 'pvppokego_launcher' "$STD_MANIFEST"
+          echo "Standard manifest is mediaProjection-only; compat owns Accessibility + SPECIAL_USE."
+
+      - name: Verify APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          STD=app/build/outputs/apk/standard/debug/app-standard-debug.apk
+          COMPAT=app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk
+          test -s "$STD"
+          test -s "$COMPAT"
+          unzip -t "$STD"
+          unzip -t "$COMPAT"
+          unzip -l "$STD" | grep -q 'pvppokego_launcher.png'
+          unzip -l "$STD" | grep -q 'pokemon_visual_fingerprints.json'
+          if unzip -p "$STD" classes.dex | strings | grep -q 'PvPPokeGoAccessibilityCaptureService'; then
+            echo "Sensitive accessibility class leaked into standard APK"
+            exit 1
+          fi
+          # The compat class may land in any multidex file; merged-manifest validation
+          # above is the authoritative check that the component is present only there.
+
+      - name: Package artifacts
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/standard/debug/app-standard-debug.apk artifact/PvPPokeGo-0.5.22.apk
+          cp app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk artifact/PvPPokeGo-0.5.22-recorder-compat.apk
+          shasum -a 256 artifact/PvPPokeGo-0.5.22.apk > artifact/PvPPokeGo-0.5.22.apk.sha256
+          shasum -a 256 artifact/PvPPokeGo-0.5.22-recorder-compat.apk > artifact/PvPPokeGo-0.5.22-recorder-compat.apk.sha256
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.22
+          path: artifact/
+          retention-days: 14
