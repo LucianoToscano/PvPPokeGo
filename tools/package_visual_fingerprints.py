@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Generate compact, form-aware Pokémon portrait fingerprints for PvPPokeGo.
+"""Generate compact, form-aware Pokémon visual assets for PvPPokeGo.
 
-The APK stores only perceptual fingerprints (dHash + hue histogram), never the
-source artwork. Fingerprints are keyed by PvPoke speciesId whenever a distinct
-Pokémon GO render can be resolved, with National Dex kept as a fallback.
+The APK stores perceptual fingerprints (dHash + hue histogram) for recognition
+and a small transparent sprite atlas for HUD reserve icons. Full-resolution
+source artwork is never bundled. Both outputs are keyed by PvPoke speciesId
+whenever a distinct Pokémon GO render can be resolved, with National Dex kept
+as a fallback.
 
 Source renders: PokeMiners pogo_assets 256x256 addressable Pokémon icons.
 """
@@ -11,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import re
 import urllib.error
 import urllib.request
@@ -22,6 +25,10 @@ from PIL import Image, ImageOps
 ASSETS = Path("app/src/main/assets")
 GM = ASSETS / "gamemaster.json"
 OUT = ASSETS / "pokemon_visual_fingerprints.json"
+ICON_ATLAS_OUT = ASSETS / "pokemon_icon_atlas.png"
+ICON_MAP_OUT = ASSETS / "pokemon_icon_atlas.json"
+ICON_CELL = 64
+ICON_COLUMNS = 32
 BASE_URL = (
     "https://raw.githubusercontent.com/PokeMiners/pogo_assets/master/"
     "Images/Pokemon%20-%20256x256/Addressable%20Assets/{key}.icon.png"
@@ -159,6 +166,26 @@ def normalize_image(raw: bytes) -> Image.Image:
     return canvas.convert("RGB").resize((72, 72), Image.Resampling.LANCZOS)
 
 
+def normalize_icon(raw: bytes) -> Image.Image:
+    """Small transparent display sprite; recognition still uses white-normalized art."""
+    img = Image.open(io.BytesIO(raw)).convert("RGBA")
+    alpha = img.getchannel("A")
+    bbox = alpha.point(lambda a: 255 if a > 12 else 0).getbbox()
+    if bbox:
+        img = img.crop(bbox)
+
+    canvas = Image.new("RGBA", (ICON_CELL, ICON_CELL), (0, 0, 0, 0))
+    fitted = ImageOps.contain(
+        img,
+        (ICON_CELL - 4, ICON_CELL - 4),
+        Image.Resampling.LANCZOS,
+    )
+    x = (ICON_CELL - fitted.width) // 2
+    y = (ICON_CELL - fitted.height) // 2
+    canvas.alpha_composite(fitted, (x, y))
+    return canvas
+
+
 def dhash64(img: Image.Image) -> str:
     gray = img.convert("L").resize((9, 8), Image.Resampling.LANCZOS)
     px = list(gray.getdata())
@@ -204,12 +231,16 @@ def build_one(entry: dict) -> dict:
         raw = fetch_bytes(key)
         if raw:
             img = normalize_image(raw)
+            icon = normalize_icon(raw)
+            icon_buf = io.BytesIO()
+            icon.save(icon_buf, format="PNG", optimize=True)
             return {
                 "speciesId": sid,
                 "dex": dex,
                 "sourceKey": key,
                 "dhash": dhash64(img),
                 "hue": hue_histogram(img),
+                "_iconPng": icon_buf.getvalue(),
             }
     return {"speciesId": sid, "dex": dex, "error": "sprite-not-found"}
 
@@ -239,6 +270,51 @@ def main() -> int:
                 built.append(item)
 
     built.sort(key=lambda x: x["speciesId"])
+
+    # Build one compact atlas so the HUD can draw the user's reserve Pokémon without
+    # network access and without shipping the original 256x256 source files.
+    rows = max(1, math.ceil(len(built) / ICON_COLUMNS))
+    atlas = Image.new(
+        "RGBA",
+        (ICON_COLUMNS * ICON_CELL, rows * ICON_CELL),
+        (0, 0, 0, 0),
+    )
+    icon_entries = []
+    for index, item in enumerate(built):
+        raw_icon = item.pop("_iconPng", None)
+        if raw_icon:
+            icon = Image.open(io.BytesIO(raw_icon)).convert("RGBA")
+            col = index % ICON_COLUMNS
+            row = index // ICON_COLUMNS
+            x = col * ICON_CELL
+            y = row * ICON_CELL
+            atlas.alpha_composite(icon, (x, y))
+            icon_entries.append({
+                "speciesId": item["speciesId"],
+                "dex": item["dex"],
+                "x": x,
+                "y": y,
+                "w": ICON_CELL,
+                "h": ICON_CELL,
+            })
+
+    atlas.save(ICON_ATLAS_OUT, format="PNG", optimize=True)
+    ICON_MAP_OUT.write_text(
+        json.dumps(
+            {
+                "format": "PvPPokeGo-pokemon-icon-atlas",
+                "version": 1,
+                "cellSize": ICON_CELL,
+                "width": atlas.width,
+                "height": atlas.height,
+                "entries": icon_entries,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+
     # A missing form does not block the build, but a catastrophically incomplete bank does.
     if len(built) < 500:
         raise SystemExit(f"Only {len(built)} visual fingerprints generated ({len(failures)} missing)")
@@ -258,7 +334,8 @@ def main() -> int:
     form_count = sum(1 for item in built if ".f" in item["sourceKey"])
     print(
         f"Visual fingerprint bank v2: {len(built)} species/form identities "
-        f"({form_count} form renders), {len(failures)} missing -> {OUT}"
+        f"({form_count} form renders), {len(failures)} missing -> {OUT}; "
+        f"{len(icon_entries)} HUD icons -> {ICON_ATLAS_OUT}"
     )
     return 0
 
