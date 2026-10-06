@@ -469,12 +469,16 @@ class BattleEngine(private val repo: GameDataRepository) {
         inactiveForMs: Long,
         sessionAgeMs: Long
     ): BattleCorrespondenceTracker.Context {
-        fun identity(name: String?, cp: Int?): BattleCorrespondenceTracker.Identity? {
-            if (name.isNullOrBlank()) return null
-            val def = repo.pokemon(name)
+        fun identity(
+            name: String?,
+            cp: Int?,
+            speciesId: String? = null
+        ): BattleCorrespondenceTracker.Identity? {
+            if (name.isNullOrBlank() && speciesId.isNullOrBlank()) return null
+            val def = speciesId?.let(repo::pokemon) ?: repo.pokemon(name)
             return BattleCorrespondenceTracker.Identity(
-                name = name,
-                speciesId = def?.speciesId,
+                name = def?.speciesName ?: name,
+                speciesId = speciesId ?: def?.speciesId,
                 cp = cp,
                 confidence = 1f
             )
@@ -494,12 +498,12 @@ class BattleEngine(private val repo: GameDataRepository) {
             ownTeam.mapNotNull { (name, cp) -> identity(name, cp) }
         }
         val opponents = enemyStates.all()
-            .mapNotNull { state -> identity(state.speciesName, null) }
+            .mapNotNull { state -> identity(state.speciesName, null, state.speciesId) }
             .distinctBy { it.stableKey() }
 
         return BattleCorrespondenceTracker.Context(
-            activePlayer = identity(playerName, playerCp),
-            activeOpponent = identity(enemyName, enemyCp),
+            activePlayer = identity(playerName, playerCp, playerSpeciesId),
+            activeOpponent = identity(enemyName, enemyCp, enemySpeciesId),
             ownTeam = team,
             knownOpponents = opponents,
             inactiveForMs = inactiveForMs.coerceAtLeast(0L),
@@ -526,7 +530,8 @@ class BattleEngine(private val repo: GameDataRepository) {
             } else {
                 null
             }
-            val def = pinnedOwn?.let(::slotDefinition)
+            val def = pinnedOwn?.speciesId?.let(repo::pokemon)
+                ?: pinnedOwn?.let(::slotDefinition)
                 ?: pokemon.visualSpeciesId?.let(repo::pokemon)
                 ?: repo.pokemon(pokemon.name)
             val confidence = maxOf(
