@@ -377,25 +377,36 @@ class BattleEngine(private val repo: GameDataRepository) {
         battleTextEvidence: Boolean,
         switchPrompt: Boolean
     ): BattleCorrespondenceTracker.Observation {
-        fun identity(pokemon: DetectedPokemon?): BattleCorrespondenceTracker.Identity? {
+        fun identity(
+            pokemon: DetectedPokemon?,
+            ownPlayer: Boolean
+        ): BattleCorrespondenceTracker.Identity? {
             pokemon ?: return null
-            val def = pokemon.visualSpeciesId
-                ?.let(repo::pokemon)
+
+            // For our side, a CP uniquely pinned to one already-known team slot is
+            // stronger than a generic top-card OCR name and preserves regional/forms.
+            val pinnedOwn = if (ownPlayer && pokemon.cp != null) {
+                ownTeamSlots.filter { it.cp == pokemon.cp }.singleOrNull()
+            } else {
+                null
+            }
+            val def = pinnedOwn?.name?.let(repo::pokemon)
+                ?: pokemon.visualSpeciesId?.let(repo::pokemon)
                 ?: repo.pokemon(pokemon.name)
             val confidence = maxOf(
                 pokemon.confidence,
                 pokemon.visualConfidence ?: 0f
             ).coerceIn(0f, 1f)
             return BattleCorrespondenceTracker.Identity(
-                name = def?.speciesName ?: pokemon.name,
-                speciesId = pokemon.visualSpeciesId ?: def?.speciesId,
+                name = def?.speciesName ?: pinnedOwn?.name ?: pokemon.name,
+                speciesId = def?.speciesId ?: pokemon.visualSpeciesId,
                 cp = pokemon.cp,
                 confidence = confidence
             )
         }
         return BattleCorrespondenceTracker.Observation(
-            player = identity(detection.player),
-            opponent = identity(detection.opponent),
+            player = identity(detection.player, ownPlayer = true),
+            opponent = identity(detection.opponent, ownPlayer = false),
             pairedCards = pairedCards,
             battleTextEvidence = battleTextEvidence,
             switchPrompt = switchPrompt
