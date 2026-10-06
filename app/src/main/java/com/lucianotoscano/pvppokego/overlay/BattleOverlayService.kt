@@ -47,6 +47,7 @@ import com.lucianotoscano.pvppokego.detect.BattleFrameEventDetector
 import com.lucianotoscano.pvppokego.detect.BattleOcrDetector
 import com.lucianotoscano.pvppokego.detect.BattlePresenceTracker
 import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
+import com.lucianotoscano.pvppokego.engine.BattleContinuityPolicy
 import com.lucianotoscano.pvppokego.engine.BattleEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -1413,15 +1414,35 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         e = engine
+                        val mayBeBackOnTeamScreen =
+                            !battleActive &&
+                                historyRecorder.hasActiveSession() &&
+                                now - lastBattleEvidenceAtMs >= BattleContinuityPolicy.MIN_OUT_OF_BATTLE_MS
                         if (
                             settingsRepo.autoRecognition &&
                             e != null &&
-                            e.needsOwnTeamScan() &&
                             !battleActive &&
-                            e.activeEnemyName() == null &&
+                            (e.needsOwnTeamScan() || mayBeBackOnTeamScreen) &&
                             now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS
                         ) {
-                            detector?.detectOwnTeam(frame)?.let(e::onOwnTeamDetected)
+                            val team = detector?.detectOwnTeam(frame).orEmpty()
+                            if (
+                                historyRecorder.hasActiveSession() &&
+                                BattleContinuityPolicy.confirmedTeamSelectionBoundary(
+                                    team = team,
+                                    battleActive = battleActive,
+                                    msSinceBattleEvidence = (now - lastBattleEvidenceAtMs).coerceAtLeast(0L)
+                                )
+                            ) {
+                                historyRecorder.finish(
+                                    nowMs = now,
+                                    reason = "Tela de seleção da equipe confirmada"
+                                )
+                                clearBattleContextAfterConfirmedEnd()
+                                engine?.onOwnTeamDetected(team)
+                            } else if (e.needsOwnTeamScan() && team.isNotEmpty()) {
+                                e.onOwnTeamDetected(team)
+                            }
                             lastTeamOcrAt = now
                         }
 
