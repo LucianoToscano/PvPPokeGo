@@ -481,6 +481,21 @@ class BattleOverlayView(
             val (indicatorRefX, cardRefY) = reservePos(index)
             val indicatorX = rx(indicatorRefX)
             val cardCenterY = ry(cardRefY)
+
+            if (!reserve.identityConfirmed) {
+                drawMatchupIndicator(canvas, indicatorX, cardCenterY, MatchupState.UNKNOWN, 13.5f*u()*bs)
+                if (settings.showHudText) {
+                    paint.color=hudColor(Color.WHITE,.72f)
+                    paint.textAlign=Paint.Align.CENTER; paint.textSize=8.6f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
+                    paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+                    canvas.drawText("IDENTIFICANDO",indicatorX,cardCenterY+27f*u()*bs,paint)
+                    paint.clearShadowLayer()
+                }
+                drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
+                blockAlphaMultiplier = oldAlpha
+                return@forEachIndexed
+            }
+
             drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u()*bs)
             if(settings.showReserveTypes && reserve.types.isNotEmpty()){
                 val typeRadius=12f*u()*bs; val spacing=rx(31f)*bs; val centerX=rx(indicatorRefX+98f)
@@ -510,7 +525,13 @@ class BattleOverlayView(
             else -> listOf(rx(SWITCH_CHOICE_LEFT_X), rx(SWITCH_CHOICE_RIGHT_X))
         }
         candidates.take(xs.size).forEachIndexed { index, reserve ->
-            drawMatchupIndicator(canvas, xs[index], y, reserve.matchup, 16f*u())
+            drawMatchupIndicator(
+                canvas,
+                xs[index],
+                y,
+                if (reserve.identityConfirmed) reserve.matchup else MatchupState.UNKNOWN,
+                16f*u()
+            )
             if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
                 paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
                 paint.textAlign=Paint.Align.CENTER; paint.textSize=10f*u(); paint.typeface=Typeface.DEFAULT_BOLD
