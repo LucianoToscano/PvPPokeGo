@@ -112,4 +112,43 @@ class BattleContinuityPolicyTest {
         )
     }
 
+    @Test
+    fun teamBoundaryUsesExactFormIdentityWhenDisplayNamesMatch() {
+        val normal = DetectedPokemon(
+            name = "Ninetales",
+            cp = 1490,
+            confidence = .98f,
+            rawText = "Ninetales PC 1490",
+            visualDex = 38,
+            visualSpeciesId = "ninetales",
+            visualConfidence = .95f
+        )
+        val alolan = DetectedPokemon(
+            name = "Ninetales",
+            cp = 1488,
+            confidence = .98f,
+            rawText = "Ninetales PC 1488",
+            visualDex = 38,
+            visualSpeciesId = "ninetales_alolan",
+            visualConfidence = .95f
+        )
+        val azumarill = DetectedPokemon(
+            name = "Azumarill",
+            cp = 1498,
+            confidence = .98f,
+            rawText = "Azumarill PC 1498",
+            visualDex = 184,
+            visualSpeciesId = "azumarill",
+            visualConfidence = .95f
+        )
+
+        assertTrue(
+            BattleContinuityPolicy.confirmedTeamSelectionBoundary(
+                team = listOf(normal, alolan, azumarill),
+                battleActive = false,
+                msSinceBattleEvidence = 6_000L
+            )
+        )
+    }
+
 }
