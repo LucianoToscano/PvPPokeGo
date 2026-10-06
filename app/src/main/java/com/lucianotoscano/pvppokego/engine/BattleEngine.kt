@@ -813,7 +813,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveOwnActiveState()
         ownChargedCycle.reset()
         pendingIncomingChargedDamage = null
+        pendingOutgoingChargedDamage = null
         pendingIncomingChargedHpBefore = null
+        pendingOutgoingChargedHpBefore = null
         playerName = name
         playerSpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         playerCp = cp
@@ -850,7 +852,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     private fun onEnemyChanged(name: String, speciesId: String? = null) {
         saveActiveState()
         pendingIncomingChargedDamage = null
+        pendingOutgoingChargedDamage = null
         pendingIncomingChargedHpBefore = null
+        pendingOutgoingChargedHpBefore = null
         enemyName = name
         enemySpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         chargedPendingSinceMs = null
