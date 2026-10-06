@@ -21,10 +21,12 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
+import com.lucianotoscano.pvppokego.capture.ScreenFrameRecorder
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
 import com.lucianotoscano.pvppokego.data.BattleHistoryRecorder
 import com.lucianotoscano.pvppokego.data.BattleUiState
@@ -66,6 +68,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var lastEditSnapshot: Triple<String, Float, Float>? = null
     private var projection: MediaProjection? = null
     private var capture: ScreenCapture? = null
+    private var screenRecorder: ScreenFrameRecorder? = null
     private var windowManager: WindowManager? = null
     private var overlayView: BattleOverlayView? = null
     private var scanJob: Job? = null
@@ -110,6 +113,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         settingsRepo.overlayServiceRunning = true
         gameRepo = GameDataRepository(this)
         historyRecorder = BattleHistoryRecorder(BattleHistoryRepository(this))
+        screenRecorder = ScreenFrameRecorder(this)
         startForeground(NOTIFICATION_ID, notification("Aguardando captura de tela"))
     }
 
@@ -127,6 +131,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 dismissMoveMenu()
                 refreshForegroundNotification()
                 redraw()
+                return START_STICKY
+            }
+            ACTION_TOGGLE_RECORDING -> {
+                toggleRecording()
                 return START_STICKY
             }
             ACTION_RESET -> {
@@ -206,7 +214,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("0.5.15 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                startForeground(NOTIFICATION_ID, notification("0.5.16 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -273,6 +281,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     dismissMoveMenu()
                     refreshForegroundNotification()
                     redraw()
+                }
+                override fun isRecording(): Boolean = screenRecorder?.isRecording == true
+                override fun onToggleRecording() {
+                    toggleRecording()
                 }
                 override fun onStopService() {
                     historyRecorder.finish()
@@ -1024,7 +1036,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             var consecutiveErrors = 0
 
             while (isActive) {
-                if (visionPaused) {
+                if (visionPaused && screenRecorder?.isRecording != true) {
                     delay(250L)
                     continue
                 }
@@ -1032,6 +1044,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 val frame = capture?.acquireLatestBitmap()
                 if (frame != null) {
                     try {
+                        screenRecorder?.recordFrame(frame)
+                        if (visionPaused) {
+                            consecutiveErrors = 0
+                            delay(FRAME_INTERVAL_MS)
+                            continue
+                        }
                         val now = System.currentTimeMillis()
                         val manualCp = settingsRepo.configuredLeagueCp()
                         if (manualCp != null && manualCp != currentLeagueCp && engine?.activeEnemyName() == null) reloadLeague(manualCp)
@@ -1287,7 +1305,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("0.5.15 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            startForeground(NOTIFICATION_ID, notification("0.5.16 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -1360,6 +1378,28 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         redraw()
     }
 
+    private fun toggleRecording() {
+        val recorder = screenRecorder ?: return
+        if (recorder.isRecording) {
+            val uri = recorder.stop()
+            Toast.makeText(
+                this,
+                if (uri != null) "Gravação salva em Movies/PvPPokeGo" else "Gravação encerrada",
+                Toast.LENGTH_LONG
+            ).show()
+        } else {
+            val c = capture
+            val ok = c != null && c.width > 0 && c.height > 0 && recorder.start(c.width, c.height)
+            Toast.makeText(
+                this,
+                if (ok) "Gravação PvPPokeGo iniciada" else "Inicie a captura do overlay antes de gravar",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        refreshForegroundNotification()
+        quickMenu?.refreshPanelFromService()
+    }
+
     private fun currentBattleModeLabelText(): String {
         val league = when (settingsRepo.leagueMode) {
             BattleLeagueMode.AUTO -> when (currentLeagueCp) {
@@ -1384,6 +1424,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     private fun refreshForegroundNotification(baseText: String? = null) {
         val state = when {
+            screenRecorder?.isRecording == true -> "● GRAVANDO • ${leagueLabel(currentLeagueCp)} • HUD ativo"
             overlaySuppressed -> "Sobreposição oculta"
             visionPaused -> "Visão pausada"
             else -> baseText ?: "${leagueLabel(currentLeagueCp)} • HUD PvP ativo"
@@ -1399,6 +1440,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val vision = serviceAction(1, ACTION_TOGGLE_VISION)
         val overlay = serviceAction(2, ACTION_TOGGLE_OVERLAY)
         val stop = serviceAction(3, ACTION_STOP)
+        val record = serviceAction(4, ACTION_TOGGLE_RECORDING)
         return NotificationCompat.Builder(this, PvPPokeGoApp.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("PvPPokeGo")
@@ -1406,6 +1448,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
+            .addAction(
+                android.R.drawable.ic_menu_camera,
+                if (screenRecorder?.isRecording == true) "Parar gravação" else "Gravar tela",
+                record
+            )
             .addAction(
                 android.R.drawable.ic_media_pause,
                 if (visionPaused) "Retomar visão" else "Pausar visão",
@@ -1443,6 +1490,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         detector?.close()
         detector = null
         frameDetector = null
+        screenRecorder?.release()
+        screenRecorder = null
         capture?.stop()
         capture = null
         projection?.stop()
@@ -1470,6 +1519,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         const val ACTION_RESET = "com.lucianotoscano.pvppokego.RESET"
         const val ACTION_TOGGLE_VISION = "com.lucianotoscano.pvppokego.TOGGLE_VISION"
         const val ACTION_TOGGLE_OVERLAY = "com.lucianotoscano.pvppokego.TOGGLE_OVERLAY"
+        const val ACTION_TOGGLE_RECORDING = "com.lucianotoscano.pvppokego.TOGGLE_RECORDING"
         const val ACTION_APP_FOREGROUND = "com.lucianotoscano.pvppokego.APP_FOREGROUND"
         const val ACTION_APP_BACKGROUND = "com.lucianotoscano.pvppokego.APP_BACKGROUND"
         private const val NOTIFICATION_ID = 1107

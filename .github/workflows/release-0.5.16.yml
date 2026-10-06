@@ -1,0 +1,67 @@
+name: Build PvPPokeGo 0.5.16
+
+on:
+  push:
+    branches: [release/0.5.16]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate 0.5.16 invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.16"' app/build.gradle.kts
+          grep -q 'ScreenFrameRecorder' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'ACTION_TOGGLE_RECORDING' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'FastMoveSignalFuser' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleFrameEventDetector.kt
+          grep -q 'motion-cadence' app/src/main/java/com/lucianotoscano/pvppokego/detect/FastMoveSignalFuser.kt
+          grep -q 'FastMoveSignalFuserTest' app/src/test/java/com/lucianotoscano/pvppokego/detect/FastMoveSignalFuserTest.kt
+          grep -q 'exportDiagnosticsLauncher' app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
+          grep -q 'package_offline_pvpoke_assets.py' <(find tools -maxdepth 1 -type f -print)
+          grep -q 'context.assets.open("gamemaster.json")' app/src/main/java/com/lucianotoscano/pvppokego/data/GameDataRepository.kt
+
+      - name: Package offline PvPoke snapshot
+        run: |
+          python3 tools/package_offline_pvpoke_assets.py
+          test -s app/src/main/assets/gamemaster.json
+          test -s app/src/main/assets/rankings-1500.json
+          test -s app/src/main/assets/rankings-2500.json
+          test -s app/src/main/assets/rankings-10000.json
+          test -s app/src/main/assets/pvpoke_snapshot.json
+          du -h app/src/main/assets/*.json
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Test and build APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Package APK
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo-0.5.16.apk
+          shasum -a 256 artifact/PvPPokeGo-0.5.16.apk > artifact/PvPPokeGo-0.5.16.apk.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.16
+          path: artifact/
+          retention-days: 14

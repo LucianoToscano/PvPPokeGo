@@ -40,6 +40,8 @@ class QuickOverlayMenu(
         fun onToggleVision()
         fun isOverlaySuppressed(): Boolean
         fun onToggleOverlaySuppressed()
+        fun isRecording(): Boolean
+        fun onToggleRecording()
         fun onStopService()
     }
 
@@ -215,6 +217,7 @@ class QuickOverlayMenu(
                 IconItem("×","Fechar",null){dismissPanel()}
             )
             row(
+                IconItem(if(callbacks.isRecording())"■" else "●","Gravar",callbacks.isRecording()){callbacks.onToggleRecording();refreshPanel()},
                 IconItem("□","Overlay",!callbacks.isOverlaySuppressed()){callbacks.onToggleOverlaySuppressed();dismissPanel()},
                 IconItem("■","Parar",null){callbacks.onStopService()}
             )
@@ -244,6 +247,7 @@ class QuickOverlayMenu(
                 IconItem("×","Fechar",null){dismissPanel()}
             )
             row(
+                IconItem(if(callbacks.isRecording())"■" else "●","Gravar",callbacks.isRecording()){callbacks.onToggleRecording();refreshPanel()},
                 IconItem(if(callbacks.isVisionPaused())"▶" else "Ⅱ","Visão",!callbacks.isVisionPaused()){callbacks.onToggleVision();refreshPanel()},
                 IconItem("□","Overlay",!callbacks.isOverlaySuppressed()){callbacks.onToggleOverlaySuppressed();dismissPanel()},
                 IconItem("■","Parar",null){callbacks.onStopService()}
@@ -349,6 +353,15 @@ class QuickOverlayMenu(
         addSectionHeader(parent, "SISTEMA")
         addRow(
             parent,
+            if (callbacks.isRecording()) "■" else "●",
+            if (callbacks.isRecording()) "Parar e salvar gravação" else "Gravar tela com PvPPokeGo",
+            callbacks.isRecording()
+        ) {
+            callbacks.onToggleRecording()
+            refreshPanel()
+        }
+        addRow(
+            parent,
             if (callbacks.isVisionPaused()) "▶" else "Ⅱ",
             if (callbacks.isVisionPaused()) "Retomar visão/análise" else "Pausar visão/análise",
             !callbacks.isVisionPaused()
@@ -444,6 +457,11 @@ class QuickOverlayMenu(
         callbacks.onSettingsChanged(rebuildTouches)
         refreshStatusBadge()
         refreshPanel()
+    }
+
+    /** Refreshes an already-open panel after a service action such as recording. */
+    fun refreshPanelFromService() {
+        if (panelView != null) refreshPanel()
     }
 
     /** Rebuild without jumping to the top after every selection. */

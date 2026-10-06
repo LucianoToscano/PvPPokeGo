@@ -46,7 +46,9 @@ fun SettingsScreen(
     onStopOverlay: () -> Unit,
     onResetBattle: () -> Unit,
     onExportSettings: () -> Unit,
-    onImportSettings: () -> Unit
+    onImportSettings: () -> Unit,
+    onExportDiagnostics: () -> Unit,
+    onToggleRecording: () -> Unit
 ) {
     var overlay by remember { mutableStateOf(repository.overlayEnabled) }
     var auto by remember { mutableStateOf(repository.autoRecognition) }
@@ -115,6 +117,18 @@ fun SettingsScreen(
                     Text("RESET BATTLE")
                 }
 
+                OutlinedButton(
+                    onClick = onToggleRecording,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Gravar / parar gravação pelo PvPPokeGo")
+                }
+                Text(
+                    "A gravação interna reutiliza a captura do overlay, evitando a disputa de MediaProjection com gravadores externos. " +
+                        "O vídeo é salvo em Movies/PvPPokeGo.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
                 Text(
                     "Controles do overlay:\n" +
                         "• 🔓 Cadeado aberto → arrasta os blocos do HUD (toques do jogo passam fora dos blocos)\n" +
@@ -122,7 +136,7 @@ fun SettingsScreen(
                         "• ◉ → mostrar / ocultar HUD\n" +
                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
-                        "Versão 0.5.11",
+                        "Versão 0.5.16",
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -272,6 +286,17 @@ fun SettingsScreen(
                     }
                 }
 
+                OutlinedButton(
+                    onClick = onExportDiagnostics,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Exportar diagnóstico (.zip)")
+                }
+                Text(
+                    "Inclui configurações, posições, histórico, confiança/origem dos eventos e dados do aparelho.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Histórico de batalhas", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -315,7 +340,7 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("Versão 0.5.15")
+                Text("Versão 0.5.16")
                 Text(
                     "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
