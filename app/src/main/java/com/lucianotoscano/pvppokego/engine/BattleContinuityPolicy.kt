@@ -65,7 +65,11 @@ internal object BattleContinuityPolicy {
         val three = team.take(3)
         return three.size == 3 &&
             three.all { it.cp != null && it.confidence >= MIN_TEAM_CONFIDENCE } &&
-            three.map { normalize(it.name) }.distinct().size == 3
+            three.map { pokemon ->
+                // Form-aware visual identity prevents normal/regional forms with the
+                // same display name from collapsing into one team member.
+                normalize(pokemon.visualSpeciesId?.takeIf(String::isNotBlank) ?: pokemon.name)
+            }.distinct().size == 3
     }
 
     private fun normalize(v: String): String =
