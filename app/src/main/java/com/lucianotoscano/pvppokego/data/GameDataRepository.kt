@@ -21,12 +21,16 @@ class GameDataRepository(private val context: Context) {
 
     suspend fun load(leagueCp: Int = 1500) = withContext(Dispatchers.IO) {
         val gmText = runCatching {
-            fetchWithCache(
-                url = GAMEMASTER_URL,
-                cacheName = "gamemaster.json",
-                maxAgeMs = 24L * 60 * 60 * 1000
-            )
-        }.getOrElse { "{\"pokemon\":[],\"moves\":[]}" }
+            context.assets.open("gamemaster.json").bufferedReader().use { it.readText() }
+        }.getOrElse {
+            runCatching {
+                fetchWithCache(
+                    url = GAMEMASTER_URL,
+                    cacheName = "gamemaster.json",
+                    maxAgeMs = 24L * 60 * 60 * 1000
+                )
+            }.getOrElse { "{\"pokemon\":[],\"moves\":[]}" }
+        }
         gameMaster = runCatching { json.decodeFromString<GameMaster>(gmText) }.getOrNull()
         movesById = gameMaster?.moves?.associateBy { normalizeId(it.moveId) }.orEmpty()
         uniquePokemon = gameMaster?.pokemon
@@ -127,6 +131,10 @@ class GameDataRepository(private val context: Context) {
             }
         return result.take(limit)
     }
+
+    fun offlineSnapshotMetadata(): String? = runCatching {
+        context.assets.open("pvpoke_snapshot.json").bufferedReader().use { it.readText() }
+    }.getOrNull()
 
     fun localizedMoveName(move: MoveDef): String = moveNamesPtBr[normalizeId(move.moveId)] ?: move.name
 
