@@ -1239,27 +1239,52 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 now
                             )
                             if (event != null) {
-                                val damageObservation = e.onHpObservation(
+                                e.onPlayerHpBarYFraction(event.playerHpBarYFraction)
+                                e.onReserveHpRatios(event.reserve1HpRatio, event.reserve2HpRatio)
+                                val damageObservations = e.onHpObservation(
                                     event.hpRatio,
                                     event.opponentHpRatio,
                                     now
                                 )
-                                if (damageObservation != null) {
+                                if (damageObservations.isNotEmpty()) {
                                     val snapshot = e.uiState()
-                                    val localizedMove = gameRepo.move(damageObservation.moveId)
-                                        ?.let(gameRepo::localizedMoveName)
-                                        ?: damageObservation.moveName
-                                    historyRecorder.recordDamageObservation(
-                                        actor = "INIMIGO",
-                                        moveName = localizedMove,
-                                        damagePercent = damageObservation.damagePercent,
-                                        damagePoints = damageObservation.damagePoints,
-                                        learnedSamples = damageObservation.learnedSamples,
-                                        nowMs = now,
-                                        attackerPokemon = snapshot.opponentName,
-                                        targetPokemon = snapshot.playerName,
-                                        source = "barra de HP"
-                                    )
+                                    damageObservations.forEach { observation ->
+                                        val localizedMove = gameRepo.move(observation.moveId)
+                                            ?.let(gameRepo::localizedMoveName)
+                                            ?: observation.moveName
+                                        val attackerPokemon = if (observation.actor == "INIMIGO") {
+                                            snapshot.opponentName
+                                        } else {
+                                            snapshot.playerName
+                                        }
+                                        val targetPokemon = if (observation.actor == "INIMIGO") {
+                                            snapshot.playerName
+                                        } else {
+                                            snapshot.opponentName
+                                        }
+                                        if (observation.shielded) {
+                                            val defenderActor = if (observation.actor == "INIMIGO") "VOCÊ" else "INIMIGO"
+                                            historyRecorder.recordShield(
+                                                actor = defenderActor,
+                                                againstMove = localizedMove,
+                                                remaining = observation.shieldsRemaining ?: 0,
+                                                nowMs = now,
+                                                pokemon = targetPokemon
+                                            )
+                                        } else {
+                                            historyRecorder.recordDamageObservation(
+                                                actor = observation.actor,
+                                                moveName = localizedMove,
+                                                damagePercent = observation.damagePercent,
+                                                damagePoints = observation.damagePoints,
+                                                learnedSamples = observation.learnedSamples,
+                                                nowMs = now,
+                                                attackerPokemon = attackerPokemon,
+                                                targetPokemon = targetPokemon,
+                                                source = "barra de HP"
+                                            )
+                                        }
+                                    }
                                 }
                                 lastNativeTopCardY = event.nativeTopCardY ?: lastNativeTopCardY
                                 battleActive = presenceTracker.update(
