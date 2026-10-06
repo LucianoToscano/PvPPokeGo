@@ -1,6 +1,7 @@
 package com.lucianotoscano.pvppokego.overlay
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -59,6 +60,33 @@ class BattleOverlayView(
     private var nativeTopCardYpx: Int? = null
     private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
+    private val reservePortraits = arrayOfNulls<Bitmap>(2)
+
+    fun setReservePortraits(first: Bitmap?, second: Bitmap?) {
+        replaceReservePortrait(0, first)
+        replaceReservePortrait(1, second)
+        postInvalidate()
+    }
+
+    fun clearReservePortraits() {
+        replaceReservePortrait(0, null)
+        replaceReservePortrait(1, null)
+        postInvalidate()
+    }
+
+    fun release() {
+        clearReservePortraits()
+    }
+
+    private fun replaceReservePortrait(index: Int, next: Bitmap?) {
+        if (index !in 0..1) {
+            next?.let { if (!it.isRecycled) it.recycle() }
+            return
+        }
+        val old = reservePortraits[index]
+        if (old !== next) old?.let { if (!it.isRecycled) it.recycle() }
+        reservePortraits[index] = next?.takeUnless { it.isRecycled }
+    }
 
     fun render(newState: BattleUiState) {
         state = newState
@@ -470,9 +498,89 @@ class BattleOverlayView(
         paint.clearShadowLayer()
     }
 
+    private fun drawReservePortraitIndicator(
+        canvas: Canvas,
+        index: Int,
+        cx: Float,
+        cy: Float,
+        matchup: MatchupState,
+        confirmed: Boolean,
+        radius: Float
+    ) {
+        val ringColor = when {
+            !confirmed || matchup == MatchupState.UNKNOWN -> Color.rgb(105,105,105)
+            matchup == MatchupState.FAVORABLE -> Color.rgb(20,190,80)
+            matchup == MatchupState.UNFAVORABLE -> Color.rgb(225,45,55)
+            else -> Color.rgb(145,145,145)
+        }
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(ringColor, .95f)
+        canvas.drawCircle(cx, cy, radius, paint)
+
+        val portrait = reservePortraits.getOrNull(index)
+        if (portrait != null && !portrait.isRecycled) {
+            val inner = (radius - 3.2f*u()).coerceAtLeast(6f*u())
+            val clip = Path().apply { addCircle(cx, cy, inner, Path.Direction.CW) }
+            canvas.save()
+            canvas.clipPath(clip)
+            paint.color = Color.WHITE
+            paint.alpha = (hudAlpha * blockAlphaMultiplier).toInt().coerceIn(0,255)
+            canvas.drawBitmap(
+                portrait,
+                null,
+                RectF(cx-inner, cy-inner, cx+inner, cy+inner),
+                paint
+            )
+            canvas.restore()
+            paint.alpha = 255
+        } else {
+            paint.color = hudColor(Color.rgb(40,44,52), .90f)
+            canvas.drawCircle(cx, cy, radius-3.2f*u(), paint)
+        }
+
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 2.2f*u()
+        stroke.color = hudColor(Color.WHITE, .92f)
+        canvas.drawCircle(cx, cy, radius, stroke)
+
+        if (!confirmed || matchup == MatchupState.UNKNOWN) {
+            paint.color = hudColor(Color.WHITE)
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.textSize = 12f*u()
+            paint.setShadowLayer(2.4f,0f,1f,Color.BLACK)
+            canvas.drawText("?", cx, cy+4.2f*u(), paint)
+            paint.clearShadowLayer()
+            return
+        }
+
+        val badgeR = 7.2f*u()
+        val bx = cx + radius*.72f
+        val by = cy + radius*.72f
+        paint.color = hudColor(ringColor)
+        canvas.drawCircle(bx, by, badgeR, paint)
+        stroke.strokeWidth = 1.2f*u()
+        stroke.color = hudColor(Color.WHITE, .95f)
+        canvas.drawCircle(bx, by, badgeR, stroke)
+        paint.color = hudColor(Color.WHITE)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = Typeface.DEFAULT_BOLD
+        when (matchup) {
+            MatchupState.FAVORABLE -> {
+                paint.textSize = 9.5f*u()
+                canvas.drawText("✓", bx, by+3.4f*u(), paint)
+            }
+            MatchupState.UNFAVORABLE -> {
+                paint.textSize = 10f*u()
+                canvas.drawText("×", bx, by+3.5f*u(), paint)
+            }
+            MatchupState.NEUTRAL -> canvas.drawCircle(bx, by, 2.3f*u(), paint)
+            MatchupState.UNKNOWN -> Unit
+        }
+    }
+
     private fun drawReserves(canvas: Canvas) {
         state.reserves.take(2).forEachIndexed { index,reserve ->
-            if (reserve.name.isNullOrBlank()) return@forEachIndexed
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
             if (settings.isBlockHidden(block)) return@forEachIndexed
             val bs = settings.blockScale(block)
@@ -481,14 +589,29 @@ class BattleOverlayView(
             val (indicatorRefX, cardRefY) = reservePos(index)
             val indicatorX = rx(indicatorRefX)
             val cardCenterY = ry(cardRefY)
+            val radius = 21f*u()*bs
+
+            // Always show the live native-card portrait when available, even before the
+            // identity is confirmed. This keeps both reserve icons visible instead of
+            // leaving an empty "?". Matchup remains UNKNOWN until identity evidence is safe.
+            drawReservePortraitIndicator(
+                canvas = canvas,
+                index = index,
+                cx = indicatorX,
+                cy = cardCenterY,
+                matchup = reserve.matchup,
+                confirmed = reserve.identityConfirmed,
+                radius = radius
+            )
 
             if (!reserve.identityConfirmed) {
-                drawMatchupIndicator(canvas, indicatorX, cardCenterY, MatchupState.UNKNOWN, 13.5f*u()*bs)
                 if (settings.showHudText) {
-                    paint.color=hudColor(Color.WHITE,.72f)
-                    paint.textAlign=Paint.Align.CENTER; paint.textSize=8.6f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
+                    paint.color=hudColor(Color.WHITE,.78f)
+                    paint.textAlign=Paint.Align.CENTER
+                    paint.textSize=8.6f*u()*bs
+                    paint.typeface=Typeface.DEFAULT_BOLD
                     paint.setShadowLayer(2f,0f,1f,Color.BLACK)
-                    canvas.drawText("IDENTIFICANDO",indicatorX,cardCenterY+27f*u()*bs,paint)
+                    canvas.drawText("IDENTIFICANDO",indicatorX,cardCenterY+34f*u()*bs,paint)
                     paint.clearShadowLayer()
                 }
                 drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
@@ -496,16 +619,39 @@ class BattleOverlayView(
                 return@forEachIndexed
             }
 
-            drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u()*bs)
             if(settings.showReserveTypes && reserve.types.isNotEmpty()){
-                val typeRadius=12f*u()*bs; val spacing=rx(31f)*bs; val centerX=rx(indicatorRefX+98f)
+                val typeRadius=12f*u()*bs
+                val spacing=rx(31f)*bs
+                val centerX=rx(indicatorRefX+98f)
                 var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
-                reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+ry(82f),type,typeRadius);x+=spacing}
+                reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+ry(20f),type,typeRadius);x+=spacing}
             }
-            if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
-                paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
-                paint.textAlign=Paint.Align.CENTER; paint.textSize=9.2f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,indicatorX,cardCenterY+27f*u()*bs,paint); paint.clearShadowLayer()
+
+            if (settings.showHudText) {
+                val matchupLabel = when (reserve.matchup) {
+                    MatchupState.FAVORABLE -> "FORTE"
+                    MatchupState.UNFAVORABLE -> "FRACO"
+                    MatchupState.NEUTRAL -> "NEUTRO"
+                    MatchupState.UNKNOWN -> "ANALISANDO"
+                }
+                paint.color=hudColor(
+                    when(reserve.matchup){
+                        MatchupState.FAVORABLE->Color.rgb(46,188,105)
+                        MatchupState.UNFAVORABLE->Color.rgb(232,61,72)
+                        MatchupState.NEUTRAL->Color.WHITE
+                        MatchupState.UNKNOWN->Color.rgb(210,210,210)
+                    }
+                )
+                paint.textAlign=Paint.Align.CENTER
+                paint.textSize=9.2f*u()*bs
+                paint.typeface=Typeface.DEFAULT_BOLD
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+                canvas.drawText(matchupLabel,indicatorX,cardCenterY+34f*u()*bs,paint)
+                if (!reserve.recommendation.isNullOrBlank() && reserve.recommendation != matchupLabel) {
+                    paint.textSize=8.2f*u()*bs
+                    canvas.drawText(reserve.recommendation!!,indicatorX,cardCenterY+47f*u()*bs,paint)
+                }
+                paint.clearShadowLayer()
             }
             drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
             blockAlphaMultiplier = oldAlpha
