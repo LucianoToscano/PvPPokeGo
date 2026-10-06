@@ -43,6 +43,14 @@ jobs:
           grep -q 'handleProjectionRevoked' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
           grep -q 'Iniciar overlay para gravador Samsung / externo' app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt
 
+          grep -q 'BattleCorrespondenceTracker' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'HOLD_CURRENT' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleCorrespondenceTracker.kt
+          grep -q 'repeatedIncompatiblePairStartsNewBattle' app/src/test/java/com/lucianotoscano/pvppokego/engine/BattleCorrespondenceTrackerTest.kt
+          grep -q 'visualSpeciesId' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
+          grep -q 'speciesId = winner.speciesId' app/src/main/java/com/lucianotoscano/pvppokego/detect/PokemonVisualRecognizer.kt
+          grep -q 'cardSpeciesIds' app/src/main/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcher.kt
+          grep -q 'formAwareVisualEvidenceDistinguishesSameDexForms' app/src/test/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcherTest.kt
+
       - name: Package offline PvPoke snapshot
         run: |
           python3 tools/package_offline_pvpoke_assets.py
@@ -63,8 +71,11 @@ jobs:
           import json
           p=json.load(open("app/src/main/assets/pokemon_visual_fingerprints.json"))
           assert p["format"]=="PvPPokeGo-visual-fingerprints"
+          assert p.get("version", 0) >= 2, p.get("version")
           assert len(p["entries"]) >= 500, len(p["entries"])
-          print("visual bank entries", len(p["entries"]))
+          assert all(e.get("speciesId") for e in p["entries"]), "speciesId missing from form-aware bank"
+          assert any("_alolan" in e.get("speciesId","") for e in p["entries"]), "regional forms missing"
+          print("visual bank entries", len(p["entries"]), "version", p.get("version"))
           PY
 
       - name: Validate PvPoke types
