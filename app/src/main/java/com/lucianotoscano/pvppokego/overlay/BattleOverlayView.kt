@@ -512,30 +512,24 @@ class BattleOverlayView(
         }
     }
 
-    /** During Pokemon GO's switch chooser, show a clear matchup icon below each selectable Pokemon. */
+    /** During Pokemon GO's switch chooser, show matchup only for a confirmed card identity. */
     private fun drawSwitchChoiceIndicators(canvas: Canvas) {
         val candidates = state.reserves.take(2).mapIndexedNotNull { index, reserve ->
-            if (reserveUsableCache.getOrElse(index) { true }) reserve else null
+            if (
+                reserveUsableCache.getOrElse(index) { true } &&
+                reserve.identityConfirmed
+            ) index to reserve else null
         }
         if (candidates.isEmpty()) return
 
         val y = ry(SWITCH_CHOICE_INDICATOR_Y)
-        val xs = when (candidates.size) {
-            1 -> listOf(rx(432f))
-            else -> listOf(rx(SWITCH_CHOICE_LEFT_X), rx(SWITCH_CHOICE_RIGHT_X))
-        }
-        candidates.take(xs.size).forEachIndexed { index, reserve ->
-            drawMatchupIndicator(
-                canvas,
-                xs[index],
-                y,
-                if (reserve.identityConfirmed) reserve.matchup else MatchupState.UNKNOWN,
-                16f*u()
-            )
+        candidates.forEach { (slotIndex, reserve) ->
+            val x = if (slotIndex == 0) rx(SWITCH_CHOICE_LEFT_X) else rx(SWITCH_CHOICE_RIGHT_X)
+            drawMatchupIndicator(canvas, x, y, reserve.matchup, 16f*u())
             if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
                 paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
                 paint.textAlign=Paint.Align.CENTER; paint.textSize=10f*u(); paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,xs[index],y+30f*u(),paint); paint.clearShadowLayer()
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,x,y+30f*u(),paint); paint.clearShadowLayer()
             }
         }
     }
