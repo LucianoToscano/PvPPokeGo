@@ -137,4 +137,65 @@ class BattleCorrespondenceTrackerTest {
         )
         assertEquals(BattleCorrespondenceTracker.Decision.INSUFFICIENT, decision)
     }
+    @Test
+    fun unknownOwnPokemonIsHeldInsteadOfReplacingTrustedTeam() {
+        val tracker = BattleCorrespondenceTracker()
+        val decision = tracker.observe(
+            BattleCorrespondenceTracker.Context(
+                activePlayer = team[0],
+                activeOpponent = id("Sneasel", 1465, "sneasel"),
+                ownTeam = team,
+                knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+                inactiveForMs = 200,
+                sessionAgeMs = 25_000
+            ),
+            BattleCorrespondenceTracker.Observation(
+                player = id("Magcargo", 149, "magcargo"),
+                opponent = id("Sneasel", 1465, "sneasel"),
+                pairedCards = true
+            ),
+            50_000
+        )
+        assertEquals(BattleCorrespondenceTracker.Decision.HOLD_CURRENT, decision)
+    }
+
+    @Test
+    fun brandNewEnemyNeedsTwoFramesButKnownEnemyReturnsImmediately() {
+        val tracker = BattleCorrespondenceTracker()
+        val context = BattleCorrespondenceTracker.Context(
+            activePlayer = team[0],
+            activeOpponent = id("Sneasel", 1465, "sneasel"),
+            ownTeam = team,
+            knownOpponents = listOf(
+                id("Sneasel", 1465, "sneasel"),
+                id("Cradily", 1470, "cradily")
+            ),
+            inactiveForMs = 200,
+            sessionAgeMs = 25_000
+        )
+        val newEnemy = BattleCorrespondenceTracker.Observation(
+            player = team[0],
+            opponent = id("Magcargo", 1486, "magcargo"),
+            pairedCards = true
+        )
+        assertEquals(
+            BattleCorrespondenceTracker.Decision.HOLD_CURRENT,
+            tracker.observe(context, newEnemy, 60_000)
+        )
+        assertEquals(
+            BattleCorrespondenceTracker.Decision.SWITCH_WITHIN_BATTLE,
+            tracker.observe(context, newEnemy, 60_600)
+        )
+
+        val knownEnemy = BattleCorrespondenceTracker.Observation(
+            player = team[0],
+            opponent = id("Cradily", 1470, "cradily"),
+            pairedCards = true
+        )
+        assertEquals(
+            BattleCorrespondenceTracker.Decision.SWITCH_WITHIN_BATTLE,
+            tracker.observe(context, knownEnemy, 61_500)
+        )
+    }
+
 }
