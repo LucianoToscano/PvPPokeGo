@@ -16,6 +16,8 @@ internal class BattleCorrespondenceTracker {
     enum class Decision {
         CONTINUE,
         SWITCH_WITHIN_BATTLE,
+        /** Keep current engine identity until another frame confirms the change. */
+        HOLD_CURRENT,
         NEW_BATTLE,
         INSUFFICIENT
     }
@@ -57,6 +59,9 @@ internal class BattleCorrespondenceTracker {
     private var pendingNewSignature: String? = null
     private var pendingNewCount: Int = 0
     private var pendingNewFirstAtMs: Long = 0L
+    private var pendingSwitchSignature: String? = null
+    private var pendingSwitchCount: Int = 0
+    private var pendingSwitchFirstAtMs: Long = 0L
 
     val hasPendingNewBattleCandidate: Boolean
         get() = pendingNewSignature != null && pendingNewCount > 0
@@ -65,6 +70,9 @@ internal class BattleCorrespondenceTracker {
         pendingNewSignature = null
         pendingNewCount = 0
         pendingNewFirstAtMs = 0L
+        pendingSwitchSignature = null
+        pendingSwitchCount = 0
+        pendingSwitchFirstAtMs = 0L
     }
 
     fun observe(
@@ -84,6 +92,41 @@ internal class BattleCorrespondenceTracker {
         val enemySame = opponent != null && sameIdentity(opponent, context.activeOpponent)
         val playerKnownTeam = player != null && context.ownTeam.any { sameIdentity(player, it) }
         val enemyPreviouslySeen = opponent != null && context.knownOpponents.any { sameIdentity(opponent, it) }
+
+        // A player identity outside an already-established own team is almost always
+        // transient OCR. Never let one such frame replace the trusted active Pokémon.
+        if (
+            player != null &&
+            context.ownTeam.size >= 2 &&
+            !playerSame &&
+            !playerKnownTeam &&
+            (opponent == null || enemySame)
+        ) {
+            clearPendingSwitch()
+            return Decision.HOLD_CURRENT
+        }
+
+        // A brand-new opponent is a valid switch, but require two matching frames unless
+        // the game is explicitly showing its switch prompt. Switching back to a previously
+        // seen opponent is immediate because its identity/energy state already exists.
+        if (
+            playerSame &&
+            opponent != null &&
+            !enemySame &&
+            !enemyPreviouslySeen
+        ) {
+            if (observation.switchPrompt) {
+                clearPendingSwitch()
+                resetNewCandidateOnly()
+                return Decision.SWITCH_WITHIN_BATTLE
+            }
+            val signature = "enemy:" + opponent.stableKey().orEmpty()
+            if (!confirmSwitchCandidate(signature, nowMs)) {
+                return Decision.HOLD_CURRENT
+            }
+            resetNewCandidateOnly()
+            return Decision.SWITCH_WITHIN_BATTLE
+        }
 
         // Exact/same identities or a normal one-sided switch are strong continuity.
         if (playerSame && (opponent == null || enemySame || enemyPreviouslySeen)) {
@@ -168,6 +211,37 @@ internal class BattleCorrespondenceTracker {
         return Decision.INSUFFICIENT
     }
 
+    private fun confirmSwitchCandidate(signature: String, nowMs: Long): Boolean {
+        if (
+            pendingSwitchSignature != signature ||
+            pendingSwitchFirstAtMs == 0L ||
+            nowMs - pendingSwitchFirstAtMs > SWITCH_CANDIDATE_WINDOW_MS
+        ) {
+            pendingSwitchSignature = signature
+            pendingSwitchCount = 1
+            pendingSwitchFirstAtMs = nowMs
+            return false
+        }
+        pendingSwitchCount++
+        if (pendingSwitchCount >= SWITCH_CONFIRM_FRAMES) {
+            clearPendingSwitch()
+            return true
+        }
+        return false
+    }
+
+    private fun clearPendingSwitch() {
+        pendingSwitchSignature = null
+        pendingSwitchCount = 0
+        pendingSwitchFirstAtMs = 0L
+    }
+
+    private fun resetNewCandidateOnly() {
+        pendingNewSignature = null
+        pendingNewCount = 0
+        pendingNewFirstAtMs = 0L
+    }
+
     private fun clearPendingIfExpired(nowMs: Long) {
         if (pendingNewFirstAtMs != 0L && nowMs - pendingNewFirstAtMs > CANDIDATE_WINDOW_MS) {
             reset()
@@ -179,6 +253,8 @@ internal class BattleCorrespondenceTracker {
         private const val LONG_GAP_NEW_MATCH_MS = 5_500L
         private const val MATURE_SESSION_MS = 20_000L
         private const val CANDIDATE_WINDOW_MS = 3_500L
+        private const val SWITCH_CANDIDATE_WINDOW_MS = 2_200L
+        private const val SWITCH_CONFIRM_FRAMES = 2
 
         fun sameIdentity(a: Identity?, b: Identity?): Boolean {
             if (a == null || b == null) return false
