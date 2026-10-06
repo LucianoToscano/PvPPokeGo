@@ -44,6 +44,9 @@ class BattleFrameEventDetector {
     private var pendingOwnHpDropPx = 0
     private var frozenUntilMs = 0L
 
+    private val largeDamageFraction = 0.16f
+    private val largeDamageGuardMs = 1_500L
+
     private val reserveVisibility = arrayOfNulls<Boolean>(2)
     private val reserveHitStreak = IntArray(2)
     private val reserveMissStreak = IntArray(2)
@@ -124,8 +127,8 @@ class BattleFrameEventDetector {
             )
         }
 
-        val enemyMinGap = (expectedEnemyFastDurationMs * 0.42f).toLong().coerceIn(230L, 1_450L)
-        val ownMinGap = (expectedOwnFastDurationMs * 0.42f).toLong().coerceIn(230L, 1_450L)
+        val enemyMinGap = (expectedEnemyFastDurationMs * 0.62f).toLong().coerceIn(280L, 1_650L)
+        val ownMinGap = (expectedOwnFastDurationMs * 0.62f).toLong().coerceIn(280L, 1_650L)
         var enemyFast = 0
         var ownFast = 0
         var source = if (battleUiVisible) "battle-hud" else "no-battle-hud"
@@ -141,12 +144,21 @@ class BattleFrameEventDetector {
                     source = "player-hp-reset"
                 } else {
                     val drop = old - hpRun
+                    val chargedLikeDrop = drop > 0 &&
+                        maximumHpRun > 0 &&
+                        drop.toFloat() / maximumHpRun.toFloat() >= largeDamageFraction
                     when {
-                        drop > 0 -> pendingEnemyHpDropPx = (pendingEnemyHpDropPx + drop).coerceAtMost(maximumHpRun.coerceAtLeast(12))
+                        chargedLikeDrop -> {
+                            pendingEnemyHpDropPx = 0
+                            frozenUntilMs = max(frozenUntilMs, nowMs + largeDamageGuardMs)
+                            source = "player-hp-large-drop"
+                        }
+                        drop > 0 -> pendingEnemyHpDropPx =
+                            (pendingEnemyHpDropPx + drop).coerceAtMost(maximumHpRun.coerceAtLeast(12))
                         drop < -1 -> pendingEnemyHpDropPx = 0
                     }
 
-                    // Hybrid confirmation: HP drop is primary. If HP pixels barely move,
+                    // HP is primary evidence. Pixel granularity can hide one or more hits,
                     // cadence + strong motion can recover a missed Fast Move without blindly
                     // counting every animation frame.
                     val threshold = max(1, maximumHpRun / 145)
@@ -160,15 +172,17 @@ class BattleFrameEventDetector {
                         motion = motion,
                         motionBaseline = motionEma,
                         battleUiVisible = battleUiVisible,
-                        allowMotionFallback = true
+                        allowMotionFallback = false
                     )
-                    if (decision.confirm) {
+                    if (decision.confirm && !chargedLikeDrop) {
                         lastFastAtMs = nowMs
-                        enemyFast = 1
+                        enemyFast = decision.count
                         source = when (decision.source) {
                             "hp-drop" -> "player-hp-drop"
+                            "hp-drop-cadence" -> "player-hp-cadence"
                             "microdrop" -> "player-hp-microdrop"
-                            else -> "hybrid-motion-cadence"
+                            "microdrop-cadence" -> "player-hp-microdrop-cadence"
+                            else -> "player-hp-estimated"
                         }
                         confidence = decision.confidence
                         pendingEnemyHpDropPx = 0
@@ -191,8 +205,17 @@ class BattleFrameEventDetector {
                     if (enemyFast == 0) source = "opponent-hp-reset"
                 } else {
                     val drop = old - opponentHpRun
+                    val chargedLikeDrop = drop > 0 &&
+                        maximumOpponentHpRun > 0 &&
+                        drop.toFloat() / maximumOpponentHpRun.toFloat() >= largeDamageFraction
                     when {
-                        drop > 0 -> pendingOwnHpDropPx = (pendingOwnHpDropPx + drop).coerceAtMost(maximumOpponentHpRun.coerceAtLeast(12))
+                        chargedLikeDrop -> {
+                            pendingOwnHpDropPx = 0
+                            frozenUntilMs = max(frozenUntilMs, nowMs + largeDamageGuardMs)
+                            if (enemyFast == 0) source = "opponent-hp-large-drop"
+                        }
+                        drop > 0 -> pendingOwnHpDropPx =
+                            (pendingOwnHpDropPx + drop).coerceAtMost(maximumOpponentHpRun.coerceAtLeast(12))
                         drop < -1 -> pendingOwnHpDropPx = 0
                     }
                     val threshold = max(1, maximumOpponentHpRun / 145)
@@ -208,12 +231,14 @@ class BattleFrameEventDetector {
                         battleUiVisible = battleUiVisible,
                         allowMotionFallback = false
                     )
-                    if (decision.confirm) {
+                    if (decision.confirm && !chargedLikeDrop) {
                         lastOwnFastAtMs = nowMs
-                        ownFast = 1
+                        ownFast = decision.count
                         source = when {
                             enemyFast > 0 -> "both-hp-drop"
                             decision.source == "hp-drop" -> "opponent-hp-drop"
+                            decision.source == "hp-drop-cadence" -> "opponent-hp-cadence"
+                            decision.source == "microdrop-cadence" -> "opponent-hp-microdrop-cadence"
                             else -> "opponent-hp-microdrop"
                         }
                         confidence = decision.confidence
