@@ -1,0 +1,186 @@
+name: Build PvPPokeGo 0.5.15-trial15 APK
+
+on:
+  pull_request:
+    branches: [backup/0.5.15-android-studio]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Apply trial15 patch
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              s = p.read_text(encoding="utf-8")
+              if old not in s:
+                  raise SystemExit(f"Expected text not found in {path}: {old!r}")
+              p.write_text(s.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "app/build.gradle.kts",
+              '        versionCode = 20\n        versionName = "0.5.15"',
+              '        versionCode = 21\n        versionName = "0.5.15-trial15"'
+          )
+          replace_once(
+              "app/build.gradle.kts",
+              '        release {\n            isMinifyEnabled = false',
+              '        release {\n            isMinifyEnabled = true\n            isShrinkResources = true'
+          )
+
+          trial = r"""package com.lucianotoscano.pvppokego.security
+
+          import android.content.Context
+          import android.content.SharedPreferences
+          import java.util.concurrent.TimeUnit
+
+          object TrialManager {
+              private const val PREFS_NAME = "pvppokego_trial_v1"
+              private const val KEY_FIRST_LAUNCH = "fl_ts"
+              private const val KEY_OBFUSCATED = "fl_chk"
+              private const val TRIAL_DURATION_MS = 15L * 24 * 60 * 60 * 1000
+
+              private fun prefs(context: Context): SharedPreferences =
+                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+              fun isTrialValid(context: Context): Boolean {
+                  val prefs = prefs(context)
+                  val now = System.currentTimeMillis()
+                  var firstLaunch = prefs.getLong(KEY_FIRST_LAUNCH, 0L)
+                  if (firstLaunch == 0L) {
+                      firstLaunch = now
+                      prefs.edit()
+                          .putLong(KEY_FIRST_LAUNCH, firstLaunch)
+                          .putLong(KEY_OBFUSCATED, firstLaunch xor 0x5A5A5A5A5A5A5A5AL)
+                          .apply()
+                      return true
+                  }
+                  val check = prefs.getLong(KEY_OBFUSCATED, 0L)
+                  if (check != (firstLaunch xor 0x5A5A5A5A5A5A5A5AL)) return false
+                  return now - firstLaunch < TRIAL_DURATION_MS
+              }
+
+              fun remainingDays(context: Context): Long {
+                  val firstLaunch = prefs(context).getLong(KEY_FIRST_LAUNCH, 0L)
+                  if (firstLaunch == 0L) return 15
+                  val remainingMs = TRIAL_DURATION_MS - (System.currentTimeMillis() - firstLaunch)
+                  return TimeUnit.MILLISECONDS.toDays(remainingMs + (24 * 60 * 60 * 1000 - 1))
+              }
+
+              fun statusMessage(context: Context): String {
+                  if (!isTrialValid(context)) {
+                      return "Versão de teste expirada.\nEste APK só funciona por 15 dias."
+                  }
+                  val days = remainingDays(context)
+                  return when {
+                      days <= 0 -> "Versão de teste expirada."
+                      days == 1L -> "Resta 1 dia de teste."
+                      else -> "Restam $days dias de teste."
+                  }
+              }
+          }
+          """
+          p = Path("app/src/main/java/com/lucianotoscano/pvppokego/security/TrialManager.kt")
+          p.parent.mkdir(parents=True, exist_ok=True)
+          p.write_text(textwrap.dedent(trial), encoding="utf-8")
+
+          replace_once(
+              "app/src/main/java/com/lucianotoscano/pvppokego/PvPPokeGoApp.kt",
+              'import android.os.Build\n',
+              'import android.os.Build\nimport android.widget.Toast\nimport com.lucianotoscano.pvppokego.security.TrialManager\n'
+          )
+          replace_once(
+              "app/src/main/java/com/lucianotoscano/pvppokego/PvPPokeGoApp.kt",
+              '        super.onCreate()\n',
+              '        super.onCreate()\n\n        if (!TrialManager.isTrialValid(this)) {\n            Toast.makeText(this, TrialManager.statusMessage(this), Toast.LENGTH_LONG).show()\n        }\n'
+          )
+
+          replace_once(
+              "app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt",
+              'import com.lucianotoscano.pvppokego.overlay.BattleOverlayService\n',
+              'import com.lucianotoscano.pvppokego.overlay.BattleOverlayService\nimport com.lucianotoscano.pvppokego.security.TrialManager\n'
+          )
+          replace_once(
+              "app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt",
+              '        super.onCreate(savedInstanceState)\n',
+              '        super.onCreate(savedInstanceState)\n\n        if (!TrialManager.isTrialValid(this)) {\n            Toast.makeText(this, TrialManager.statusMessage(this), Toast.LENGTH_LONG).show()\n            window.decorView.postDelayed({ finishAffinity() }, 3500)\n            return\n        }\n'
+          )
+
+          replace_once(
+              "app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt",
+              'import com.lucianotoscano.pvppokego.capture.ScreenCapture\n',
+              'import com.lucianotoscano.pvppokego.capture.ScreenCapture\nimport com.lucianotoscano.pvppokego.security.TrialManager\n'
+          )
+          replace_once(
+              "app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt",
+              '    override fun onCreate() {\n        super.onCreate()\n',
+              '    override fun onCreate() {\n        super.onCreate()\n\n        if (!TrialManager.isTrialValid(this)) {\n            stopSelf()\n            return\n        }\n'
+          )
+
+      - name: Verify trial15 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.15-trial15"' app/build.gradle.kts
+          grep -q 'versionCode = 21' app/build.gradle.kts
+          grep -q 'isMinifyEnabled = true' app/build.gradle.kts
+          grep -q 'isShrinkResources = true' app/build.gradle.kts
+          test -f app/src/main/java/com/lucianotoscano/pvppokego/security/TrialManager.kt
+          grep -q 'TrialManager.isTrialValid' app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
+          grep -q 'TrialManager.isTrialValid' app/src/main/java/com/lucianotoscano/pvppokego/PvPPokeGoApp.kt
+          grep -q 'TrialManager.isTrialValid' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+
+      - name: Test and build release
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleRelease
+
+      - name: Sign release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -f "$UNSIGNED"
+          PASS='PvPPokeGoTrial15Build2026!'
+          keytool -genkeypair -noprompt -keystore /tmp/pvppokego-trial15.keystore \
+            -storepass "$PASS" -keypass "$PASS" -alias pvppokego \
+            -keyalg RSA -keysize 2048 -validity 3650 \
+            -dname "CN=PvPPokeGo Trial15,O=PvPPokeGo,C=BR"
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$ZIPALIGN" -p -f 4 "$UNSIGNED" artifact/PvPPokeGo-0.5.15-trial15-aligned.apk
+          "$APKSIGNER" sign \
+            --ks /tmp/pvppokego-trial15.keystore \
+            --ks-key-alias pvppokego \
+            --ks-pass "pass:$PASS" \
+            --key-pass "pass:$PASS" \
+            --out artifact/PvPPokeGo-0.5.15-trial15.apk \
+            artifact/PvPPokeGo-0.5.15-trial15-aligned.apk
+          rm artifact/PvPPokeGo-0.5.15-trial15-aligned.apk
+          "$APKSIGNER" verify --verbose --print-certs artifact/PvPPokeGo-0.5.15-trial15.apk
+          sha256sum artifact/PvPPokeGo-0.5.15-trial15.apk > artifact/PvPPokeGo-0.5.15-trial15.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.15-trial15
+          path: |
+            artifact/PvPPokeGo-0.5.15-trial15.apk
+            artifact/PvPPokeGo-0.5.15-trial15.apk.sha256
+          retention-days: 14
