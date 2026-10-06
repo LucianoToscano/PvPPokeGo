@@ -1,0 +1,72 @@
+name: Build PvPPokeGo 0.5.15 trial15 icon
+
+on:
+  push:
+    branches: [build/0.5.15-trial15-icon]
+  pull_request:
+    branches: [release/0.5.15]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Validate trial and icon wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.15-trial15"' app/build.gradle.kts
+          grep -q 'isMinifyEnabled = true' app/build.gradle.kts
+          grep -q 'isShrinkResources = true' app/build.gradle.kts
+          grep -q 'TrialManager' app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
+          grep -q 'TrialManager' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'ic_launcher_pvppokego' app/src/main/AndroidManifest.xml
+          test -s .icon/pvppokego_launcher.webp.b64
+
+      - name: Test and build protected release
+        shell: bash
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleRelease
+
+      - name: Sign installable APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -f "$UNSIGNED"
+
+          keytool -genkeypair -noprompt             -keystore /tmp/pvppokego-trial.keystore             -storepass android             -keypass android             -alias pvppokego             -keyalg RSA             -keysize 2048             -validity 10000             -dname "CN=PvPPokeGo Trial,O=PvPPokeGo,C=BR"
+
+          BUILD_TOOLS="$(ls "$ANDROID_HOME/build-tools" | sort -r | head -1)"
+          ZIPALIGN="$ANDROID_HOME/build-tools/$BUILD_TOOLS/zipalign"
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+
+          mkdir -p artifact
+          "$ZIPALIGN" -f -p 4 "$UNSIGNED" /tmp/PvPPokeGo-aligned.apk
+          "$APKSIGNER" sign             --ks /tmp/pvppokego-trial.keystore             --ks-key-alias pvppokego             --ks-pass pass:android             --key-pass pass:android             --out artifact/PvPPokeGo-0.5.15-trial15-icon.apk             /tmp/PvPPokeGo-aligned.apk
+
+          "$APKSIGNER" verify --verbose --print-certs artifact/PvPPokeGo-0.5.15-trial15-icon.apk
+          shasum -a 256 artifact/PvPPokeGo-0.5.15-trial15-icon.apk > artifact/PvPPokeGo-0.5.15-trial15-icon.apk.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.15-trial15-icon
+          path: artifact/
+          retention-days: 14
