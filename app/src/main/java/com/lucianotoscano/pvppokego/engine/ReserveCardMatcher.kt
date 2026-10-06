@@ -68,28 +68,6 @@ internal object ReserveCardMatcher {
             }
         }
 
-        // Form-aware visual speciesId is stronger than dex-only evidence because
-        // regional/forms can share the same National Dex while having different types.
-        result.indices.forEach { cardIndex ->
-            if (result[cardIndex] != null) return@forEach
-            val speciesId = cardSpeciesIds.getOrNull(cardIndex)?.takeIf { it.isNotBlank() } ?: return@forEach
-            val matches = reserves.filter {
-                it.slot !in used && it.speciesId.equals(speciesId, ignoreCase = true)
-            }
-            if (matches.size == 1) {
-                val member = matches.first()
-                result[cardIndex] = Match(
-                    member = member,
-                    cardCp = cardCps.getOrNull(cardIndex),
-                    cardDex = cardDexes.getOrNull(cardIndex),
-                    cardSpeciesId = speciesId,
-                    confirmed = true,
-                    source = "image-form"
-                )
-                used += member.slot
-            }
-        }
-
         // Form-aware visual speciesId is stronger than dex-only evidence and can
         // distinguish regional/forms that share the same National Dex.
         result.indices.forEach { cardIndex ->
