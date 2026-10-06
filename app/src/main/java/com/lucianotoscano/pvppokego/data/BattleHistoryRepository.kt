@@ -45,10 +45,19 @@ class BattleHistoryRepository(context: Context) {
     private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    fun loadHistory(): List<BattleHistoryEntry> = runCatching {
+    private fun loadRawHistory(): List<BattleHistoryEntry> = runCatching {
         val raw = prefs.getString(KEY_HISTORY, null) ?: return emptyList()
         json.decodeFromString<List<BattleHistoryEntry>>(raw)
     }.getOrDefault(emptyList())
+
+    fun loadHistory(): List<BattleHistoryEntry> {
+        val raw = loadRawHistory()
+        val repaired = BattleHistorySegmentMatcher.repair(raw)
+        if (repaired != raw) {
+            prefs.edit().putString(KEY_HISTORY, json.encodeToString(repaired)).apply()
+        }
+        return repaired
+    }
 
     fun exportJson(): String = json.encodeToString(loadHistory())
 
@@ -155,8 +164,14 @@ class BattleHistoryRepository(context: Context) {
     }
 
     fun append(entry: BattleHistoryEntry) {
-        val next = (listOf(entry) + loadHistory()).take(MAX_BATTLES)
-        prefs.edit().putString(KEY_HISTORY, json.encodeToString(next)).apply()
+        val existing = BattleHistorySegmentMatcher.repair(loadRawHistory())
+        val previous = existing.firstOrNull()
+        val next = if (previous != null && BattleHistorySegmentMatcher.shouldMerge(previous, entry)) {
+            listOf(BattleHistorySegmentMatcher.merge(previous, entry)) + existing.drop(1)
+        } else {
+            listOf(entry) + existing
+        }
+        prefs.edit().putString(KEY_HISTORY, json.encodeToString(next.take(MAX_BATTLES))).apply()
     }
 
     fun clear() = prefs.edit().remove(KEY_HISTORY).apply()
@@ -240,7 +255,7 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         } else {
             val a = active ?: return
             if (nowMs - a.lastEvidenceAtMs >= SESSION_INACTIVITY_GRACE_MS) {
-                finish(nowMs, reason = "Sem evidência de batalha por 12s")
+                finish(nowMs, reason = "Sem evidência de batalha por 28s")
             }
         }
     }
@@ -412,6 +427,6 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
     }
 
     companion object {
-        private const val SESSION_INACTIVITY_GRACE_MS = 12_000L
+        private const val SESSION_INACTIVITY_GRACE_MS = 28_000L
     }
 }
