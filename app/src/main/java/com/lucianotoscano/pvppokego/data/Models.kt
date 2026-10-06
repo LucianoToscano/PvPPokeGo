@@ -97,8 +97,10 @@ data class ReserveState(
     val identityKey: String? = null,
     /** CP read from Pokemon GO's native reserve card. */
     val cardCp: Int? = null,
-    /** True when this reserve card was pinned to a team member by CP/image/elimination. */
+    /** True when the reserve Pokémon identity is stable enough for type/matchup analysis. */
     val identityConfirmed: Boolean = false,
+    /** True only when Pokémon GO's native reserve card was pinned by CP/image/elimination. */
+    val cardMappingConfirmed: Boolean = false,
     /** cp, image-form, image, elimination or fallback. */
     val identitySource: String? = null,
     val fastMove: MoveDef? = null,
