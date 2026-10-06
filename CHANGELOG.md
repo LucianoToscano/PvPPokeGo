@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.19
+
+- Corrigida a causa raiz dos tipos errados nas reservas: os 3 cards da tela "Escolha a sua equipe" passam a ser lidos separadamente por coluna, preservando o par Pokémon + PC.
+- O caso Houndoom PC1499 / Cramorant PC1485 / Rillaboom PC1500 deixa de deslocar os PCs entre os slots.
+- OCR principal de jogador, adversário e texto de batalha passa a rodar em paralelo para reduzir latência.
+- OCR dos dois cards de reserva usa duas regiões pequenas e independentes, evitando troca de ordem entre os PCs.
+- Reserva com PC único conhecido é confirmada imediatamente; OCR contínuo do card para assim que a identidade estiver confirmada.
+- Recomendações e indicadores de troca só usam reservas com identidade confirmada.
+- Indicadores da tela de troca permanecem presos ao card original, sem deslocar esquerda/direita quando um slot ainda não foi confirmado.
+- Tipos do PvPoke são sanitizados: o pseudo-tipo "none" é removido. Rillaboom passa a exibir somente Planta.
+- Testes adicionados para Rillaboom=Planta, Cramorant=Voador/Água e Houndoom=Sombrio/Fogo.
+- Ícone do aplicativo migrado para adaptive icon/mipmap, usando a arte oficial já enviada pelo usuário.
+- O APK de teste deixa de usar applicationId ".debug" e volta a instalar no pacote real com.lucianotoscano.pvppokego, evitando dois PvPPokeGo diferentes no aparelho.
+- Mantidas as melhorias do histórico/exportação da 0.5.18 e todos os recursos anteriores.
+
+
 ## 0.5.18
 
 - Histórico de batalhas redesenhado em cartões mais legíveis.
