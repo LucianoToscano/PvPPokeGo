@@ -172,16 +172,20 @@ class BattleEngine(private val repo: GameDataRepository) {
             val canonical = cpPinnedSlot?.name ?: resolvedDef?.speciesName ?: ocrCanonical
             val speciesId = cpPinnedSlot?.speciesId
                 ?: resolvedDef?.speciesId
-                ?: detected.visualSpeciesId
             val dex = cpPinnedSlot?.dex
                 ?: resolvedDef?.dex?.takeIf { it > 0 }
-                ?: detected.visualDex
             val stableCp = playerCpTracker.observe(
                 normalize(speciesId ?: canonical),
                 detected.cp
             )
 
-            rememberOwnPokemon(canonical, stableCp, speciesId, dex)
+            rememberOwnPokemon(
+                canonical,
+                stableCp,
+                speciesId,
+                dex,
+                maxOf(detected.confidence, detected.visualConfidence ?: 0f)
+            )
             if (!samePokemonIdentity(playerName, playerSpeciesId, canonical, speciesId)) {
                 onPlayerChanged(canonical, stableCp, speciesId)
             } else {
@@ -200,7 +204,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 ?.let(repo::pokemon)
             val resolvedDef = visualDef ?: repo.pokemon(ocrCanonical)
             val canonical = resolvedDef?.speciesName ?: ocrCanonical
-            val speciesId = resolvedDef?.speciesId ?: detected.visualSpeciesId
+            val speciesId = resolvedDef?.speciesId
             val stableCp = enemyCpTracker.observe(
                 normalize(speciesId ?: canonical),
                 detected.cp
@@ -922,7 +926,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
         if (playerActor) {
             enemyChargedCycle.observe(null, nowMs)
-            val ownCandidates = playerName
+            val ownCandidates = (ownActiveState?.speciesId ?: playerSpeciesId ?: playerName)
                 ?.let(repo::possibleChargedMoves)
                 .orEmpty()
                 .ifEmpty { listOfNotNull(ownCharge1, ownCharge2) }
