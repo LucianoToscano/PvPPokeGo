@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
@@ -24,6 +25,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.R
@@ -121,7 +123,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         gameRepo = GameDataRepository(this)
         historyRecorder = BattleHistoryRecorder(BattleHistoryRepository(this))
         screenRecorder = ScreenFrameRecorder(this)
-        startForeground(NOTIFICATION_ID, notification("Aguardando captura de tela"))
+        setForegroundNotification(notification("Aguardando captura de tela"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -196,15 +198,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (code != Int.MIN_VALUE && data != null && projection == null) {
             startProjection(code, data)
         } else if (projection == null && overlayView == null && intent?.action == null) {
-            startForeground(NOTIFICATION_ID, notification("Toque em Iniciar overlay para reativar a captura"))
+            setForegroundNotification(notification("Toque em Iniciar overlay para reativar a captura"))
         }
         return START_STICKY
     }
 
     private fun startAccessibilityCaptureMode() {
         if (!AccessibilityScreenCapture.isConnected) {
-            startForeground(
-                NOTIFICATION_ID,
+            setForegroundNotification(
                 notification("Ative PvPPokeGo em Acessibilidade para usar com gravador externo")
             )
             return
@@ -230,8 +231,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
                 withContext(Dispatchers.Main) {
                     attachOverlay()
-                    startForeground(
-                        NOTIFICATION_ID,
+                    setForegroundNotification(
                         notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • modo gravador externo")
                     )
                     redraw()
@@ -239,8 +239,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 startScanLoop()
             } catch (t: Throwable) {
                 withContext(Dispatchers.Main) {
-                    startForeground(
-                        NOTIFICATION_ID,
+                    setForegroundNotification(
                         notification("Erro no modo gravador externo: ${t.javaClass.simpleName}")
                     )
                 }
@@ -280,9 +279,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                setForegroundNotification(notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
-                startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
+                setForegroundNotification(notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
             }
         }
@@ -1392,7 +1391,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("0.5.20 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            setForegroundNotification(notification("0.5.20 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -1566,7 +1565,16 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             visionPaused -> "Visão pausada"
             else -> baseText ?: "${leagueLabel(currentLeagueCp)} • HUD PvP ativo"
         }
-        startForeground(NOTIFICATION_ID, notification(state))
+        setForegroundNotification(notification(state))
+    }
+
+    private fun setForegroundNotification(value: Notification) {
+        val type = when {
+            Build.VERSION.SDK_INT >= 34 && projection == null -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            Build.VERSION.SDK_INT >= 29 && projection != null -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            else -> 0
+        }
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, value, type)
     }
 
     private fun notification(text: String): Notification {
