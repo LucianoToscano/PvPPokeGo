@@ -82,20 +82,30 @@ class ScreenFrameRecorder(private val context: Context) {
 
     fun start(width: Int, height: Int): Boolean {
         if (isRecording) return true
+        inputWidth = width
+        inputHeight = height
+        conservativeProfile = false
+        return startProfile(width, height, conservative = false)
+    }
+
+    private fun startProfile(width: Int, height: Int, conservative: Boolean): Boolean {
         lastErrorMessage = null
         if (width < 2 || height < 2) {
             lastErrorMessage = "Dimensões de captura inválidas"
             return false
         }
+        conservativeProfile = conservative
+        val maxWidth = if (conservative) CONSERVATIVE_MAX_OUTPUT_WIDTH else MAX_OUTPUT_WIDTH
+        val maxHeight = if (conservative) CONSERVATIVE_MAX_OUTPUT_HEIGHT else MAX_OUTPUT_HEIGHT
+        val targetFps = if (conservative) CONSERVATIVE_FPS else TARGET_FPS
+        currentFrameIntervalNs = 1_000_000_000L / targetFps.coerceAtLeast(1)
 
         val scale = minOf(
             1f,
-            MAX_OUTPUT_WIDTH.toFloat() / width.toFloat(),
-            MAX_OUTPUT_HEIGHT.toFloat() / height.toFloat()
+            maxWidth.toFloat() / width.toFloat(),
+            maxHeight.toFloat() / height.toFloat()
         )
-        // Many Samsung/Qualcomm AVC encoders are happiest with macroblock-aligned
-        // dimensions. 720x1600 exceeded common AVC level limits and could produce
-        // an MP4 that existed but was not decodable by Gallery.
+        // Samsung/Qualcomm AVC encoders are usually more reliable with macroblock-aligned dimensions.
         fun align16(value: Int): Int = ((value.coerceAtLeast(16)) / 16) * 16
         outputWidth = align16((width * scale).toInt())
         outputHeight = align16((height * scale).toInt())
@@ -108,18 +118,16 @@ class ScreenFrameRecorder(private val context: Context) {
                 outputHeight
             ).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                setInteger(MediaFormat.KEY_BIT_RATE, suggestedBitrate(outputWidth, outputHeight))
-                setInteger(MediaFormat.KEY_FRAME_RATE, TARGET_FPS)
+                val bitrate = suggestedBitrate(outputWidth, outputHeight)
+                setInteger(MediaFormat.KEY_BIT_RATE, if (conservative) (bitrate * .62f).toInt() else bitrate)
+                setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-                // Deliberately avoid forcing profile/bitrate mode. Several OEM codecs
-                // accept the surface but later emit an unreadable stream when those
-                // optional constraints are unsupported.
             }
 
-            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).also {
-                it.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-                codecSurface = it.createInputSurface()
-                it.start()
+            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).also { encoder ->
+                encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                codecSurface = encoder.createInputSurface()
+                encoder.start()
             }
             muxer = MediaMuxer(tempFile!!.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             setupEgl(codecSurface ?: error("Encoder surface unavailable"))
@@ -129,14 +137,25 @@ class ScreenFrameRecorder(private val context: Context) {
             muxerStarted = false
             trackIndex = -1
             encodedSampleCount = 0
+            submittedFrameCount = 0
             firstFrameSubmitted = false
             isRecording = true
             true
         }.getOrElse { error ->
-            lastErrorMessage = "Falha ao iniciar encoder: ${error.javaClass.simpleName}: ${error.message ?: "sem detalhe"}"
+            lastErrorMessage = "Falha ao iniciar encoder (" + activeProfileLabel + "): " +
+                error.javaClass.simpleName + ": " + (error.message ?: "sem detalhe")
             releaseInternal(deleteTemp = true)
             false
         }
+    }
+
+    private fun retryWithConservativeProfile(): Boolean {
+        if (conservativeProfile || inputWidth < 2 || inputHeight < 2) return false
+        val reason = "Encoder padrão não produziu vídeo; tentando perfil compatível"
+        releaseInternal(deleteTemp = true)
+        val ok = startProfile(inputWidth, inputHeight, conservative = true)
+        if (ok) lastErrorMessage = reason
+        return ok
     }
 
     /**
