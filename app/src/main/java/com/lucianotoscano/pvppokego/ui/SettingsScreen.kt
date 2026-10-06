@@ -74,6 +74,7 @@ fun SettingsScreen(
     var moves by remember { mutableStateOf(repository.showEnemyMoves) }
     var counter by remember { mutableStateOf(repository.showChargedCounter) }
     var progress by remember { mutableStateOf(repository.showEnergyProgress) }
+    var hpAssist by remember { mutableStateOf(repository.showHpAssist) }
     var timer by remember { mutableStateOf(repository.showSwitchTimer) }
     var debug by remember { mutableStateOf(repository.debugMode) }
     var edit by remember { mutableStateOf(repository.editMode) }
@@ -324,6 +325,16 @@ fun SettingsScreen(
                     progress = it
                     repository.showEnergyProgress = it
                 }
+                Toggle("HP e previsão de dano sem escudo", hpAssist) {
+                    hpAssist = it
+                    repository.showHpAssist = it
+                }
+                Text(
+                    "Mostra HP estimado e uma faixa fantasma sobre a barra quando um carregado inimigo pode chegar. " +
+                        "Dano observado tem prioridade; sem amostras, usa o modelo offline PvPoke como estimativa.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Toggle("Timer de troca", timer) {
                     timer = it
                     repository.showSwitchTimer = it
