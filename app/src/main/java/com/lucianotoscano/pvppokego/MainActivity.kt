@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.overlay.BattleOverlayService
+import com.lucianotoscano.pvppokego.security.TrialManager
 import com.lucianotoscano.pvppokego.ui.SettingsScreen
 
 class MainActivity : ComponentActivity() {
@@ -84,6 +85,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // === TRIAL 15 DIAS ===
+        if (!TrialManager.isTrialValid(this)) {
+            Toast.makeText(this, TrialManager.statusMessage(this), Toast.LENGTH_LONG).show()
+            window.decorView.postDelayed({ finishAffinity() }, 3500)
+            return
+        }
         settingsRepo = SettingsRepository(this)
         historyRepo = BattleHistoryRepository(this)
         overlayGranted = Settings.canDrawOverlays(this)
