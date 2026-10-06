@@ -297,10 +297,50 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         nowMs: Long = System.currentTimeMillis(),
         pokemon: String? = null,
         confidence: String? = null,
-        source: String? = null
+        source: String? = null,
+        damageFraction: Float? = null
     ) {
         if (count <= 0) return
-        addEvent(actor, "RÁPIDO", moveName, count, nowMs, pokemon, confidence, source, null)
+        val details = buildMap {
+            damageFraction?.takeIf { it > 0f }?.let { fraction ->
+                val totalPercent = fraction.coerceIn(0f, 1f) * 100f
+                val perHitPercent = totalPercent / count.coerceAtLeast(1)
+                put("damagePercent", "%.1f".format(Locale.US, totalPercent))
+                put("damagePerHitPercent", "%.1f".format(Locale.US, perHitPercent))
+                put("damagePoints", (fraction.coerceIn(0f, 1f) * 1000f).toInt().toString())
+            }
+        }
+        addEvent(actor, "RÁPIDO", moveName, count, nowMs, pokemon, confidence, source, null, details)
+    }
+
+    fun recordDamageObservation(
+        actor: String,
+        moveName: String,
+        damagePercent: Float,
+        damagePoints: Int,
+        learnedSamples: Int,
+        nowMs: Long = System.currentTimeMillis(),
+        attackerPokemon: String? = null,
+        targetPokemon: String? = null,
+        source: String = "HP"
+    ) {
+        addEvent(
+            actor = actor,
+            category = "DANO",
+            moveName = moveName,
+            count = 1,
+            nowMs = nowMs,
+            pokemon = attackerPokemon,
+            confidence = if (learnedSamples >= 5) "CONFIRMADO" else "ESTIMADO",
+            source = source,
+            reason = null,
+            details = buildMap {
+                put("damagePercent", "%.1f".format(Locale.US, damagePercent.coerceAtLeast(0f)))
+                put("damagePoints", damagePoints.coerceAtLeast(0).toString())
+                put("samples", learnedSamples.coerceAtLeast(1).toString())
+                targetPokemon?.let { put("target", it) }
+            }
+        )
     }
 
     fun recordCharged(
