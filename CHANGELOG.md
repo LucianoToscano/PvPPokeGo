@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.21
+
+- Corrigido o bloqueio de instalação mostrado pelo Google Play Protect: o APK principal não declara nem empacota mais o serviço de Acessibilidade usado para captura de compatibilidade.
+- A compatibilidade com Samsung Screen Recorder/gravadores externos foi isolada em uma variante separada `Recorder Compat`, preservando a implementação sem obrigar o APK principal a solicitar acesso sensível.
+- O APK padrão mantém overlay, OCR, reconhecimento visual, correspondência/continuidade de batalha, histórico, exportações, PvPoke offline e gravação interna.
+- `Icon PVPPokeGo.png` passa a ser referenciado diretamente como `android:icon` e `android:roundIcon`, sem depender do adaptive icon para o instalador/launcher.
+- Gravador interno reforçado para aparelhos Samsung: saída AVC limitada a dimensões alinhadas em macroblocos e no máximo 720x1280, removidas restrições opcionais de profile/bitrate mode que quebram alguns codecs OEM.
+- MP4 interno agora é validado por duração e dimensões antes de ser publicado em Movies/PvPPokeGo; arquivos inválidos não são apresentados como gravação concluída.
+- A versão e os nomes dos arquivos exportados passam a usar `BuildConfig.VERSION_NAME`, evitando divergências entre APK e README/ZIP.
+- Preservadas integralmente as correções da 0.5.20: reconhecimento visual por espécie/forma, matcher de reservas, continuidade de batalha, deduplicação de carregados, energia por Pokémon, histórico detalhado e banco visual offline.
+
+
 ## 0.5.20
 
 - Adicionado terceiro sinal de identidade por imagem do próprio Pokémon, além de OCR e PC.
