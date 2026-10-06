@@ -100,6 +100,7 @@ class BattleOcrDetector(
                 ReserveCardEvidence(
                     cp = cpJob.await(),
                     visualDex = visual?.dex,
+                    visualSpeciesId = visual?.speciesId,
                     visualConfidence = visual?.confidence
                 )
             }
@@ -197,46 +198,74 @@ class BattleOcrDetector(
         ocr: TeamSlotEvidence,
         visual: PokemonVisualRecognizer.Match?
     ): DetectedPokemon? {
-        val visualCandidate = visual?.let { repo.uniquePokemonForVisualDex(it.dex) }
+        val visualCandidate = visual?.let { repo.pokemonForVisualIdentity(it.speciesId, it.dex) }
         val ocrPokemon = ocr.name?.let(repo::pokemon)
         val ocrDex = ocrPokemon?.dex?.takeIf { it > 0 }
+        val ocrSpeciesId = ocrPokemon?.speciesId
 
-        // OCR + image agree: strongest possible identity.
-        if (ocr.name != null && visual != null && ocrDex == visual.dex) {
-            return DetectedPokemon(
-                name = ocr.name,
-                cp = ocr.cp,
-                confidence = 0.995f,
-                rawText = ocr.raw,
-                visualDex = visual.dex,
-                visualConfidence = visual.confidence
-            )
-        }
+        if (ocr.name != null && visual != null) {
+            val sameDex = ocrDex != null && ocrDex == visual.dex
+            val exactFormMatch = visual.speciesId == null ||
+                ocrSpeciesId.equals(visual.speciesId, ignoreCase = true)
 
-        // OCR has a name but image strongly disagrees. Do not silently overwrite it;
-        // lower confidence so this frame cannot redefine the stable 3-Pokémon team.
-        if (ocr.name != null) {
-            val conflict = visual != null && ocrDex != null && ocrDex != visual.dex &&
+            // Exact form agreement is the strongest identity signal.
+            if (sameDex && exactFormMatch) {
+                return DetectedPokemon(
+                    name = ocr.name,
+                    cp = ocr.cp,
+                    confidence = 0.995f,
+                    rawText = ocr.raw,
+                    visualDex = visual.dex,
+                    visualSpeciesId = visual.speciesId,
+                    visualConfidence = visual.confidence
+                )
+            }
+
+            // Same dex but a form-aware image resolves a different PvPoke identity.
+            // Prefer the image only at high confidence; OCR often shows only the base
+            // display name and cannot distinguish regional/stance forms.
+            if (
+                sameDex &&
+                visualCandidate != null &&
+                visual.speciesId != null &&
+                visual.confidence >= VISUAL_FORM_ACCEPT_CONFIDENCE
+            ) {
+                return DetectedPokemon(
+                    name = visualCandidate.speciesName,
+                    cp = ocr.cp,
+                    confidence = 0.97f,
+                    rawText = ocr.raw,
+                    visualDex = visual.dex,
+                    visualSpeciesId = visual.speciesId,
+                    visualConfidence = visual.confidence
+                )
+            }
+
+            // Different dex = true conflict. Keep OCR but lower confidence so one noisy
+            // frame cannot redefine the stable team.
+            val conflict = ocrDex != null && ocrDex != visual.dex &&
                 visual.confidence >= VISUAL_CONFLICT_CONFIDENCE
             return DetectedPokemon(
                 name = ocr.name,
                 cp = ocr.cp,
                 confidence = if (conflict) 0.70f else ocr.confidence,
                 rawText = ocr.raw,
-                visualDex = visual?.dex,
-                visualConfidence = visual?.confidence
+                visualDex = visual.dex,
+                visualSpeciesId = visual.speciesId,
+                visualConfidence = visual.confidence
             )
         }
 
-        // Image-only recovery is allowed only for an unambiguous National Dex entry.
-        // CP may still come from OCR even when the name text was unreadable.
+        // Image-only recovery accepts an exact form-aware speciesId when available.
+        // Older dex-only banks remain supported, but only for unambiguous dex entries.
         if (visualCandidate != null && visual != null && visual.confidence >= VISUAL_ACCEPT_CONFIDENCE) {
             return DetectedPokemon(
                 name = visualCandidate.speciesName,
                 cp = ocr.cp,
-                confidence = if (ocr.cp != null) 0.93f else 0.84f,
+                confidence = if (ocr.cp != null) 0.94f else 0.86f,
                 rawText = ocr.raw,
                 visualDex = visual.dex,
+                visualSpeciesId = visual.speciesId,
                 visualConfidence = visual.confidence
             )
         }
