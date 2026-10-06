@@ -58,6 +58,9 @@ internal class BattleCorrespondenceTracker {
     private var pendingNewCount: Int = 0
     private var pendingNewFirstAtMs: Long = 0L
 
+    val hasPendingNewBattleCandidate: Boolean
+        get() = pendingNewSignature != null && pendingNewCount > 0
+
     fun reset() {
         pendingNewSignature = null
         pendingNewCount = 0
