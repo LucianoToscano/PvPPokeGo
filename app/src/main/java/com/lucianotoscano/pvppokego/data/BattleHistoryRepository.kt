@@ -19,7 +19,8 @@ data class BattleHistoryEvent(
     val pokemon: String? = null,
     val confidence: String? = null,
     val source: String? = null,
-    val reason: String? = null
+    val reason: String? = null,
+    val details: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -32,6 +33,11 @@ data class BattleHistoryEntry(
     val playerCp: Int? = null,
     val opponentName: String? = null,
     val opponentCp: Int? = null,
+    val appVersion: String = "desconhecida",
+    val dataVersion: String? = null,
+    val startedMidBattle: Boolean = false,
+    val endReason: String? = null,
+    val result: String? = null,
     val events: List<BattleHistoryEvent> = emptyList()
 )
 
@@ -159,17 +165,71 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         var playerCp: Int? = null,
         var opponentName: String? = null,
         var opponentCp: Int? = null,
+        var appVersion: String = "desconhecida",
+        var dataVersion: String? = null,
+        var startedMidBattle: Boolean = false,
+        var result: String? = null,
+        var lastEvidenceAtMs: Long = startedAt,
         val events: MutableList<BattleHistoryEvent> = mutableListOf()
     )
 
     private var active: Active? = null
+    private var appVersion: String = "desconhecida"
+    private var dataVersion: String? = null
+
+    fun setMetadata(appVersion: String, dataVersion: String?) {
+        this.appVersion = appVersion
+        this.dataVersion = dataVersion
+        active?.let {
+            it.appVersion = appVersion
+            it.dataVersion = dataVersion
+        }
+    }
+
+    fun hasActiveSession(): Boolean = active != null
+
+    fun activeElapsedMs(nowMs: Long = System.currentTimeMillis()): Long? =
+        active?.let { (nowMs - it.startedAt).coerceAtLeast(0L) }
+
+    fun markStartedMidBattle() {
+        active?.startedMidBattle = true
+    }
+
+    fun setResult(result: String?) {
+        if (!result.isNullOrBlank()) active?.result = result
+    }
 
     fun setBattleActive(isActive: Boolean, leagueCp: Int, nowMs: Long = System.currentTimeMillis()) {
         if (isActive) {
-            if (active == null) active = Active(nowMs, nowMs, leagueCp)
-            else active?.leagueCp = leagueCp
+            if (active == null) {
+                active = Active(
+                    id = nowMs,
+                    startedAt = nowMs,
+                    leagueCp = leagueCp,
+                    appVersion = appVersion,
+                    dataVersion = dataVersion,
+                    lastEvidenceAtMs = nowMs
+                )
+                addEvent(
+                    actor = "PARTIDA",
+                    category = "INÍCIO",
+                    moveName = "Partida detectada",
+                    count = 1,
+                    nowMs = nowMs,
+                    pokemon = null,
+                    confidence = null,
+                    source = "session",
+                    reason = null
+                )
+            } else {
+                active?.leagueCp = leagueCp
+                active?.lastEvidenceAtMs = nowMs
+            }
         } else {
-            finish(nowMs)
+            val a = active ?: return
+            if (nowMs - a.lastEvidenceAtMs >= SESSION_INACTIVITY_GRACE_MS) {
+                finish(nowMs, reason = "Sem evidência de batalha por 12s")
+            }
         }
     }
 
