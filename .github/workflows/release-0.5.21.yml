@@ -50,7 +50,8 @@ jobs:
           grep -q 'PokemonVisualRecognizer' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
           grep -q 'visualSpeciesId' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
           grep -q 'cardSpeciesIds' app/src/main/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcher.kt
-          grep -q 'ChargedMoveCycleTracker' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'ChargedAnimationCycleGate' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'ChargedAnimationCycleGateTest' app/src/test/java/com/lucianotoscano/pvppokego/engine/ChargedAnimationCycleGateTest.kt
           grep -q 'exportAnalysisText' app/src/main/java/com/lucianotoscano/pvppokego/data/BattleHistoryRepository.kt
 
       - name: Package offline PvPoke snapshot
