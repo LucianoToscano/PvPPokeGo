@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.DisplayMetrics
 import android.view.WindowManager
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 class ScreenCapture(
@@ -19,6 +20,7 @@ class ScreenCapture(
     private val projection: MediaProjection
 ) {
     private val latest = AtomicReference<Bitmap?>(null)
+    private val latestTimestampMs = AtomicLong(0L)
     /** Guards copy/replacement so the capture thread never recycles a bitmap mid-copy. */
     private val bitmapLock = Any()
     private var reader: ImageReader? = null
@@ -81,6 +83,7 @@ class ScreenCapture(
                 padded.recycle()
 
                 val old = synchronized(bitmapLock) {
+                    latestTimestampMs.set(System.currentTimeMillis())
                     latest.getAndSet(cropped)
                 }
                 old?.recycle()
@@ -106,7 +109,10 @@ class ScreenCapture(
         display = null
         runCatching { reader?.close() }
         reader = null
-        val last = synchronized(bitmapLock) { latest.getAndSet(null) }
+        val last = synchronized(bitmapLock) {
+            latestTimestampMs.set(0L)
+            latest.getAndSet(null)
+        }
         last?.recycle()
     }
 
@@ -122,6 +128,9 @@ class ScreenCapture(
             metrics.widthPixels to metrics.heightPixels
         }
     }
+
+    /** Timestamp of the actual ImageReader frame, not the caller's last copy. */
+    fun latestFrameTimestampMs(): Long = latestTimestampMs.get()
 
     /** Caller owns and must recycle the returned copy. */
     fun acquireLatestBitmap(): Bitmap? = synchronized(bitmapLock) {
