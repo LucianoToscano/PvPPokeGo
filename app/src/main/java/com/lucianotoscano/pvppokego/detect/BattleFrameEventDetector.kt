@@ -18,6 +18,9 @@ class BattleFrameEventDetector {
         val ownFastMoveCount: Int = 0,
         val hpRatio: Float? = null,
         val opponentHpRatio: Float? = null,
+        /** Normalized HP lost by the player/opponent in the confirmed Fast-Move event. */
+        val playerDamageFraction: Float? = null,
+        val opponentDamageFraction: Float? = null,
         val motion: Float = 0f,
         val confidence: Float = 0f,
         val source: String = "none",
@@ -133,6 +136,8 @@ class BattleFrameEventDetector {
         var ownFast = 0
         var source = if (battleUiVisible) "battle-hud" else "no-battle-hud"
         var confidence = if (battleUiVisible) .78f else .18f
+        var playerDamageFraction: Float? = null
+        var opponentDamageFraction: Float? = null
 
         if (hpRun != null) {
             val old = previousHpRun
@@ -177,6 +182,9 @@ class BattleFrameEventDetector {
                     if (decision.confirm && !chargedLikeDrop) {
                         lastFastAtMs = nowMs
                         enemyFast = decision.count
+                        playerDamageFraction = if (maximumHpRun > 0) {
+                            pendingEnemyHpDropPx.toFloat() / maximumHpRun.toFloat()
+                        } else null
                         source = when (decision.source) {
                             "hp-drop" -> "player-hp-drop"
                             "hp-drop-cadence" -> "player-hp-cadence"
@@ -234,6 +242,9 @@ class BattleFrameEventDetector {
                     if (decision.confirm && !chargedLikeDrop) {
                         lastOwnFastAtMs = nowMs
                         ownFast = decision.count
+                        opponentDamageFraction = if (maximumOpponentHpRun > 0) {
+                            pendingOwnHpDropPx.toFloat() / maximumOpponentHpRun.toFloat()
+                        } else null
                         source = when {
                             enemyFast > 0 -> "both-hp-drop"
                             decision.source == "hp-drop" -> "opponent-hp-drop"
@@ -256,6 +267,8 @@ class BattleFrameEventDetector {
             ownFastMoveCount = ownFast,
             hpRatio = hpRatio,
             opponentHpRatio = opponentHpRatio,
+            playerDamageFraction = playerDamageFraction,
+            opponentDamageFraction = opponentDamageFraction,
             motion = motion,
             confidence = confidence,
             source = source,
