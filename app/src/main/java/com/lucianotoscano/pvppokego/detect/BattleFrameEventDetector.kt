@@ -146,17 +146,31 @@ class BattleFrameEventDetector {
                         drop < -1 -> pendingEnemyHpDropPx = 0
                     }
 
-                    // Low-damage Fast Moves can move the rendered HP bar only one pixel.
-                    // The old threshold discarded those tiny drops forever, freezing enemy energy.
+                    // Hybrid confirmation: HP drop is primary. If HP pixels barely move,
+                    // cadence + strong motion can recover a missed Fast Move without blindly
+                    // counting every animation frame.
                     val threshold = max(1, maximumHpRun / 145)
                     val elapsed = nowMs - lastFastAtMs
-                    val cadenceFallback = pendingEnemyHpDropPx > 0 &&
-                        elapsed >= (expectedEnemyFastDurationMs * .70f).toLong().coerceAtLeast(enemyMinGap)
-                    if ((pendingEnemyHpDropPx >= threshold || cadenceFallback) && elapsed >= enemyMinGap) {
+                    val decision = FastMoveSignalFuser.decide(
+                        pendingDropPx = pendingEnemyHpDropPx,
+                        hpThresholdPx = threshold,
+                        elapsedMs = elapsed,
+                        minGapMs = enemyMinGap,
+                        expectedDurationMs = expectedEnemyFastDurationMs,
+                        motion = motion,
+                        motionBaseline = motionEma,
+                        battleUiVisible = battleUiVisible,
+                        allowMotionFallback = true
+                    )
+                    if (decision.confirm) {
                         lastFastAtMs = nowMs
                         enemyFast = 1
-                        source = if (pendingEnemyHpDropPx >= threshold) "player-hp-drop" else "player-hp-microdrop"
-                        confidence = if (source == "player-hp-drop") .98f else .90f
+                        source = when (decision.source) {
+                            "hp-drop" -> "player-hp-drop"
+                            "microdrop" -> "player-hp-microdrop"
+                            else -> "hybrid-motion-cadence"
+                        }
+                        confidence = decision.confidence
                         pendingEnemyHpDropPx = 0
                     }
                 }
@@ -183,17 +197,26 @@ class BattleFrameEventDetector {
                     }
                     val threshold = max(1, maximumOpponentHpRun / 145)
                     val elapsed = nowMs - lastOwnFastAtMs
-                    val cadenceFallback = pendingOwnHpDropPx > 0 &&
-                        elapsed >= (expectedOwnFastDurationMs * .70f).toLong().coerceAtLeast(ownMinGap)
-                    if ((pendingOwnHpDropPx >= threshold || cadenceFallback) && elapsed >= ownMinGap) {
+                    val decision = FastMoveSignalFuser.decide(
+                        pendingDropPx = pendingOwnHpDropPx,
+                        hpThresholdPx = threshold,
+                        elapsedMs = elapsed,
+                        minGapMs = ownMinGap,
+                        expectedDurationMs = expectedOwnFastDurationMs,
+                        motion = motion,
+                        motionBaseline = motionEma,
+                        battleUiVisible = battleUiVisible,
+                        allowMotionFallback = false
+                    )
+                    if (decision.confirm) {
                         lastOwnFastAtMs = nowMs
                         ownFast = 1
                         source = when {
                             enemyFast > 0 -> "both-hp-drop"
-                            pendingOwnHpDropPx >= threshold -> "opponent-hp-drop"
+                            decision.source == "hp-drop" -> "opponent-hp-drop"
                             else -> "opponent-hp-microdrop"
                         }
-                        confidence = if (source.endsWith("microdrop")) .90f else .98f
+                        confidence = decision.confidence
                         pendingOwnHpDropPx = 0
                     }
                 }
