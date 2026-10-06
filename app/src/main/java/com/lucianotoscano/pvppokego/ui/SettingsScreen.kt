@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.lucianotoscano.pvppokego.BuildConfig
 import com.lucianotoscano.pvppokego.data.BattleHistoryEntry
 import com.lucianotoscano.pvppokego.data.BattleHistoryEvent
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
@@ -189,7 +190,7 @@ fun SettingsScreen(
                         "• ◉ → mostrar / ocultar HUD\n" +
                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
-                        "Versão 0.5.21" + if (recorderCompatibilityAvailable) " Recorder Compat" else "",
+                        "Versão " + BuildConfig.VERSION_NAME,
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -405,7 +406,7 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("Versão 0.5.21")
+                Text("Versão " + BuildConfig.VERSION_NAME)
                 Text(
                     "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
