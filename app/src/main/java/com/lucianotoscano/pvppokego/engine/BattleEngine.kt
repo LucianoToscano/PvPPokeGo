@@ -545,7 +545,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         var newPrompt = false
 
         if (CHARGED_PROMPTS.any { text.contains(it) }) {
-            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_UNKNOWN_CHARGED_DEBOUNCE_MS) {
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
@@ -600,7 +600,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 return BattleTextResult(newPrompt, false, false)
             }
             enemyChargedCycle.observe(null, nowMs)
-            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_UNKNOWN_CHARGED_DEBOUNCE_MS) {
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
