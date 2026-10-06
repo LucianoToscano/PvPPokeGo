@@ -1615,7 +1615,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             val uri = recorder.stop()
             Toast.makeText(
                 this,
-                if (uri != null) "Gravação salva em Movies/PvPPokeGo" else "Gravação encerrada",
+                if (uri != null) {
+                    "Gravação salva em Movies/PvPPokeGo"
+                } else {
+                    "Gravação não foi salva: " + (recorder.lastErrorMessage ?: "erro desconhecido")
+                },
                 Toast.LENGTH_LONG
             ).show()
         } else {
@@ -1623,7 +1627,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             val ok = c != null && c.width > 0 && c.height > 0 && recorder.start(c.width, c.height)
             Toast.makeText(
                 this,
-                if (ok) "Gravação PvPPokeGo iniciada" else "Inicie a captura do overlay antes de gravar",
+                if (ok) {
+                    "Gravação PvPPokeGo iniciada"
+                } else {
+                    recorder.lastErrorMessage ?: "Inicie a captura do overlay antes de gravar"
+                },
                 Toast.LENGTH_LONG
             ).show()
         }
