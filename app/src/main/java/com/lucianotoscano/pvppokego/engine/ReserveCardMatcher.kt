@@ -90,6 +90,31 @@ internal object ReserveCardMatcher {
             }
         }
 
+        // Form-aware visual speciesId is stronger than dex-only evidence and can
+        // distinguish regional/forms that share the same National Dex.
+        result.indices.forEach { cardIndex ->
+            if (result[cardIndex] != null) return@forEach
+            val speciesId = cardSpeciesIds.getOrNull(cardIndex)?.takeIf(String::isNotBlank)
+                ?: return@forEach
+            val matches = reserves.filter {
+                it.slot !in used &&
+                    !it.speciesId.isNullOrBlank() &&
+                    normalize(it.speciesId) == normalize(speciesId)
+            }
+            if (matches.size == 1) {
+                val member = matches.first()
+                result[cardIndex] = Match(
+                    member = member,
+                    cardCp = cardCps.getOrNull(cardIndex),
+                    cardDex = cardDexes.getOrNull(cardIndex),
+                    cardSpeciesId = speciesId,
+                    confirmed = true,
+                    source = "image-form"
+                )
+                used += member.slot
+            }
+        }
+
         // Visual evidence is independent of OCR. Only a unique dex among remaining
         // reserve members may confirm a card; ambiguous forms remain unconfirmed.
         result.indices.forEach { cardIndex ->
@@ -148,4 +173,7 @@ internal object ReserveCardMatcher {
 
         return result.filterNotNull()
     }
+
+    private fun normalize(value: String): String =
+        value.lowercase().replace(Regex("[^a-z0-9]+"), "")
 }
