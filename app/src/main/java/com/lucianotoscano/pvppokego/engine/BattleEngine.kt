@@ -531,16 +531,26 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     private fun autoLearnObservedCharged(state: BattlePokemonState, move: MoveDef) {
-        val replaceIndex = when {
-            !state.charge1Manual && !state.charge1Confirmed -> 0
-            !state.charge2Manual && !state.charge2Confirmed -> 1
-            !state.charge1Manual && charge1?.moveId !in state.observedChargedMoveIds -> 0
-            !state.charge2Manual && charge2?.moveId !in state.observedChargedMoveIds -> 1
-            else -> -1
-        }
+        val replaceIndex = ChargedMoveSlotResolver.choose(
+            observedMoveId = move.moveId,
+            slot1Id = charge1?.moveId,
+            slot2Id = charge2?.moveId,
+            slot1Manual = state.charge1Manual,
+            slot2Manual = state.charge2Manual,
+            slot1Confirmed = state.charge1Confirmed,
+            slot2Confirmed = state.charge2Confirmed
+        )
         when (replaceIndex) {
-            0 -> { charge1 = move; state.chargedMove1Id = move.moveId; state.charge1Confirmed = true }
-            1 -> { charge2 = move; state.chargedMove2Id = move.moveId; state.charge2Confirmed = true }
+            0 -> {
+                charge1 = move
+                state.chargedMove1Id = move.moveId
+                state.charge1Confirmed = true
+            }
+            1 -> {
+                charge2 = move
+                state.chargedMove2Id = move.moveId
+                state.charge2Confirmed = true
+            }
         }
     }
 
