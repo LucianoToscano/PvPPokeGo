@@ -242,8 +242,11 @@ class PokemonVisualRecognizer(context: Context) {
                     total += weight
                 }
             }
-            if (total <= 1e-9) return@try IntArray(HUE_BINS)
-            IntArray(HUE_BINS) { i -> ((counts[i] / total) * 255.0).toInt() }
+            if (total <= 1e-9) {
+                IntArray(HUE_BINS)
+            } else {
+                IntArray(HUE_BINS) { i -> ((counts[i] / total) * 255.0).toInt() }
+            }
         } finally {
             small.recycle()
         }
