@@ -11,6 +11,12 @@ package com.lucianotoscano.pvppokego.engine
 internal object ReserveMatchupPolicy {
     const val MIN_STABLE_TEAM_IDENTITY_CONFIDENCE = 0.76f
 
+    fun classifyScore(score: Double): com.lucianotoscano.pvppokego.data.MatchupState = when {
+        score >= 0.16 -> com.lucianotoscano.pvppokego.data.MatchupState.FAVORABLE
+        score <= -0.16 -> com.lucianotoscano.pvppokego.data.MatchupState.UNFAVORABLE
+        else -> com.lucianotoscano.pvppokego.data.MatchupState.NEUTRAL
+    }
+
     fun canEvaluate(
         speciesId: String?,
         identityConfidence: Float,
