@@ -622,13 +622,17 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
     }
 
-    private fun ownIdentityKey(name: String, cp: Int?): String {
-        val exact = findOwnSlot(name, cp, repo.pokemon(name)?.speciesId)
+    private fun ownIdentityKey(
+        name: String,
+        cp: Int?,
+        speciesId: String? = null
+    ): String {
+        val exact = findOwnSlot(name, cp, speciesId ?: repo.pokemon(name)?.speciesId)
         return if (exact != null) {
             val identity = exact.speciesId ?: slotDefinition(exact)?.speciesId ?: exact.name
             "slot${exact.slot}:${normalize(identity)}:${exact.cp ?: cp ?: 0}"
         } else {
-            val identity = repo.pokemon(name)?.speciesId ?: name
+            val identity = speciesId ?: repo.pokemon(name)?.speciesId ?: name
             "own:${normalize(identity)}:${cp ?: 0}"
         }
     }
@@ -636,9 +640,12 @@ class BattleEngine(private val repo: GameDataRepository) {
     private fun rebindOwnActiveStateToStableSlot() {
         val name = playerName ?: return
         val old = ownActiveState ?: return
-        val stableKey = ownIdentityKey(name, playerCp)
-        if (old.key == stableKey) return
-        val target = ownStates.getOrCreate(stableKey, name)
+        val stableKey = ownIdentityKey(name, playerCp, playerSpeciesId)
+        if (old.key == stableKey) {
+            if (!playerSpeciesId.isNullOrBlank()) old.speciesId = playerSpeciesId
+            return
+        }
+        val target = ownStates.getOrCreate(stableKey, name, playerSpeciesId)
         target.fastMoveId = old.fastMoveId
         target.chargedMove1Id = old.chargedMove1Id
         target.chargedMove2Id = old.chargedMove2Id
@@ -659,17 +666,28 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownActiveState = target
     }
 
-    private fun onPlayerChanged(name: String, cp: Int?) {
+    private fun onPlayerChanged(name: String, cp: Int?, speciesId: String? = null) {
         saveOwnActiveState()
         ownChargedCycle.reset()
         playerName = name
+        playerSpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value
-        val key = ownIdentityKey(name, playerCp)
-        ownActiveState = ownStates.getOrCreate(key, name)
+
+        val exactSlot = findOwnSlot(name, playerCp, playerSpeciesId)
+        if (exactSlot != null) {
+            playerName = slotDefinition(exactSlot)?.speciesName ?: exactSlot.name
+            playerSpeciesId = exactSlot.speciesId ?: slotDefinition(exactSlot)?.speciesId ?: playerSpeciesId
+            if (playerCp == null) playerCp = exactSlot.cp
+        }
+
+        val displayName = playerName ?: name
+        val lookup = playerSpeciesId ?: displayName
+        val key = ownIdentityKey(displayName, playerCp, playerSpeciesId)
+        ownActiveState = ownStates.getOrCreate(key, displayName, playerSpeciesId)
         val saved = ownActiveState!!
-        val likely = repo.likelyMoveset(name)
-        ownFast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        resolveChargedPair(name, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
+        val likely = repo.likelyMoveset(lookup)
+        ownFast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(lookup).firstOrNull()
+        resolveChargedPair(lookup, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
             ownCharge1 = c1
             ownCharge2 = c2
         }
@@ -679,18 +697,20 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveOwnActiveState()
     }
 
-    private fun onEnemyChanged(name: String) {
+    private fun onEnemyChanged(name: String, speciesId: String? = null) {
         saveActiveState()
         enemyName = name
+        enemySpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         chargedPendingSinceMs = null
         enemyChargedCycle.reset()
         ignoreFastUntilMs = 0L
-        val key = normalize(name)
-        activeState = enemyStates.getOrCreate(key, name)
+        val lookup = enemySpeciesId ?: name
+        val key = normalize(lookup)
+        activeState = enemyStates.getOrCreate(key, name, enemySpeciesId)
         val saved = activeState!!
-        val likely = repo.likelyMoveset(name)
-        fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        resolveChargedPair(name, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
+        val likely = repo.likelyMoveset(lookup)
+        fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(lookup).firstOrNull()
+        resolveChargedPair(lookup, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
             charge1 = c1
             charge2 = c2
         }
