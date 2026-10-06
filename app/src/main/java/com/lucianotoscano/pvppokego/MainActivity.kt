@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.lucianotoscano.pvppokego.capture.AccessibilityScreenCapture
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.overlay.BattleOverlayService
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var settingsRepo: SettingsRepository
     private lateinit var historyRepo: BattleHistoryRepository
     private var overlayGranted by mutableStateOf(false)
+    private var recorderCompatibilityEnabled by mutableStateOf(false)
     private var historyRevision by mutableStateOf(0)
     private var pendingHistoryExportBattleId: Long? = null
     /** True after capture permission succeeds until the service-running flag catches up. */
@@ -188,6 +190,8 @@ class MainActivity : ComponentActivity() {
                 historyRevision = historyRevision,
                 overlayPermissionGranted = overlayGranted,
                 onRequestOverlayPermission = ::requestOverlayPermission,
+                recorderCompatibilityEnabled = recorderCompatibilityEnabled,
+                onOpenRecorderCompatibility = ::openRecorderCompatibility,
                 onStartOverlay = ::startOverlay,
                 onStopOverlay = ::stopOverlay,
                 onResetBattle = ::resetBattle,
@@ -204,6 +208,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         overlayGranted = Settings.canDrawOverlays(this)
+        recorderCompatibilityEnabled = AccessibilityScreenCapture.isConnected
         historyRevision++
         if (::settingsRepo.isInitialized && settingsRepo.overlayServiceRunning) {
             overlayStarting = false
@@ -233,6 +238,15 @@ class MainActivity : ComponentActivity() {
                 Uri.parse("package:$packageName")
             )
         )
+    }
+
+    private fun openRecorderCompatibility() {
+        Toast.makeText(
+            this,
+            "Ative PvPPokeGo em Acessibilidade. Ele usa somente captura de tela de compatibilidade e não executa toques.",
+            Toast.LENGTH_LONG
+        ).show()
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
     private fun startOverlay() {
