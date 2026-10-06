@@ -582,6 +582,7 @@ class BattleOverlayView(
     private fun drawReserves(canvas: Canvas) {
         state.reserves.take(2).forEachIndexed { index,reserve ->
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
+            if (!reserve.visible && !settings.editMode) return@forEachIndexed
             if (settings.isBlockHidden(block)) return@forEachIndexed
             val bs = settings.blockScale(block)
             val oldAlpha = blockAlphaMultiplier
