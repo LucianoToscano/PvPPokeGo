@@ -210,7 +210,21 @@ class BattleOverlayView(
 
         if (settings.showCurrentIndicator) withBlockAlpha(BLOCK_PLAYER_MATCHUP) {
             val (x, y) = topPos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X)
-            drawMatchupIndicator(canvas, rx(x), ry(y), state.playerMatchup, 14f*u()*settings.blockScale(BLOCK_PLAYER_MATCHUP))
+            val sx = rx(x)
+            val sy = ry(y)
+            val bs = settings.blockScale(BLOCK_PLAYER_MATCHUP)
+            drawMatchupIndicator(canvas, sx, sy, state.playerMatchup, 14f*u()*bs)
+            if (settings.showHudText) {
+                state.playerHpRatio?.let { hp ->
+                    paint.color = hudColor(Color.WHITE, .92f)
+                    paint.textAlign = Paint.Align.CENTER
+                    paint.typeface = Typeface.DEFAULT_BOLD
+                    paint.textSize = 9.2f*u()*bs
+                    paint.setShadowLayer(3f, 0f, 1f, Color.BLACK)
+                    canvas.drawText("HP " + (hp.coerceIn(0f,1f)*100f).toInt() + "%", sx, sy + 29f*u()*bs, paint)
+                    paint.clearShadowLayer()
+                }
+            }
         }
         if (settings.showStrongTypes) withBlockAlpha(BLOCK_STRONG_TYPES) { drawStrongTypes(canvas) }
         if (settings.showEnemyMoves) withBlockAlpha(BLOCK_ENEMY_MOVES) { drawMoveTriangle(canvas) }
@@ -326,6 +340,7 @@ class BattleOverlayView(
         val spread=rx(74f)*bs; val fastRadius=31f*u()*bs; val chargedRadius=41f*u()*bs
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)
+            drawObservedDamageBadge(canvas, centerX, fastY-fastRadius-10f*u()*bs, state.incomingFastDamage)
             drawMoveLabel(
                 canvas,
                 centerX,
@@ -336,6 +351,7 @@ class BattleOverlayView(
         state.charged1?.let { p ->
             val cx=centerX-spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
+            drawObservedDamageBadge(canvas, cx, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged1Damage)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged1Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
@@ -343,6 +359,7 @@ class BattleOverlayView(
         state.charged2?.let { p ->
             val cx=centerX+spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
+            drawObservedDamageBadge(canvas, cx, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged2Damage)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged2Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
@@ -360,6 +377,28 @@ class BattleOverlayView(
             }
         }
         drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 138f*u()*bs, 122f*u()*bs)
+    }
+
+    private fun drawObservedDamageBadge(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        estimate: com.lucianotoscano.pvppokego.data.ObservedDamageEstimate?
+    ) {
+        if (!settings.showHudText || estimate == null) return
+        paint.color = hudColor(Color.WHITE, .90f)
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = 9.0f*u()
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.setShadowLayer(3f, 0f, 1f, Color.BLACK)
+        val sampleSuffix = if (estimate.samples > 1) " • " + estimate.samples + "x" else ""
+        canvas.drawText(
+            "~" + "%.0f".format(estimate.averagePercent) + "% HP" + sampleSuffix,
+            x,
+            y,
+            paint
+        )
+        paint.clearShadowLayer()
     }
 
     private fun drawEnemySuperEffectiveText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
