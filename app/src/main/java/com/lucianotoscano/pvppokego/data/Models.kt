@@ -66,6 +66,12 @@ data class BattleDetection(
     val battleText: String = ""
 )
 
+data class ReserveCardEvidence(
+    val cp: Int?,
+    val visualDex: Int? = null,
+    val visualConfidence: Float? = null
+)
+
 enum class MatchupState { FAVORABLE, NEUTRAL, UNFAVORABLE, UNKNOWN }
 enum class EnergyConfidence { CONFIRMED, ESTIMATED, RANGE }
 
