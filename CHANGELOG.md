@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.16
+
+- Novo detector híbrido de Fast Move: combina queda de HP, microqueda, cadência esperada e pico de movimento com confiança.
+- Testes unitários adicionados para HP forte, microqueda, fallback por movimento/cadência e proteção contra dupla contagem.
+- PvPoke offline no APK: gamemaster + rankings 1500/2500/10000 são empacotados no build, com fallback de rede/cache.
+- Exportação de diagnóstico em ZIP com configurações, posições, histórico, confiança/origem dos eventos e dados do aparelho.
+- Gravação de tela interna do PvPPokeGo: reutiliza os mesmos frames da captura, evitando abrir uma segunda MediaProjection.
+- Vídeos internos são salvos em Movies/PvPPokeGo, sem áudio.
+- A gravação pode ser iniciada/parada pelo menu rápido, tela principal ou notificação.
+- Durante gravação, pausar a análise não interrompe o vídeo.
+- Mantidas todas as correções da 0.5.15: posições, ícone de Configurações, golpes mais próximos e carregamento inimigo corrigido.
+
+
 ## 0.5.15
 
 - As posições do HUD passam a usar como preset oficial as coordenadas exportadas no arquivo PvPPokeGo-0.5.14-config.json enviado pelo usuário.
