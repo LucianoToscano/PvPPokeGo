@@ -48,6 +48,7 @@ import com.lucianotoscano.pvppokego.detect.BattleOcrDetector
 import com.lucianotoscano.pvppokego.detect.BattlePresenceTracker
 import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
 import com.lucianotoscano.pvppokego.engine.BattleContinuityPolicy
+import com.lucianotoscano.pvppokego.engine.BattleCorrespondenceTracker
 import com.lucianotoscano.pvppokego.engine.BattleEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -72,6 +73,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var detector: BattleOcrDetector? = null
     private var frameDetector: BattleFrameEventDetector? = null
     private val presenceTracker = BattlePresenceTracker()
+    private val battleCorrespondence = BattleCorrespondenceTracker()
     private var lastNativeTopCardY: Int? = null
     private var lastEditSnapshot: Triple<String, Float, Float>? = null
     private var projection: MediaProjection? = null
@@ -227,7 +229,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 detector?.close()
                 detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
                 if (frameDetector == null) frameDetector = BattleFrameEventDetector()
-                if (!battleActive && !historyRecorder.hasActiveSession()) presenceTracker.reset()
+                if (!battleActive && !historyRecorder.hasActiveSession()) {
+                    presenceTracker.reset()
+                    battleCorrespondence.reset()
+                }
 
                 projectionRevokedBySystem = true
                 usingAccessibilityFallback = true
@@ -265,6 +270,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
                 frameDetector = BattleFrameEventDetector()
                 presenceTracker.reset()
+                battleCorrespondence.reset()
 
                 val pm = getSystemService(MediaProjectionManager::class.java)
                 val mediaProjection = pm.getMediaProjection(resultCode, resultData)
@@ -1133,6 +1139,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         engine?.resetBattle()
         frameDetector?.reset()
         presenceTracker.reset()
+        battleCorrespondence.reset()
         battleActive = false
         lastNativeTopCardY = null
         lastBattleEvidenceAtMs = 0L
@@ -1300,14 +1307,58 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 val pairedCards = d.player != null && d.opponent != null
                                 val textEvidence = battleTextLooksActive(d.battleText)
                                 val switchPrompt = switchChoicePromptDetected(d.battleText)
-                                if (pairedCards || textEvidence || switchPrompt) {
+                                val hasBattleEvidence = pairedCards || textEvidence || switchPrompt
+                                val previousEvidenceGap = if (lastBattleEvidenceAtMs > 0L) {
+                                    (now - lastBattleEvidenceAtMs).coerceAtLeast(0L)
+                                } else {
+                                    Long.MAX_VALUE
+                                }
+
+                                val correspondenceDecision = if (historyRecorder.hasActiveSession()) {
+                                    battleCorrespondence.observe(
+                                        context = e.battleCorrespondenceContext(
+                                            inactiveForMs = previousEvidenceGap,
+                                            sessionAgeMs = historyRecorder.activeElapsedMs(now) ?: 0L
+                                        ),
+                                        observation = e.battleCorrespondenceObservation(
+                                            detection = d,
+                                            pairedCards = pairedCards,
+                                            battleTextEvidence = textEvidence,
+                                            switchPrompt = switchPrompt
+                                        ),
+                                        nowMs = now
+                                    )
+                                } else {
+                                    battleCorrespondence.reset()
+                                    BattleCorrespondenceTracker.Decision.CONTINUE
+                                }
+
+                                if (correspondenceDecision == BattleCorrespondenceTracker.Decision.NEW_BATTLE) {
+                                    // The old session survived a visibility gap, but a repeated,
+                                    // incompatible player+opponent pair proves a new match.
+                                    // Finish it before letting the new identities mutate energy/team state.
+                                    historyRecorder.finish(
+                                        nowMs = now,
+                                        reason = "Nova partida confirmada por identidade visual/OCR"
+                                    )
+                                    clearBattleContextAfterConfirmedEnd()
+                                    e = engine
+                                }
+
+                                if (hasBattleEvidence) {
                                     battleActive = presenceTracker.update(
                                         pairedPokemonCards = pairedCards,
                                         battleTextEvidence = textEvidence,
                                         switchPrompt = switchPrompt,
                                         nowMs = now
                                     )
-                                    updateHistorySession(battleActive, now)
+                                    updateHistorySession(
+                                        battleActive,
+                                        now,
+                                        startedMidBattleEvidence =
+                                            correspondenceDecision == BattleCorrespondenceTracker.Decision.NEW_BATTLE &&
+                                                textEvidence
+                                    )
                                     e?.onBattleConfidence(presenceTracker.confidence)
                                     markBattleEvidence(now)
                                 }
@@ -1315,8 +1366,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
 
+                                // While a possible new-match pair is waiting for its second
+                                // confirming frame, preserve the old battle state untouched.
+                                val holdIdentityMutation =
+                                    correspondenceDecision == BattleCorrespondenceTracker.Decision.INSUFFICIENT &&
+                                        battleCorrespondence.hasPendingNewBattleCandidate
+
                                 val before = e?.uiState()
-                                val changes = e?.onDetection(d)
+                                val changes = if (!holdIdentityMutation) e?.onDetection(d) else null
                                 val after = e?.uiState()
                                 if (changes?.playerChanged == true) lastReserveOcrAt = 0L
 
@@ -1357,7 +1414,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
 
-                                val textEvent = e?.onBattleText(d.battleText, now)
+                                val textEvent = if (!holdIdentityMutation) e?.onBattleText(d.battleText, now) else null
                                 if (textEvent != null) {
                                     val chargedAtSessionStart =
                                         historyRecorder.activeElapsedMs(now)?.let { it <= 3_500L } == true &&
