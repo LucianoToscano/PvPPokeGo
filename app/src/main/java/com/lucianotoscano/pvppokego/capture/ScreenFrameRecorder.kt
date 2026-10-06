@@ -62,9 +62,16 @@ class ScreenFrameRecorder(private val context: Context) {
     var lastSavedUri: Uri? = null
         private set
 
+    var lastErrorMessage: String? = null
+        private set
+
     fun start(width: Int, height: Int): Boolean {
         if (isRecording) return true
-        if (width < 2 || height < 2) return false
+        lastErrorMessage = null
+        if (width < 2 || height < 2) {
+            lastErrorMessage = "Dimensões de captura inválidas"
+            return false
+        }
 
         val scale = minOf(
             1f,
@@ -103,7 +110,8 @@ class ScreenFrameRecorder(private val context: Context) {
             firstFrameSubmitted = false
             isRecording = true
             true
-        }.getOrElse {
+        }.getOrElse { error ->
+            lastErrorMessage = "Falha ao iniciar encoder: ${error.javaClass.simpleName}: ${error.message ?: "sem detalhe"}"
             releaseInternal(deleteTemp = true)
             false
         }
@@ -156,7 +164,8 @@ class ScreenFrameRecorder(private val context: Context) {
                 }
             }
             drainEncoder(endOfStream = false)
-        }.onFailure {
+        }.onFailure { error ->
+            lastErrorMessage = "Falha durante gravação: ${error.javaClass.simpleName}: ${error.message ?: "sem detalhe"}"
             runCatching { stop() }
         }
     }
@@ -186,7 +195,16 @@ class ScreenFrameRecorder(private val context: Context) {
         val validFile = muxerStarted && encodedSampleCount > 0 &&
             file != null && file.exists() && file.length() >= MIN_VALID_MP4_BYTES
         val published = file?.takeIf { validFile }?.let(::publishToMediaStore)
-        if (published != null) lastSavedUri = published
+        if (published != null) {
+            lastSavedUri = published
+            lastErrorMessage = null
+        } else if (lastErrorMessage == null) {
+            lastErrorMessage = when {
+                !muxerStarted -> "Encoder não produziu formato de vídeo"
+                encodedSampleCount <= 0 -> "Nenhum quadro de vídeo foi codificado"
+                else -> "MP4 incompleto; arquivo não foi publicado"
+            }
+        }
         runCatching { file?.delete() }
         muxerStarted = false
         trackIndex = -1
