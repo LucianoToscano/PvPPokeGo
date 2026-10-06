@@ -65,6 +65,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val reserveCardDexes = arrayOfNulls<Int>(2)
     private val reserveDexCandidate = arrayOfNulls<Int>(2)
     private val reserveDexStreak = IntArray(2)
+    private val reserveCardSpeciesIds = arrayOfNulls<String>(2)
+    private val reserveSpeciesCandidate = arrayOfNulls<String>(2)
+    private val reserveSpeciesStreak = IntArray(2)
     private var ownSwitchReadyAtMs: Long = 0L
     private var opponentSwitchReadyAtMs: Long = 0L
     private var chargedPendingSinceMs: Long? = null
@@ -107,6 +110,12 @@ class BattleEngine(private val repo: GameDataRepository) {
         reserveCardDexes.fill(null)
         reserveDexCandidate.fill(null)
         reserveDexStreak.fill(0)
+        reserveCardSpeciesIds.fill(null)
+        reserveSpeciesCandidate.fill(null)
+        reserveSpeciesStreak.fill(0)
+        reserveCardSpeciesIds.fill(null)
+        reserveSpeciesCandidate.fill(null)
+        reserveSpeciesStreak.fill(0)
         ownSwitchReadyAtMs = 0L
         opponentSwitchReadyAtMs = 0L
         chargedPendingSinceMs = null
@@ -244,6 +253,31 @@ class BattleEngine(private val repo: GameDataRepository) {
             if (reserveCpStreak[index] >= 2) reserveCardCps[index] = cp
         }
 
+        fun updateSpecies(index: Int, evidence: ReserveCardEvidence) {
+            val speciesId = evidence.visualSpeciesId?.takeIf { it.isNotBlank() } ?: return
+            val confidence = evidence.visualConfidence ?: return
+            if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
+
+            val matchingMembers = ownTeamSlots.filter { slot ->
+                repo.pokemon(slot.name)?.speciesId.equals(speciesId, ignoreCase = true)
+            }
+            if (matchingMembers.size != 1) return
+
+            if (reserveSpeciesCandidate[index].equals(speciesId, ignoreCase = true)) {
+                reserveSpeciesStreak[index]++
+            } else {
+                reserveSpeciesCandidate[index] = speciesId
+                reserveSpeciesStreak[index] = 1
+            }
+
+            if (
+                confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
+                reserveSpeciesStreak[index] >= RESERVE_VISUAL_CONFIRM_FRAMES
+            ) {
+                reserveCardSpeciesIds[index] = speciesId
+            }
+        }
+
         fun updateDex(index: Int, evidence: ReserveCardEvidence) {
             val dex = evidence.visualDex ?: return
             val confidence = evidence.visualConfidence ?: return
@@ -271,6 +305,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
         listOf(top, bottom).forEachIndexed { index, evidence ->
             updateCp(index, evidence.cp)
+            updateSpecies(index, evidence)
             updateDex(index, evidence)
         }
     }
@@ -281,7 +316,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun needsReserveCardScan(): Boolean =
         ownTeamSlots.size >= 2 &&
             reserveCardCps.indices.any { index ->
-                reserveCardCps[index] == null && reserveCardDexes[index] == null
+                reserveCardCps[index] == null &&
+                    reserveCardSpeciesIds[index] == null &&
+                    reserveCardDexes[index] == null
             }
 
     private fun clearReserveCardIdentity() {
@@ -778,7 +815,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.minEnergy}-${tracker.maxEnergy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
                 appendLine("Battle conf=${"%.2f".format(lastBattleConfidence)} HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"}/${lastOpponentHpRatio?.let { "%.3f".format(it) } ?: "?"}")
-                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }} DEXcards=${reserveCardDexes.joinToString { it?.toString() ?: "?" }}")
+                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }} DEXcards=${reserveCardDexes.joinToString { it?.toString() ?: "?" }} FORMS=${reserveCardSpeciesIds.joinToString { it ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
                 append("Own C1=${ownCharge1?.name ?: "?"} C2=${ownCharge2?.name ?: "?"} state=${os?.speciesName ?: "?"}")
@@ -838,7 +875,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                 slot = slot.slot,
                 name = slot.name,
                 cp = slot.cp,
-                dex = repo.pokemon(slot.name)?.dex?.takeIf { it > 0 }
+                dex = repo.pokemon(slot.name)?.dex?.takeIf { it > 0 },
+                speciesId = repo.pokemon(slot.name)?.speciesId
             )
         }
         return ReserveCardMatcher.resolve(
@@ -846,7 +884,8 @@ class BattleEngine(private val repo: GameDataRepository) {
             activeName = playerName,
             activeCp = playerCp,
             cardCps = reserveCardCps.toList(),
-            cardDexes = reserveCardDexes.toList()
+            cardDexes = reserveCardDexes.toList(),
+            cardSpeciesIds = reserveCardSpeciesIds.toList()
         ).mapNotNull { match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
                 ResolvedOwnReserve(slot, match.cardCp, match.confirmed)
