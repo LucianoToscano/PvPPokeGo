@@ -226,6 +226,7 @@ class BattleOverlayView(
                 }
             }
         }
+        drawIncomingDamagePreview(canvas)
         if (settings.showStrongTypes) withBlockAlpha(BLOCK_STRONG_TYPES) { drawStrongTypes(canvas) }
         if (settings.showEnemyMoves) withBlockAlpha(BLOCK_ENEMY_MOVES) { drawMoveTriangle(canvas) }
         if (state.chargedIncoming && settings.showEnemyMoves && !settings.battleAssistEnabled) drawShieldAdvice(canvas)
@@ -311,6 +312,61 @@ class BattleOverlayView(
             if (kotlin.math.abs(cx-rx(mx)) < 2f && kotlin.math.abs(cy-ry(my)) < 2f) {
                 drawEditSelection(canvas, BLOCK_PLAYER_MATCHUP, cx, cy, 24f*u(), 24f*u())
             }
+        }
+    }
+
+    private fun drawIncomingDamagePreview(canvas: Canvas) {
+        val forecast = state.incomingDamagePreview ?: return
+        val hp = state.playerHpRatio?.coerceIn(0f, 1f) ?: return
+        val yFraction = state.playerHpBarYFraction?.takeIf { it in 0f..1f } ?: return
+        if (!state.chargedIncoming) return
+        if (
+            state.captureHealth == com.lucianotoscano.pvppokego.data.CaptureHealth.STALE ||
+            state.captureHealth == com.lucianotoscano.pvppokego.data.CaptureHealth.PAUSED
+        ) return
+
+        // Same player HP ROI used by BattleFrameEventDetector. Draw above the native
+        // bar so the preview never hides Pokemon GO current HP.
+        val left = width * .035f
+        val right = width * .405f
+        val fullWidth = (right - left).coerceAtLeast(1f)
+        val y = height * yFraction - 8f * u()
+        val barHeight = 5.2f * u()
+        val currentX = left + fullWidth * hp
+        val minDamage = (forecast.minPercent / 100f).coerceIn(0f, 1f)
+        val maxDamage = (forecast.maxPercent / 100f).coerceIn(minDamage, 1f)
+        val bestRemaining = (hp - minDamage).coerceIn(0f, hp)
+        val worstRemaining = (hp - maxDamage).coerceIn(0f, hp)
+        val bestX = left + fullWidth * bestRemaining
+        val worstX = left + fullWidth * worstRemaining
+
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(Color.rgb(238, 70, 64), .34f)
+        canvas.drawRoundRect(RectF(worstX, y, currentX, y + barHeight), 2.5f*u(), 2.5f*u(), paint)
+        paint.color = hudColor(Color.rgb(255, 184, 58), .55f)
+        canvas.drawRect(bestX - 1.2f*u(), y - 1f*u(), bestX + 1.2f*u(), y + barHeight + 1f*u(), paint)
+        paint.color = hudColor(Color.rgb(238, 70, 64), .78f)
+        canvas.drawRect(worstX - 1.2f*u(), y - 1f*u(), worstX + 1.2f*u(), y + barHeight + 1f*u(), paint)
+
+        if (settings.showHudText) {
+            val remainMin = (hp * 100f - forecast.maxPercent).coerceIn(0f, 100f)
+            val remainMax = (hp * 100f - forecast.minPercent).coerceIn(0f, 100f)
+            val source = when (forecast.confidence) {
+                com.lucianotoscano.pvppokego.data.DamageForecastConfidence.OBSERVED_STABLE -> "OBS"
+                com.lucianotoscano.pvppokego.data.DamageForecastConfidence.OBSERVED_ESTIMATED -> "OBS~"
+                com.lucianotoscano.pvppokego.data.DamageForecastConfidence.MODEL -> "MODELO"
+            }
+            val shields = if (state.ownShieldsRemaining > 0) "ESC " + state.ownShieldsRemaining else "SEM ESCUDO"
+            val label = shields + " • -" + "%.0f".format(forecast.minPercent) + "-" +
+                "%.0f".format(forecast.maxPercent) + "% • →" + "%.0f".format(remainMin) + "-" +
+                "%.0f".format(remainMax) + "% • " + source
+            paint.color = hudColor(Color.WHITE, .96f)
+            paint.textAlign = Paint.Align.LEFT
+            paint.textSize = 8.8f*u()
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.setShadowLayer(3f, 0f, 1.2f, Color.BLACK)
+            canvas.drawText(label, left, y - 4f*u(), paint)
+            paint.clearShadowLayer()
         }
     }
 
@@ -567,7 +623,11 @@ class BattleOverlayView(
                 }
                 val recommendation = reserve.recommendation
                     ?.takeIf { it == "MELHOR" || it == "EVITAR" }
-                val status = listOfNotNull(matchupText, recommendation)
+                val hpLabel = reserve.hpRatio?.let { "HP " + (it.coerceIn(0f, 1f) * 100f).toInt() + "%" }
+                val lifeLabel = if (
+                    reserve.status == com.lucianotoscano.pvppokego.data.TeamPokemonStatus.FAINTED
+                ) "DESMAIADO" else null
+                val status = listOfNotNull(lifeLabel, matchupText, recommendation, hpLabel)
                     .distinct()
                     .joinToString(" • ")
 
