@@ -27,6 +27,9 @@ object AccessibilityScreenCapture {
     @Volatile
     private var lastRequestAtMs: Long = 0L
 
+    @Volatile
+    private var latestCapturedAtMs: Long = 0L
+
     val isConnected: Boolean
         get() = serviceRef.get()?.get() != null
 
@@ -38,7 +41,10 @@ object AccessibilityScreenCapture {
         val current = serviceRef.get()?.get()
         if (current === service) serviceRef.set(null)
         inFlight.set(false)
-        val old = synchronized(bitmapLock) { latest.getAndSet(null) }
+        val old = synchronized(bitmapLock) {
+            latestCapturedAtMs = 0L
+            latest.getAndSet(null)
+        }
         old?.recycle()
     }
 
@@ -62,7 +68,10 @@ object AccessibilityScreenCapture {
                             val copy = wrapped?.copy(Bitmap.Config.ARGB_8888, false)
                             hardware.close()
                             if (copy != null) {
-                                val old = synchronized(bitmapLock) { latest.getAndSet(copy) }
+                                val old = synchronized(bitmapLock) {
+                                    latestCapturedAtMs = System.currentTimeMillis()
+                                    latest.getAndSet(copy)
+                                }
                                 old?.recycle()
                             }
                         } finally {
@@ -82,10 +91,12 @@ object AccessibilityScreenCapture {
         }
     }
 
-    /** Caller owns and must recycle the returned copy. */
-    fun acquireLatestBitmap(): Bitmap? = synchronized(bitmapLock) {
+    /** Caller owns and must recycle the returned copy. Returns only a newer frame. */
+    fun acquireLatestBitmap(afterCapturedAtMs: Long): Pair<Bitmap, Long>? = synchronized(bitmapLock) {
+        val capturedAt = latestCapturedAtMs
+        if (capturedAt <= afterCapturedAtMs) return@synchronized null
         val src = latest.get() ?: return@synchronized null
-        if (src.isRecycled) null else src.copy(Bitmap.Config.ARGB_8888, false)
+        if (src.isRecycled) null else src.copy(Bitmap.Config.ARGB_8888, false) to capturedAt
     }
 
     fun clearLatest() {
