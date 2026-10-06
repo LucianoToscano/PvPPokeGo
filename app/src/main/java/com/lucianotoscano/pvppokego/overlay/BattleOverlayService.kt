@@ -216,7 +216,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("0.5.18 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                startForeground(NOTIFICATION_ID, notification("0.5.19 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -1327,7 +1327,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("0.5.18 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            startForeground(NOTIFICATION_ID, notification("0.5.19 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
