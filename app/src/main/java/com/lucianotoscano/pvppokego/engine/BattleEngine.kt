@@ -163,6 +163,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
             val visualDef = detected.visualSpeciesId
                 ?.takeIf(String::isNotBlank)
+                ?.takeIf { (detected.visualConfidence ?: 0f) >= IdentityThresholds.ACTIVE_VISUAL_MIN_CONFIDENCE }
                 ?.let(repo::pokemon)
             val ocrDef = repo.pokemon(ocrCanonical)
             val resolvedDef = cpPinnedSlot?.speciesId?.let(repo::pokemon)
@@ -195,6 +196,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             val ocrCanonical = repo.canonicalPokemonName(detected.name) ?: detected.name
             val visualDef = detected.visualSpeciesId
                 ?.takeIf(String::isNotBlank)
+                ?.takeIf { (detected.visualConfidence ?: 0f) >= IdentityThresholds.ACTIVE_VISUAL_MIN_CONFIDENCE }
                 ?.let(repo::pokemon)
             val resolvedDef = visualDef ?: repo.pokemon(ocrCanonical)
             val canonical = resolvedDef?.speciesName ?: ocrCanonical
@@ -1055,7 +1057,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     speciesId = slot.speciesId ?: def?.speciesId,
                     cp = cp,
                     types = types,
-                    matchup = classify(types, eTypes),
+                    matchup = if (resolved.confirmed) classify(types, eTypes) else MatchupState.UNKNOWN,
                     visible = reserveSlotVisible.getOrNull(index) != false,
                     score = score,
                     teamSlot = slot.slot,
