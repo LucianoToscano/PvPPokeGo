@@ -82,6 +82,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     @Volatile private var usingAccessibilityFallback = false
     @Volatile private var destroyingService = false
     private var lastAccessibilityFrameAtMs = 0L
+    private var lastMediaProjectionFrameAtMs = 0L
+    private var lastFreshAnalysisFrameAtMs = 0L
+    private var captureStaleNotified = false
     private var screenRecorder: ScreenFrameRecorder? = null
     private var windowManager: WindowManager? = null
     private var overlayView: BattleOverlayView? = null
@@ -108,6 +111,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     private var battleActive = false
     private var lastBattleEvidenceAtMs = 0L
+    /** Short visual lifetime for the league badge; independent from battle continuity. */
+    private var lastBattleUiVisibleAtMs = 0L
     private var switchChoicePromptUntilMs = 0L
     private var lastHistoryStateAtMs = 0L
 
@@ -1204,6 +1209,23 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 runCatching { capture?.ensureMatchesCurrentDisplay() }
                 val nowForFrame = System.currentTimeMillis()
                 val frame = acquireAnalysisFrame(nowForFrame)
+                if (
+                    frame == null &&
+                    lastFreshAnalysisFrameAtMs > 0L &&
+                    nowForFrame - lastFreshAnalysisFrameAtMs >= CAPTURE_STALE_AFTER_MS
+                ) {
+                    if (!captureStaleNotified) {
+                        captureStaleNotified = true
+                        engine?.onCaptureHealth(
+                            CaptureHealth.STALE,
+                            "Captura pausada • aguardando imagem atual"
+                        )
+                        withContext(Dispatchers.Main) {
+                            refreshForegroundNotification("Captura pausada • aguardando imagem")
+                            redraw()
+                        }
+                    }
+                }
                 if (frame != null) {
                     try {
                         screenRecorder?.recordFrame(frame)
@@ -1293,7 +1315,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 )
                                 updateHistorySession(battleActive, now)
                                 e.onBattleConfidence(presenceTracker.confidence)
-                                if (event.battleUiVisible) markBattleEvidence(now)
+                                if (event.battleUiVisible) {
+                                    lastBattleUiVisibleAtMs = now
+                                    markBattleEvidence(now)
+                                }
                                 if (battleActive || event.battleUiVisible) {
                                     e.onReserveSlotsDetected(event.reserve1Visible, event.reserve2Visible)
                                 }
@@ -1718,7 +1743,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         hudLockTouch?.visibility = if (chromeEnabled && !hudCollapsed) View.VISIBLE else View.GONE
         // Original lock/eye icons are drawn on the HUD canvas; touch views stay transparent.
         quickMenu?.setVisible(chromeEnabled && !hudCollapsed)
-        quickMenu?.setBattleActive(battleActive)
+        val leagueVisuallyActive =
+            System.currentTimeMillis() - lastBattleUiVisibleAtMs <= LEAGUE_BADGE_VISIBILITY_MS
+        quickMenu?.setBattleActive(leagueVisuallyActive)
         if (!hudCollapsed) quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()
     }
@@ -1790,9 +1817,20 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
      * Accessibility fallback after another recorder revokes MediaProjection.
      */
     private fun acquireAnalysisFrame(nowMs: Long): android.graphics.Bitmap? {
-        capture?.acquireLatestBitmap()?.let {
-            usingAccessibilityFallback = false
-            return it
+        val mediaCapture = capture
+        if (mediaCapture != null) {
+            val frameTimestamp = mediaCapture.latestFrameTimestampMs()
+            if (frameTimestamp > 0L && frameTimestamp > lastMediaProjectionFrameAtMs) {
+                val bitmap = mediaCapture.acquireLatestBitmap()
+                if (bitmap != null) {
+                    lastMediaProjectionFrameAtMs = frameTimestamp
+                    lastFreshAnalysisFrameAtMs = nowMs
+                    captureStaleNotified = false
+                    usingAccessibilityFallback = false
+                    engine?.onCaptureHealth(CaptureHealth.FRESH)
+                    return bitmap
+                }
+            }
         }
 
         if (!projectionRevokedBySystem || !AccessibilityScreenCapture.isConnected) return null
@@ -1800,6 +1838,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         AccessibilityScreenCapture.requestScreenshot(nowMs)
         val fresh = AccessibilityScreenCapture.acquireLatestBitmap(lastAccessibilityFrameAtMs) ?: return null
         lastAccessibilityFrameAtMs = fresh.second
+        lastFreshAnalysisFrameAtMs = nowMs
+        captureStaleNotified = false
+        engine?.onCaptureHealth(
+            CaptureHealth.COMPATIBILITY,
+            "Gravador externo ativo • análise por screenshots"
+        )
         return fresh.first
     }
 
@@ -1994,6 +2038,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         const val ACTION_APP_FOREGROUND = "com.lucianotoscano.pvppokego.APP_FOREGROUND"
         const val ACTION_APP_BACKGROUND = "com.lucianotoscano.pvppokego.APP_BACKGROUND"
         private const val NOTIFICATION_ID = 1107
+        private const val CAPTURE_STALE_AFTER_MS = 2_500L
+        private const val LEAGUE_BADGE_VISIBILITY_MS = 2_800L
         private const val FRAME_INTERVAL_MS = 105L
         private const val OCR_INTERVAL_MS = 520L
         private const val RESERVE_OCR_INTERVAL_MS = 280L
