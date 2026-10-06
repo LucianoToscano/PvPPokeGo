@@ -183,6 +183,9 @@ data class BattlePokemonState(
     var charge1Manual: Boolean = false,
     var charge2Manual: Boolean = false,
     var observedChargedMoveIds: MutableSet<String> = linkedSetOf(),
+    /** Last trustworthy visible HP estimate for this exact Pokémon. */
+    var lastHpRatio: Float? = null,
+    var fainted: Boolean = false,
     var lastSeenAtMs: Long = 0L
 )
 
