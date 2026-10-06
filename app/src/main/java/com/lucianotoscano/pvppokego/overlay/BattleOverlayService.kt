@@ -68,7 +68,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var settingsRepo: SettingsRepository
     private lateinit var gameRepo: GameDataRepository
+    private lateinit var historyRepository: BattleHistoryRepository
     private lateinit var historyRecorder: BattleHistoryRecorder
+    private var lastStrategyOpponentKey: String? = null
     private var engine: BattleEngine? = null
     private var detector: BattleOcrDetector? = null
     private var frameDetector: BattleFrameEventDetector? = null
@@ -134,7 +136,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         settingsRepo.layoutLocked = true
         settingsRepo.overlayServiceRunning = true
         gameRepo = GameDataRepository(this)
-        historyRecorder = BattleHistoryRecorder(BattleHistoryRepository(this))
+        historyRepository = BattleHistoryRepository(this)
+        historyRecorder = BattleHistoryRecorder(historyRepository)
         screenRecorder = ScreenFrameRecorder(this)
         setForegroundNotification(notification("Aguardando captura de tela"))
     }
@@ -1153,6 +1156,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         frameDetector?.reset()
         presenceTracker.reset()
         battleCorrespondence.reset()
+        lastStrategyOpponentKey = null
         battleActive = false
         lastNativeTopCardY = null
         lastBattleEvidenceAtMs = 0L
@@ -1503,6 +1507,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 val before = e?.uiState()
                                 val changes = if (!holdIdentityMutation) e?.onDetection(d) else null
                                 val after = e?.uiState()
+                                after?.opponentName?.takeIf { it.isNotBlank() }?.let { opponent ->
+                                    val key = normalizeForComparison(opponent)
+                                    if (key != lastStrategyOpponentKey) {
+                                        lastStrategyOpponentKey = key
+                                        e?.onLocalStrategyProfile(historyRepository.strategyProfile(opponent))
+                                    }
+                                }
                                 if (changes?.playerChanged == true) lastReserveOcrAt = 0L
 
                                 if (battleActive && after != null) {
