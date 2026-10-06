@@ -1,19 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <service
-            android:name=".overlay.BattleOverlayService"
-            android:foregroundServiceType="mediaProjection|specialUse"
-            tools:replace="android:foregroundServiceType">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="PvP visual overlay analysis with user-enabled screenshot compatibility" />
-        </service>
-
         <service
             android:name=".capture.PvPPokeGoAccessibilityCaptureService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
