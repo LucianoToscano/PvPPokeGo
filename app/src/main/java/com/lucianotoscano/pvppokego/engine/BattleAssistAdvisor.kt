@@ -2,6 +2,7 @@ package com.lucianotoscano.pvppokego.engine
 
 import android.graphics.Color
 import com.lucianotoscano.pvppokego.data.BattleUiState
+import com.lucianotoscano.pvppokego.data.CaptureHealth
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
@@ -28,6 +29,15 @@ object BattleAssistAdvisor {
                 playerTypes.isNotEmpty() &&
                 enemyTypes.isNotEmpty()
 
+        if (state.captureHealth == CaptureHealth.STALE || state.captureHealth == CaptureHealth.PAUSED) {
+            return Advice(
+                "ANALISANDO",
+                state.captureStatusText ?: "Aguardando uma imagem atual da batalha",
+                Color.rgb(128, 136, 146),
+                140
+            )
+        }
+
         if (!identityReady || state.battleConfidence < .45f) {
             return Advice(
                 "ANALISANDO",
@@ -52,12 +62,15 @@ object BattleAssistAdvisor {
                         .distinctBy { it.move.moveId }
                         .take(2)
                         .joinToString(" ou ") { shortName(it.move.name) }
+                    val forecast = state.incomingDamagePreview?.let { f ->
+                        " • sem escudo ~${"%.0f".format(f.minPercent)}-${"%.0f".format(f.maxPercent)}% HP"
+                    }.orEmpty()
                     return Advice(
-                        "ANALISANDO ATAQUE",
+                        if (state.ownShieldsRemaining <= 0) "SEM ESCUDOS" else "ANALISANDO ATAQUE",
                         if (possibleNames.isNotBlank()) {
-                            "Possível: $possibleNames • ${energyLabel(threat)}"
+                            "Possível: $possibleNames$forecast • ${energyLabel(threat)}"
                         } else {
-                            "Ataque carregado detectado • aguardando identificação"
+                            "Ataque carregado detectado$forecast"
                         },
                         Color.rgb(245, 175, 52),
                         112
@@ -80,6 +93,18 @@ object BattleAssistAdvisor {
                 val baitPossible = bait != null && bait.move.moveId != threat.move.moveId &&
                     bait.energyCost + 5 <= threat.energyCost && threat.maxEnergy >= threat.energyCost
                 return when {
+                    state.ownShieldsRemaining <= 0 -> Advice(
+                        "SEM ESCUDOS",
+                        listOfNotNull(
+                            shortName(threat.move.name),
+                            damageDetail ?: state.incomingDamagePreview?.let {
+                                "~${"%.0f".format(it.minPercent)}-${"%.0f".format(it.maxPercent)}% HP"
+                            },
+                            "prepare troca/farm conforme o HP"
+                        ).joinToString(" • "),
+                        Color.rgb(232, 61, 72),
+                        118
+                    )
                     observedLikelyLethal -> Advice(
                         "ESCUDO",
                         listOfNotNull(shortName(threat.move.name), damageDetail, "pode nocautear").joinToString(" • "),
@@ -162,7 +187,11 @@ object BattleAssistAdvisor {
         }
 
         // 4) Smarter swap recommendation using the engine's move-aware reserve score.
-        val visibleReserves = state.reserves.filter { it.visible && it.identityConfirmed }
+        val visibleReserves = state.reserves.filter {
+            it.visible &&
+                it.identityConfirmed &&
+                it.status != com.lucianotoscano.pvppokego.data.TeamPokemonStatus.FAINTED
+        }
         val bestReserve = visibleReserves.maxByOrNull { it.score }
         if (state.playerMatchup == MatchupState.UNFAVORABLE && bestReserve != null && bestReserve.score > -.10) {
             return Advice(
