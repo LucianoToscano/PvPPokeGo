@@ -100,22 +100,28 @@ class GameDataRepository(private val context: Context) {
         return uniquePokemonForVisualDex(dex)
     }
 
-    fun possibleFastMoves(speciesName: String): List<MoveDef> {
-        val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
+    private fun rankingEntry(nameOrSpeciesId: String): RankingEntry? {
+        val key = normalizeName(nameOrSpeciesId)
+        return ranking.firstOrNull { normalizeName(it.speciesId) == key }
+            ?: ranking.firstOrNull { normalizeName(it.speciesName) == key }
+    }
+
+    fun possibleFastMoves(nameOrSpeciesId: String): List<MoveDef> {
+        val entry = rankingEntry(nameOrSpeciesId)
         return entry?.moves?.fastMoves.orEmpty()
             .sortedByDescending { it.uses }
             .mapNotNull { move(it.moveId) }
     }
 
-    fun possibleChargedMoves(speciesName: String): List<MoveDef> {
-        val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
+    fun possibleChargedMoves(nameOrSpeciesId: String): List<MoveDef> {
+        val entry = rankingEntry(nameOrSpeciesId)
         return entry?.moves?.chargedMoves.orEmpty()
             .sortedByDescending { it.uses }
             .mapNotNull { move(it.moveId) }
     }
 
-    fun likelyMoveset(speciesName: String): Triple<MoveDef?, MoveDef?, MoveDef?> {
-        val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
+    fun likelyMoveset(nameOrSpeciesId: String): Triple<MoveDef?, MoveDef?, MoveDef?> {
+        val entry = rankingEntry(nameOrSpeciesId)
         val ids = entry?.moveset.orEmpty()
         return Triple(move(ids.getOrNull(0)), move(ids.getOrNull(1)), move(ids.getOrNull(2)))
     }
