@@ -140,7 +140,12 @@ class BattleEngine(private val repo: GameDataRepository) {
         val oldEnemy = enemyName
 
         d.player?.let {
-            val canonical = repo.canonicalPokemonName(it.name) ?: it.name
+            val visualName = it.visualSpeciesId?.let(repo::pokemon)?.speciesName
+            val ocrCanonical = repo.canonicalPokemonName(it.name) ?: it.name
+            val cpPinnedSlot = it.cp?.let { rawCp ->
+                ownTeamSlots.filter { slot -> slot.cp == rawCp }.singleOrNull()
+            }
+            val canonical = visualName ?: cpPinnedSlot?.name ?: ocrCanonical
             val stableCp = playerCpTracker.observe(normalize(canonical), it.cp)
             rememberOwnPokemon(canonical, stableCp)
             if (!canonical.equals(playerName, ignoreCase = true)) onPlayerChanged(canonical, stableCp)
