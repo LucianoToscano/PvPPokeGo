@@ -1457,6 +1457,19 @@ class BattleEngine(private val repo: GameDataRepository) {
 
         val enemyConf = enemyEnergyConfidence()
         val ownConf = ownEnergyConfidence()
+        val enemyCharged1Prediction = if (f != null && charge1 != null) tracker.predict(charge1!!, f, enemyConf) else null
+        val enemyCharged2Prediction = if (f != null && charge2 != null) tracker.predict(charge2!!, f, enemyConf) else null
+        val ownCharged1Prediction = if (of != null && ownCharge1 != null) ownTracker.predict(ownCharge1!!, of, ownConf) else null
+        val ownCharged2Prediction = if (of != null && ownCharge2 != null) ownTracker.predict(ownCharge2!!, of, ownConf) else null
+        val incomingPreview = if (
+            chargedPendingSinceMs != null &&
+            captureHealth != CaptureHealth.STALE &&
+            captureHealth != CaptureHealth.PAUSED
+        ) {
+            combinedIncomingDamageForecast(
+                listOfNotNull(enemyCharged1Prediction, enemyCharged2Prediction)
+            )
+        } else null
         val enemyHistory = enemyStates.all()
             .sortedByDescending { it.lastSeenAtMs }
             .take(3)
@@ -1480,14 +1493,14 @@ class BattleEngine(private val repo: GameDataRepository) {
             strongTypesAgainstOpponent = if (eTypes.isEmpty()) emptyList() else TypeChart.strongTypesAgainst(eTypes),
             reserves = reserveStates,
             fastMove = f,
-            charged1 = if (f != null && charge1 != null) tracker.predict(charge1!!, f, enemyConf) else null,
-            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f, enemyConf) else null,
+            charged1 = enemyCharged1Prediction,
+            charged2 = enemyCharged2Prediction,
             fastMoveKnowledge = moveKnowledge(activeState, 0, f),
             charged1Knowledge = moveKnowledge(activeState, 1, charge1),
             charged2Knowledge = moveKnowledge(activeState, 2, charge2),
             ownFastMove = of,
-            ownCharged1 = if (of != null && ownCharge1 != null) ownTracker.predict(ownCharge1!!, of, ownConf) else null,
-            ownCharged2 = if (of != null && ownCharge2 != null) ownTracker.predict(ownCharge2!!, of, ownConf) else null,
+            ownCharged1 = ownCharged1Prediction,
+            ownCharged2 = ownCharged2Prediction,
             ownFastMoveKnowledge = moveKnowledge(ownActiveState, 0, of),
             ownCharged1Knowledge = moveKnowledge(ownActiveState, 1, ownCharge1),
             ownCharged2Knowledge = moveKnowledge(ownActiveState, 2, ownCharge2),
@@ -1496,6 +1509,12 @@ class BattleEngine(private val repo: GameDataRepository) {
             chargedIncoming = chargedPendingSinceMs != null,
             playerHpRatio = lastHpRatio,
             opponentHpRatio = lastOpponentHpRatio,
+            playerHpBarYFraction = lastPlayerHpBarYFraction,
+            ownShieldsRemaining = ownShieldsRemaining,
+            opponentShieldsRemaining = opponentShieldsRemaining,
+            incomingDamagePreview = incomingPreview,
+            captureHealth = captureHealth,
+            captureStatusText = captureStatusText,
             incomingFastDamage = incomingDamageTracker.estimate(
                 currentEnemyDamageKey(),
                 currentPlayerDamageKey(),
@@ -1535,6 +1554,62 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
                 append("Own C1=${ownCharge1?.name ?: "?"} C2=${ownCharge2?.name ?: "?"} state=${os?.speciesName ?: "?"}")
             } else null
+        )
+    }
+
+    private fun combinedIncomingDamageForecast(
+        predictions: List<com.lucianotoscano.pvppokego.data.ChargedPrediction>
+    ): DamageForecast? {
+        if (predictions.isEmpty()) return null
+        val plausible = predictions.filter {
+            it.ready || it.maxEnergy >= it.energyCost || it.progress >= .72f
+        }.ifEmpty { predictions }
+
+        val forecasts = plausible.mapNotNull { prediction ->
+            val move = prediction.move
+            val observed = incomingDamageTracker.estimate(
+                currentEnemyDamageKey(),
+                currentPlayerDamageKey(),
+                move.moveId,
+                lastHpRatio
+            )
+            DamageForecastEngine.forecast(
+                repo = repo,
+                attackerId = enemySpeciesId ?: enemyName,
+                attackerCp = enemyCp,
+                defenderId = playerSpeciesId ?: playerName,
+                defenderCp = playerCp,
+                move = move,
+                observed = observed,
+                currentHpRatio = lastHpRatio
+            )?.let { forecast -> move to forecast }
+        }
+        if (forecasts.isEmpty()) return null
+        if (forecasts.size == 1) return forecasts.first().second
+
+        val minDamage = forecasts.minOf { it.second.minPercent }
+        val maxDamage = forecasts.maxOf { it.second.maxPercent }
+        val avgDamage = forecasts.maxOf { it.second.averagePercent }
+        val currentHpPercent = lastHpRatio?.times(100f)
+        val names = forecasts.map { repo.localizedMoveName(it.first) }.distinct()
+        val allObserved = forecasts.all {
+            it.second.confidence != DamageForecastConfidence.MODEL
+        }
+        val stableObserved = forecasts.all {
+            it.second.confidence == DamageForecastConfidence.OBSERVED_STABLE
+        }
+        return DamageForecast(
+            moveName = names.joinToString(" / ").take(50),
+            averagePercent = avgDamage,
+            minPercent = minDamage,
+            maxPercent = maxDamage,
+            projectedRemainingPercent = currentHpPercent?.let { (it - avgDamage).coerceIn(0f, 100f) },
+            source = if (allObserved) "dano observado • golpes possíveis" else "modelo PvPoke • golpes possíveis",
+            confidence = when {
+                stableObserved -> DamageForecastConfidence.OBSERVED_STABLE
+                allObserved -> DamageForecastConfidence.OBSERVED_ESTIMATED
+                else -> DamageForecastConfidence.MODEL
+            }
         )
     }
 
