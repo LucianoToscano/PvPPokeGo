@@ -108,6 +108,8 @@ data class ReserveState(
 data class BattlePokemonState(
     val key: String,
     val speciesName: String,
+    /** Exact PvPoke species/form id when known (for example ninetales_alolan). */
+    var speciesId: String? = null,
     var fastMoveId: String? = null,
     var chargedMove1Id: String? = null,
     var chargedMove2Id: String? = null,
