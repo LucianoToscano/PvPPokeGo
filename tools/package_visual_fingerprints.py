@@ -27,7 +27,7 @@ GM = ASSETS / "gamemaster.json"
 OUT = ASSETS / "pokemon_visual_fingerprints.json"
 ICON_ATLAS_OUT = ASSETS / "pokemon_icon_atlas.png"
 ICON_MAP_OUT = ASSETS / "pokemon_icon_atlas.json"
-ICON_CELL = 64
+ICON_CELL = 48
 ICON_COLUMNS = 32
 BASE_URL = (
     "https://raw.githubusercontent.com/PokeMiners/pogo_assets/master/"
