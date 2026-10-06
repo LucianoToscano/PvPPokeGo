@@ -678,13 +678,17 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownChargedCycle.reset()
         playerName = name
         playerSpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
-        playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value
+        playerCp = cp
 
-        val exactSlot = findOwnSlot(name, playerCp, playerSpeciesId)
+        val exactSlot = findOwnSlot(name, cp, playerSpeciesId)
         if (exactSlot != null) {
             playerName = slotDefinition(exactSlot)?.speciesName ?: exactSlot.name
             playerSpeciesId = exactSlot.speciesId ?: slotDefinition(exactSlot)?.speciesId ?: playerSpeciesId
-            if (playerCp == null) playerCp = exactSlot.cp
+            // The exact form slot is safer than a display-name fallback when two forms
+            // can share a name. Keep a valid observed CP, otherwise restore the slot CP.
+            playerCp = cp ?: exactSlot.cp
+        } else if (playerCp == null) {
+            playerCp = ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value
         }
 
         val displayName = playerName ?: name
