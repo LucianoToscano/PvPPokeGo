@@ -86,6 +86,10 @@ class BattleHistoryRepository(context: Context) {
             appendLine("$date  |  $league  |  ${"%.1f".format(Locale.US, duration)}s")
             appendLine("VOCÊ: ${battle.playerName ?: "?"} PC ${battle.playerCp ?: "?"}")
             appendLine("INIMIGO: ${battle.opponentName ?: "?"} PC ${battle.opponentCp ?: "?"}")
+            appendLine("APP: ${battle.appVersion} | BASE: ${battle.dataVersion ?: "desconhecida"}")
+            appendLine("CAPTURA: ${if (battle.startedMidBattle) "iniciada no meio da luta" else "início normal/indeterminado"}")
+            appendLine("ENCERRAMENTO: ${battle.endReason ?: "não informado"}")
+            battle.result?.let { appendLine("RESULTADO: $it") }
             appendLine("RESUMO: rápidos você=$ownFast, inimigo=$enemyFast | carregados você=$ownCharged, inimigo=$enemyCharged | decisões=$decisions")
             appendLine()
 
@@ -107,6 +111,9 @@ class BattleHistoryRepository(context: Context) {
                         event.confidence?.let { append(" • confiança: ").append(it) }
                         event.source?.let { append(" • fonte: ").append(it) }
                         appendLine()
+                        if (event.details.isNotEmpty()) {
+                            appendLine("  Estado: " + event.details.entries.joinToString(" • ") { "${it.key}=${it.value}" })
+                        }
                         event.reason?.takeIf(String::isNotBlank)?.let { appendLine("  Motivo: $it") }
                     }
                 }
@@ -116,6 +123,9 @@ class BattleHistoryRepository(context: Context) {
             section("VOCÊ") { it.actor == "VOCÊ" }
             section("INIMIGO") { it.actor == "INIMIGO" }
             section("ASSISTENTE") { it.actor == "ASSISTENTE" || it.category == "DECISÃO" }
+            section("PARTIDA / TROCAS / ESTADO") {
+                it.actor == "PARTIDA" || it.category == "TROCA" || it.category == "ESTADO"
+            }
             section("DIAGNÓSTICO TÉCNICO") { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
         }
     }
@@ -126,15 +136,17 @@ class BattleHistoryRepository(context: Context) {
             return "\"" + raw.replace("\"", "\"\"") + "\""
         }
         return buildString {
-            appendLine("battle_id,started_at_ms,league_cp,player,player_cp,opponent,opponent_cp,elapsed_ms,actor,category,move,count,pokemon,confidence,source,reason")
+            appendLine("battle_id,started_at_ms,league_cp,app_version,data_version,started_mid_battle,end_reason,result,player,player_cp,opponent,opponent_cp,elapsed_ms,actor,category,move,count,pokemon,confidence,source,reason,details")
             entries.forEach { battle ->
                 battle.events.forEach { event ->
                     appendLine(
                         listOf(
                             battle.id, battle.startedAtEpochMs, battle.leagueCp,
+                            battle.appVersion, battle.dataVersion, battle.startedMidBattle, battle.endReason, battle.result,
                             battle.playerName, battle.playerCp, battle.opponentName, battle.opponentCp,
                             event.elapsedMs, event.actor, event.category, event.moveName, event.count,
-                            event.pokemon, event.confidence, event.source, event.reason
+                            event.pokemon, event.confidence, event.source, event.reason,
+                            event.details.entries.joinToString(";") { "${it.key}=${it.value}" }
                         ).joinToString(",") { csv(it) }
                     )
                 }
@@ -231,6 +243,23 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
                 finish(nowMs, reason = "Sem evidência de batalha por 12s")
             }
         }
+    }
+
+    fun observeStableState(
+        playerName: String?,
+        playerCp: Int?,
+        opponentName: String?,
+        opponentCp: Int?,
+        leagueCp: Int,
+        nowMs: Long = System.currentTimeMillis()
+    ) {
+        val a = active ?: return
+        a.leagueCp = leagueCp
+        playerName?.let { a.playerName = it }
+        playerCp?.let { a.playerCp = it }
+        opponentName?.let { a.opponentName = it }
+        opponentCp?.let { a.opponentCp = it }
+        a.lastEvidenceAtMs = nowMs
     }
 
     fun observeDetection(detection: BattleDetection, leagueCp: Int, nowMs: Long = System.currentTimeMillis()) {
