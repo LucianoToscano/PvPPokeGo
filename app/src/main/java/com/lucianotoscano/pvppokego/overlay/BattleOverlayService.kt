@@ -86,6 +86,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var lastFreshAnalysisFrameAtMs = 0L
     private var captureStaleNotified = false
     private var screenRecorder: ScreenFrameRecorder? = null
+    private var recordingAwaitingEncoder = false
+    private var recordingConfirmedNotified = false
     private var windowManager: WindowManager? = null
     private var overlayView: BattleOverlayView? = null
     private var scanJob: Job? = null
@@ -1787,6 +1789,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private fun toggleRecording() {
         val recorder = screenRecorder ?: return
         if (recorder.isRecording) {
+            recordingAwaitingEncoder = false
+            recordingConfirmedNotified = false
             val uri = recorder.stop()
             Toast.makeText(
                 this,
@@ -1803,7 +1807,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             Toast.makeText(
                 this,
                 if (ok) {
-                    "Gravação PvPPokeGo iniciada"
+                    recordingAwaitingEncoder = true
+                    recordingConfirmedNotified = false
+                    "Preparando gravação • aguardando o primeiro quadro codificado"
                 } else {
                     recorder.lastErrorMessage ?: "Inicie a captura do overlay antes de gravar"
                 },
