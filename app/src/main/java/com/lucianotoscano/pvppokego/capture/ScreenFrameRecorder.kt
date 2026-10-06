@@ -12,6 +12,7 @@ import android.opengl.EGL14
 import android.opengl.EGLExt
 import android.opengl.GLES20
 import android.opengl.GLUtils
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.Surface
@@ -52,6 +53,8 @@ class ScreenFrameRecorder(private val context: Context) {
     private var lastFrameAtNs = 0L
     private var outputWidth = 0
     private var outputHeight = 0
+    private var encodedSampleCount = 0
+    private var firstFrameSubmitted = false
 
     var isRecording: Boolean = false
         private set
@@ -59,12 +62,24 @@ class ScreenFrameRecorder(private val context: Context) {
     var lastSavedUri: Uri? = null
         private set
 
+    var lastErrorMessage: String? = null
+        private set
+
     fun start(width: Int, height: Int): Boolean {
         if (isRecording) return true
-        if (width < 2 || height < 2) return false
+        lastErrorMessage = null
+        if (width < 2 || height < 2) {
+            lastErrorMessage = "Dimensões de captura inválidas"
+            return false
+        }
 
-        val evenW = width and 1.inv()
-        val evenH = height and 1.inv()
+        val scale = minOf(
+            1f,
+            MAX_OUTPUT_WIDTH.toFloat() / width.toFloat(),
+            MAX_OUTPUT_HEIGHT.toFloat() / height.toFloat()
+        )
+        val evenW = ((width * scale).toInt().coerceAtLeast(2)) and 1.inv()
+        val evenH = ((height * scale).toInt().coerceAtLeast(2)) and 1.inv()
         outputWidth = evenW
         outputHeight = evenH
         tempFile = File(context.cacheDir, "pvppokego-recording-" + System.currentTimeMillis() + ".mp4")
@@ -74,7 +89,9 @@ class ScreenFrameRecorder(private val context: Context) {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
                 setInteger(MediaFormat.KEY_BIT_RATE, suggestedBitrate(evenW, evenH))
                 setInteger(MediaFormat.KEY_FRAME_RATE, TARGET_FPS)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+                setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             }
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).also {
@@ -89,9 +106,12 @@ class ScreenFrameRecorder(private val context: Context) {
             lastFrameAtNs = 0L
             muxerStarted = false
             trackIndex = -1
+            encodedSampleCount = 0
+            firstFrameSubmitted = false
             isRecording = true
             true
-        }.getOrElse {
+        }.getOrElse { error ->
+            lastErrorMessage = "Falha ao iniciar encoder: ${error.javaClass.simpleName}: ${error.message ?: "sem detalhe"}"
             releaseInternal(deleteTemp = true)
             false
         }
@@ -135,8 +155,17 @@ class ScreenFrameRecorder(private val context: Context) {
                 (nowNs - startedAtNs).coerceAtLeast(0L)
             )
             EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+            if (!firstFrameSubmitted) {
+                firstFrameSubmitted = true
+                runCatching {
+                    codec?.setParameters(Bundle().apply {
+                        putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+                    })
+                }
+            }
             drainEncoder(endOfStream = false)
-        }.onFailure {
+        }.onFailure { error ->
+            lastErrorMessage = "Falha durante gravação: ${error.javaClass.simpleName}: ${error.message ?: "sem detalhe"}"
             runCatching { stop() }
         }
     }
@@ -163,8 +192,19 @@ class ScreenFrameRecorder(private val context: Context) {
 
         val file = tempFile
         tempFile = null
-        val published = file?.takeIf { it.exists() && it.length() > 0L }?.let(::publishToMediaStore)
-        if (published != null) lastSavedUri = published
+        val validFile = muxerStarted && encodedSampleCount > 0 &&
+            file != null && file.exists() && file.length() >= MIN_VALID_MP4_BYTES
+        val published = file?.takeIf { validFile }?.let(::publishToMediaStore)
+        if (published != null) {
+            lastSavedUri = published
+            lastErrorMessage = null
+        } else if (lastErrorMessage == null) {
+            lastErrorMessage = when {
+                !muxerStarted -> "Encoder não produziu formato de vídeo"
+                encodedSampleCount <= 0 -> "Nenhum quadro de vídeo foi codificado"
+                else -> "MP4 incompleto; arquivo não foi publicado"
+            }
+        }
         runCatching { file?.delete() }
         muxerStarted = false
         trackIndex = -1
@@ -182,10 +222,10 @@ class ScreenFrameRecorder(private val context: Context) {
         var idleCount = 0
 
         while (true) {
-            val index = encoder.dequeueOutputBuffer(info, if (endOfStream) 10_000L else 0L)
+            val index = encoder.dequeueOutputBuffer(info, if (endOfStream) 20_000L else 0L)
             when {
                 index == MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                    if (!endOfStream || ++idleCount > 25) break
+                    if (!endOfStream || ++idleCount > 100) break
                 }
                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                     if (muxerStarted) error("Encoder output format changed twice")
@@ -200,6 +240,7 @@ class ScreenFrameRecorder(private val context: Context) {
                         encoded.position(info.offset)
                         encoded.limit(info.offset + info.size)
                         mediaMuxer.writeSampleData(trackIndex, encoded, info)
+                        encodedSampleCount++
                     }
                     val eos = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     encoder.releaseOutputBuffer(index, false)
@@ -324,6 +365,8 @@ class ScreenFrameRecorder(private val context: Context) {
         tempFile = null
         muxerStarted = false
         trackIndex = -1
+        encodedSampleCount = 0
+        firstFrameSubmitted = false
     }
 
     private fun publishToMediaStore(file: File): Uri? = runCatching {
@@ -351,9 +394,12 @@ class ScreenFrameRecorder(private val context: Context) {
         (width.toLong() * height.toLong() * 2L).coerceIn(3_000_000L, 12_000_000L).toInt()
 
     companion object {
-        private const val TARGET_FPS = 10
-        private const val FRAME_INTERVAL_NS = 100_000_000L
+        private const val TARGET_FPS = 12
+        private const val FRAME_INTERVAL_NS = 83_333_333L
         private const val EGL_RECORDABLE_ANDROID = 0x3142
+        private const val MAX_OUTPUT_WIDTH = 720
+        private const val MAX_OUTPUT_HEIGHT = 1600
+        private const val MIN_VALID_MP4_BYTES = 16_384L
 
         private val VERTICES: FloatBuffer = ByteBuffer
             .allocateDirect(8 * 4)

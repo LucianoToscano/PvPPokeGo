@@ -4,6 +4,9 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -20,6 +23,7 @@ class GameDataRepository(private val context: Context) {
     @Volatile private var gameMaster: GameMaster? = null
     @Volatile private var movesById: Map<String, MoveDef> = emptyMap()
     @Volatile private var pokemonByName: Map<String, PokemonDef> = emptyMap()
+    @Volatile private var pokemonByDex: Map<Int, List<PokemonDef>> = emptyMap()
     @Volatile private var uniquePokemon: List<PokemonDef> = emptyList()
     @Volatile private var ranking: List<RankingEntry> = emptyList()
     @Volatile private var moveNamesPtBr: Map<String, String> = emptyMap()
@@ -49,6 +53,9 @@ class GameDataRepository(private val context: Context) {
         pokemonByName = uniquePokemon
             .flatMap { p -> listOf(p.speciesName to p, p.speciesId to p) }
             .associate { normalizeName(it.first) to it.second }
+        pokemonByDex = uniquePokemon
+            .filter { it.dex > 0 }
+            .groupBy { it.dex }
 
         val rankingText = runCatching {
             context.assets.open("rankings-$leagueCp.json").bufferedReader().use { it.readText() }
@@ -74,22 +81,47 @@ class GameDataRepository(private val context: Context) {
 
     fun pokemon(nameOrId: String?): PokemonDef? = nameOrId?.let { pokemonByName[normalizeName(it)] }
 
-    fun possibleFastMoves(speciesName: String): List<MoveDef> {
-        val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
+    fun pokemonForDex(dex: Int): List<PokemonDef> = pokemonByDex[dex].orEmpty()
+
+    /**
+     * Visual recognition is only allowed to choose a species directly when that Pokédex
+     * number maps to one unambiguous PvPoke entry. Regional/forms that share a dex number
+     * are left to OCR/CP instead of guessing a potentially wrong type.
+     */
+    fun uniquePokemonForVisualDex(dex: Int): PokemonDef? {
+        val candidates = pokemonByDex[dex].orEmpty()
+        return candidates.singleOrNull()
+    }
+
+    fun pokemonForVisualIdentity(speciesId: String?, dex: Int): PokemonDef? {
+        speciesId?.takeIf { it.isNotBlank() }?.let { exact ->
+            pokemon(exact)?.takeIf { it.dex <= 0 || dex <= 0 || it.dex == dex }?.let { return it }
+        }
+        return uniquePokemonForVisualDex(dex)
+    }
+
+    private fun rankingEntry(nameOrSpeciesId: String): RankingEntry? {
+        val key = normalizeName(nameOrSpeciesId)
+        return ranking.firstOrNull { normalizeName(it.speciesId) == key }
+            ?: ranking.firstOrNull { normalizeName(it.speciesName) == key }
+    }
+
+    fun possibleFastMoves(nameOrSpeciesId: String): List<MoveDef> {
+        val entry = rankingEntry(nameOrSpeciesId)
         return entry?.moves?.fastMoves.orEmpty()
             .sortedByDescending { it.uses }
             .mapNotNull { move(it.moveId) }
     }
 
-    fun possibleChargedMoves(speciesName: String): List<MoveDef> {
-        val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
+    fun possibleChargedMoves(nameOrSpeciesId: String): List<MoveDef> {
+        val entry = rankingEntry(nameOrSpeciesId)
         return entry?.moves?.chargedMoves.orEmpty()
             .sortedByDescending { it.uses }
             .mapNotNull { move(it.moveId) }
     }
 
-    fun likelyMoveset(speciesName: String): Triple<MoveDef?, MoveDef?, MoveDef?> {
-        val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
+    fun likelyMoveset(nameOrSpeciesId: String): Triple<MoveDef?, MoveDef?, MoveDef?> {
+        val entry = rankingEntry(nameOrSpeciesId)
         val ids = entry?.moveset.orEmpty()
         return Triple(move(ids.getOrNull(0)), move(ids.getOrNull(1)), move(ids.getOrNull(2)))
     }
@@ -145,6 +177,18 @@ class GameDataRepository(private val context: Context) {
     fun offlineSnapshotMetadata(): String? = runCatching {
         context.assets.open("pvpoke_snapshot.json").bufferedReader().use { it.readText() }
     }.getOrNull()
+
+    fun offlineSnapshotVersion(): String? = offlineSnapshotMetadata()?.let { raw ->
+        runCatching {
+            val obj = json.parseToJsonElement(raw).jsonObject
+            val generated = obj["generatedAtUtc"]?.jsonPrimitive?.contentOrNull
+            val ref = obj["pvpokeRef"]?.jsonPrimitive?.contentOrNull
+            listOfNotNull(
+                ref?.takeIf { it.isNotBlank() }?.let { "PvPoke:$it" },
+                generated?.takeIf { it.isNotBlank() }?.let { "snapshot:$it" }
+            ).joinToString(" • ").takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
 
     fun localizedMoveName(move: MoveDef): String = moveNamesPtBr[normalizeId(move.moveId)] ?: move.name
 

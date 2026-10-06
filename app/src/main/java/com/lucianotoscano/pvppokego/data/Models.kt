@@ -21,7 +21,9 @@ data class MoveDef(
 data class PokemonDef(
     val speciesId: String,
     val speciesName: String,
-    val types: List<String> = emptyList()
+    val types: List<String> = emptyList(),
+    /** National Pokédex number from the PvPoke gamemaster. Used by visual recognition. */
+    val dex: Int = 0
 )
 
 @Serializable
@@ -52,13 +54,24 @@ data class DetectedPokemon(
     val name: String,
     val cp: Int?,
     val confidence: Float,
-    val rawText: String
+    val rawText: String,
+    /** Optional independent visual evidence from the Pokémon portrait. */
+    val visualDex: Int? = null,
+    val visualSpeciesId: String? = null,
+    val visualConfidence: Float? = null
 )
 
 data class BattleDetection(
     val player: DetectedPokemon?,
     val opponent: DetectedPokemon?,
     val battleText: String = ""
+)
+
+data class ReserveCardEvidence(
+    val cp: Int?,
+    val visualDex: Int? = null,
+    val visualSpeciesId: String? = null,
+    val visualConfidence: Float? = null
 )
 
 enum class MatchupState { FAVORABLE, NEUTRAL, UNFAVORABLE, UNKNOWN }
@@ -72,6 +85,8 @@ enum class MoveKnowledgeConfidence { CONFIRMED, MANUAL, RANKED, UNKNOWN }
 
 data class ReserveState(
     val name: String?,
+    /** Exact PvPoke species/form id when known. */
+    val speciesId: String? = null,
     val cp: Int?,
     val types: List<String>,
     val matchup: MatchupState,
@@ -82,8 +97,10 @@ data class ReserveState(
     val identityKey: String? = null,
     /** CP read from Pokemon GO's native reserve card. */
     val cardCp: Int? = null,
-    /** True when this reserve card was pinned to a team member by CP (or elimination). */
+    /** True when this reserve card was pinned to a team member by CP/image/elimination. */
     val identityConfirmed: Boolean = false,
+    /** cp, image-form, image, elimination or fallback. */
+    val identitySource: String? = null,
     val fastMove: MoveDef? = null,
     val chargedMove1: MoveDef? = null,
     val chargedMove2: MoveDef? = null,
@@ -95,6 +112,8 @@ data class ReserveState(
 data class BattlePokemonState(
     val key: String,
     val speciesName: String,
+    /** Exact PvPoke species/form id when known (for example ninetales_alolan). */
+    var speciesId: String? = null,
     var fastMoveId: String? = null,
     var chargedMove1Id: String? = null,
     var chargedMove2Id: String? = null,

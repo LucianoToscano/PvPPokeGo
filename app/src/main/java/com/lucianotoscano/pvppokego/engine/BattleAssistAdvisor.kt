@@ -5,6 +5,7 @@ import com.lucianotoscano.pvppokego.data.BattleUiState
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
+import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 
 /** Read-only PvP copilot. It recommends the next action but never sends input to Pokemon GO. */
 object BattleAssistAdvisor {
@@ -21,12 +22,48 @@ object BattleAssistAdvisor {
         val enemyCharged = listOfNotNull(state.charged1, state.charged2)
         val ownCharged = listOfNotNull(state.ownCharged1, state.ownCharged2)
 
+        val identityReady =
+            !state.playerName.isNullOrBlank() &&
+                !state.opponentName.isNullOrBlank() &&
+                playerTypes.isNotEmpty() &&
+                enemyTypes.isNotEmpty()
+
+        if (!identityReady || state.battleConfidence < .45f) {
+            return Advice(
+                "ANALISANDO",
+                "Confirmando Pokémon, tipos e estado da batalha",
+                Color.rgb(128, 136, 146),
+                125
+            )
+        }
+
         // 1) Incoming Charged: compare cheap bait and high-damage nuke possibilities.
         if (state.chargedIncoming && playerTypes.isNotEmpty() && enemyCharged.isNotEmpty()) {
             val plausible = enemyCharged.filter { it.ready || it.maxEnergy >= it.energyCost }.ifEmpty { enemyCharged }
             val threat = plausible.maxByOrNull { it.move.power.toDouble() * TypeChart.multiplier(it.move.type, playerTypes) }
             val bait = plausible.minByOrNull { it.energyCost }
             if (threat != null) {
+                val threatKnowledge = enemyMoveKnowledge(state, threat.move.moveId)
+                val observedOrManual = threatKnowledge == MoveKnowledgeConfidence.CONFIRMED ||
+                    threatKnowledge == MoveKnowledgeConfidence.MANUAL
+
+                if (!observedOrManual) {
+                    val possibleNames = plausible
+                        .distinctBy { it.move.moveId }
+                        .take(2)
+                        .joinToString(" ou ") { shortName(it.move.name) }
+                    return Advice(
+                        "ANALISANDO ATAQUE",
+                        if (possibleNames.isNotBlank()) {
+                            "Possível: $possibleNames • ${energyLabel(threat)}"
+                        } else {
+                            "Ataque carregado detectado • aguardando identificação"
+                        },
+                        Color.rgb(245, 175, 52),
+                        112
+                    )
+                }
+
                 val eff = TypeChart.multiplier(threat.move.type, playerTypes)
                 val score = threat.move.power.toDouble() * eff
                 val baitPossible = bait != null && bait.move.moveId != threat.move.moveId &&
@@ -153,10 +190,19 @@ object BattleAssistAdvisor {
         return if (first.fastMovesRemaining > 0) "$fallback • ${first.fastMovesRemaining}F p/ ${shortName(first.move.name)}" else fallback
     }
 
-    private fun energyLabel(p: com.lucianotoscano.pvppokego.data.ChargedPrediction): String = when (p.confidence) {
-        EnergyConfidence.CONFIRMED -> "${p.currentEnergy}E confirmado"
-        EnergyConfidence.ESTIMATED -> "~${p.currentEnergy}E"
-        EnergyConfidence.RANGE -> "${p.minEnergy}-${p.maxEnergy}E"
+    private fun energyLabel(p: com.lucianotoscano.pvppokego.data.ChargedPrediction): String {
+        if (p.maxEnergy <= 0 && p.currentEnergy <= 0) return "energia em sincronização"
+        return when (p.confidence) {
+            EnergyConfidence.CONFIRMED -> "${p.currentEnergy}E confirmado"
+            EnergyConfidence.ESTIMATED -> "~${p.currentEnergy}E estimado"
+            EnergyConfidence.RANGE -> "${p.minEnergy}-${p.maxEnergy}E possíveis"
+        }
+    }
+
+    private fun enemyMoveKnowledge(state: BattleUiState, moveId: String): MoveKnowledgeConfidence = when (moveId) {
+        state.charged1?.move?.moveId -> state.charged1Knowledge
+        state.charged2?.move?.moveId -> state.charged2Knowledge
+        else -> MoveKnowledgeConfidence.UNKNOWN
     }
 
     private fun shortName(name: String): String = if (name.length <= 18) name else name.take(17) + "…"

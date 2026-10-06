@@ -13,11 +13,14 @@ android {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
         targetSdk = 36
-        versionCode = 24
-        versionName = "0.5.19"
+        versionCode = 25
+        versionName = "0.5.20"
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 
     buildTypes {

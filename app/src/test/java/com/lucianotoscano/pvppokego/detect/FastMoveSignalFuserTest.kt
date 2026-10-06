@@ -85,4 +85,39 @@ class FastMoveSignalFuserTest {
         )
         assertFalse(d.confirm)
     }
+    @Test
+    fun delayedMicrodropCanRecoverTwoMissedFastMoves() {
+        val d = FastMoveSignalFuser.decide(
+            pendingDropPx = 1,
+            hpThresholdPx = 2,
+            elapsedMs = 2_050,
+            minGapMs = 620,
+            expectedDurationMs = 1_000,
+            motion = 40f,
+            motionBaseline = 5f,
+            battleUiVisible = true,
+            allowMotionFallback = false
+        )
+        assertTrue(d.confirm)
+        assertEquals(2, d.count)
+        assertEquals("microdrop-cadence", d.source)
+    }
+
+    @Test
+    fun productionModeNeverCountsMotionWithoutHpEvidence() {
+        val d = FastMoveSignalFuser.decide(
+            pendingDropPx = 0,
+            hpThresholdPx = 2,
+            elapsedMs = 2_000,
+            minGapMs = 620,
+            expectedDurationMs = 1_000,
+            motion = 60f,
+            motionBaseline = 5f,
+            battleUiVisible = true,
+            allowMotionFallback = false
+        )
+        assertFalse(d.confirm)
+        assertEquals(0, d.count)
+    }
+
 }

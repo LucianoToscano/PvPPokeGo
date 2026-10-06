@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.20
+
+- Adicionado terceiro sinal de identidade por imagem do próprio Pokémon, além de OCR e PC.
+- Novo banco visual offline de fingerprints por National Dex, gerado a partir de renders HOME do PokeAPI; o APK armazena apenas fingerprints compactos, não o catálogo de imagens.
+- Os três cards da equipe usam fusão independente de OCR + PC + imagem; uma leitura visual conflitante impede que um frame redefina silenciosamente o time.
+- A identidade interna agora preserva o speciesId/form exato do PvPoke durante time, ativo, reservas, trocas e restauração de energia.
+- Rankings e movesets procuram primeiro o speciesId exato e só depois o nome exibido, evitando misturar formas que compartilham nome/Dex.
+- Reservas registram a origem da confirmação (PC, imagem da forma, imagem/Dex ou eliminação) e não exibem matchup confiável antes da confirmação.
+- Adicionados testes de continuidade entre formas regionais e de preservação independente da energia/estado por forma.
+- Reconhecimento visual só vira identidade direta quando o número da Pokédex é inequívoco no banco; formas regionais/alternativas continuam exigindo OCR/PC para não errar tipo.
+- Tipos e matchup continuam vindo do banco PvPoke depois que a identidade é confirmada, então funciona com times diferentes e contas diferentes.
+- Adicionado modo de compatibilidade com gravadores Samsung/externos via Accessibility screenshot API.
+- O serviço de acessibilidade do PvPPokeGo não lê nós da interface e não executa toques; é usado apenas como fonte alternativa de screenshots.
+- Quando outro gravador revoga a MediaProjection, o PvPPokeGo não encerra mais o serviço: mantém o HUD e migra para capturas de compatibilidade se o serviço estiver habilitado.
+- Novo botão "Iniciar overlay para gravador Samsung / externo" inicia o PvPPokeGo sem abrir MediaProjection própria, evitando disputa direta com o gravador.
+- No modo externo, OCR, identidade, tipos e matchup continuam; a contagem FAST de alta frequência fica reduzida pela taxa de screenshots do Android.
+- Mantido o ícone oficial Icon PVPPokeGo.png como adaptive launcher icon.
+- Mantidas as correções 0.5.19 para cards por PC, tipos sanitizados, package real e todas as melhorias anteriores.
+
+
 ## 0.5.19
 
 - Corrigida a causa raiz dos tipos errados nas reservas: os 3 cards da tela "Escolha a sua equipe" passam a ser lidos separadamente por coluna, preservando o par Pokémon + PC.

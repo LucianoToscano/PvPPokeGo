@@ -48,6 +48,9 @@ fun SettingsScreen(
     historyRevision: Int,
     overlayPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
+    recorderCompatibilityEnabled: Boolean,
+    onOpenRecorderCompatibility: () -> Unit,
+    onStartExternalRecorderMode: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
     onResetBattle: () -> Unit,
@@ -132,8 +135,46 @@ fun SettingsScreen(
                     Text("Gravar / parar gravação pelo PvPPokeGo")
                 }
                 Text(
-                    "A gravação interna reutiliza a captura do overlay, evitando a disputa de MediaProjection com gravadores externos. " +
+                    "A gravação interna reutiliza a captura do overlay e mantém a detecção completa. " +
                         "O vídeo é salvo em Movies/PvPPokeGo.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                OutlinedButton(
+                    onClick = onOpenRecorderCompatibility,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (recorderCompatibilityEnabled) {
+                            "Compatibilidade com gravador externo: ATIVA"
+                        } else {
+                            "Ativar compatibilidade com gravador externo"
+                        }
+                    )
+                }
+                Text(
+                    if (recorderCompatibilityEnabled) {
+                        "Pronto para Samsung Screen Recorder e outros gravadores. Se o Android retirar a MediaProjection do PvPPokeGo, " +
+                            "o HUD continua ativo e o app muda para capturas de tela de compatibilidade. OCR, tipos e matchup continuam; " +
+                            "a contagem automática de ataques rápidos fica reduzida nesse modo."
+                    } else {
+                        "Android normalmente permite apenas uma sessão principal de captura. Um gravador externo pode retirar a MediaProjection do PvPPokeGo. " +
+                            "Ative esta opção antes de gravar para o app continuar com OCR, tipos e matchup por capturas de compatibilidade."
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Button(
+                    onClick = onStartExternalRecorderMode,
+                    enabled = recorderCompatibilityEnabled,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Iniciar overlay para gravador Samsung / externo")
+                }
+                Text(
+                    "Use este botão quando quiser gravar com outro aplicativo. Nesse modo o PvPPokeGo não abre MediaProjection própria, " +
+                        "então não disputa a captura com o gravador. A análise de identidade, tipos e matchup continua; o detector de FAST " +
+                        "de alta frequência fica limitado pela taxa de screenshots do Android.",
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -144,7 +185,7 @@ fun SettingsScreen(
                         "• ◉ → mostrar / ocultar HUD\n" +
                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
-                        "Versão 0.5.19",
+                        "Versão 0.5.20",
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -398,6 +439,7 @@ private fun BattleHistoryCard(
     val decisions = battle.events.count { it.actor == "ASSISTENTE" || it.category == "DECISÃO" }
     val diagnostics = battle.events.count { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
     var showDiagnostics by remember(battle.id) { mutableStateOf(false) }
+    var showTimeline by remember(battle.id) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -420,6 +462,18 @@ private fun BattleHistoryCard(
                 "$player$playerCp  ×  $enemy$enemyCp",
                 style = MaterialTheme.typography.titleMedium
             )
+            battle.result?.let {
+                Text("Resultado: $it", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            }
+            if (battle.startedMidBattle) {
+                Text(
+                    "Captura iniciada no meio da luta",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            battle.endReason?.takeIf { it.isNotBlank() }?.let {
+                Text("Fim: $it", style = MaterialTheme.typography.bodySmall)
+            }
 
             Surface(
                 shape = RoundedCornerShape(10.dp),
@@ -449,13 +503,48 @@ private fun BattleHistoryCard(
 
             if (expanded) {
                 HorizontalDivider()
-                Text("Linha do tempo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("Detalhes da batalha", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
-                val normalEvents = battle.events.filterNot { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
-                if (normalEvents.isEmpty()) {
-                    Text("Nenhum ataque ou decisão identificado.", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    normalEvents.forEach { event -> BattleHistoryEventCard(event) }
+                val ownEvents = battle.events.filter {
+                    it.actor == "VOCÊ" && it.category != "ESTADO"
+                }
+                val enemyEvents = battle.events.filter {
+                    it.actor == "INIMIGO" && it.category != "ESTADO"
+                }
+                val assistantEvents = battle.events.filter {
+                    it.actor == "ASSISTENTE" || it.category == "DECISÃO"
+                }
+                val stateEvents = battle.events.filter {
+                    it.actor == "PARTIDA" || it.category == "TROCA" || it.category == "ESTADO"
+                }
+                val normalEvents = battle.events.filterNot {
+                    it.actor == "APP" || it.category == "DIAGNÓSTICO"
+                }
+
+                BattleHistorySection("VOCÊ", ownEvents)
+                BattleHistorySection("INIMIGO", enemyEvents)
+                BattleHistorySection("ASSISTENTE", assistantEvents)
+                BattleHistorySection("TROCAS E ESTADO", stateEvents)
+
+                OutlinedButton(
+                    onClick = { showTimeline = !showTimeline },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (showTimeline) "Ocultar linha do tempo completa" else "Ver linha do tempo completa")
+                }
+                if (showTimeline) {
+                    Text(
+                        "Linha do tempo cronológica",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (normalEvents.isEmpty()) {
+                        Text("Nenhum evento identificado.", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        normalEvents.sortedBy { it.elapsedMs }.forEach { event ->
+                            BattleHistoryEventCard(event)
+                        }
+                    }
                 }
 
                 if (diagnostics > 0) {
@@ -474,6 +563,32 @@ private fun BattleHistoryCard(
                             .filter { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
                             .forEach { event -> BattleHistoryEventCard(event, technical = true) }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BattleHistorySection(
+    title: String,
+    events: List<BattleHistoryEvent>
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
+    ) {
+        Column(
+            Modifier.padding(9.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            if (events.isEmpty()) {
+                Text("Nenhum evento.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                events.sortedBy { it.elapsedMs }.forEach { event ->
+                    BattleHistoryEventCard(event)
                 }
             }
         }
@@ -539,6 +654,23 @@ private fun BattleHistoryEventCard(
             if (detail.isNotBlank()) {
                 Text(detail, style = MaterialTheme.typography.bodySmall)
             }
+            if (event.details.isNotEmpty()) {
+                Text(
+                    event.details.entries.joinToString(" • ") { (key, value) ->
+                        when (key) {
+                            "hpPercent" -> "HP $value%"
+                            "energyMin" -> "Energia mín. $value"
+                            "energyMax" -> "Energia máx. $value"
+                            "shields" -> "Escudos $value"
+                            "de" -> "De: $value"
+                            "para" -> "Para: $value"
+                            "pc" -> "PC $value"
+                            else -> "$key: $value"
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             event.reason?.takeIf { it.isNotBlank() }?.let { reason ->
                 Text("Motivo: $reason", style = MaterialTheme.typography.bodySmall)
             }
@@ -561,6 +693,12 @@ private fun friendlyHistorySource(raw: String?): String? = when (raw) {
     "engine" -> "motor interno"
     "opponent-hp-drop" -> "queda de HP do inimigo"
     "opponent-hp-microdrop" -> "microqueda de HP do inimigo"
+    "opponent-hp-cadence" -> "queda de HP + cadência"
+    "opponent-hp-microdrop-cadence" -> "microqueda de HP + cadência"
+    "player-hp-cadence" -> "queda de HP + cadência do inimigo"
+    "player-hp-microdrop-cadence" -> "microqueda de HP + cadência do inimigo"
+    "energia/faixa" -> "faixa de energia"
+    "session" -> "sessão de batalha"
     "hp-drop" -> "queda de HP"
     "microdrop" -> "microqueda de HP"
     "motion-cadence" -> "movimento + cadência"

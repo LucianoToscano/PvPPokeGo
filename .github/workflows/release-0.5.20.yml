@@ -1,0 +1,131 @@
+name: Build PvPPokeGo 0.5.20
+
+on:
+  push:
+    branches: [release/0.5.20]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pvppokego-05120-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate 0.5.20 invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.20"' app/build.gradle.kts
+          grep -q 'versionCode = 25' app/build.gradle.kts
+          grep -q 'applicationId = "com.lucianotoscano.pvppokego"' app/build.gradle.kts
+          if grep -q 'applicationIdSuffix = ".debug"' app/build.gradle.kts; then exit 1; fi
+
+          grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
+          grep -q 'pvppokego_launcher' app/src/main/res/drawable/pvppokego_launcher_foreground.xml
+          test -s app/src/main/res/drawable-nodpi/pvppokego_launcher.png
+
+          grep -q 'PokemonVisualRecognizer' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
+          grep -q 'visualDex' app/src/main/java/com/lucianotoscano/pvppokego/data/Models.kt
+          grep -q 'uniquePokemonForVisualDex' app/src/main/java/com/lucianotoscano/pvppokego/data/GameDataRepository.kt
+          grep -q 'package_visual_fingerprints.py' .github/workflows/package-project-zip.yml
+
+          grep -q 'PvPPokeGoAccessibilityCaptureService' app/src/main/AndroidManifest.xml
+          grep -q 'android:canTakeScreenshot="true"' app/src/main/res/xml/accessibility_capture_service.xml
+          grep -q 'ACTION_START_ACCESSIBILITY_CAPTURE' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'handleProjectionRevoked' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'Iniciar overlay para gravador Samsung / externo' app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt
+
+          grep -q 'BattleCorrespondenceTracker' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'HOLD_CURRENT' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleCorrespondenceTracker.kt
+          grep -q 'repeatedIncompatiblePairStartsNewBattle' app/src/test/java/com/lucianotoscano/pvppokego/engine/BattleCorrespondenceTrackerTest.kt
+          grep -q 'visualSpeciesId' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
+          grep -q 'speciesId = winner.speciesId' app/src/main/java/com/lucianotoscano/pvppokego/detect/PokemonVisualRecognizer.kt
+          grep -q 'cardSpeciesIds' app/src/main/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcher.kt
+          grep -q 'formAwareVisualEvidenceDistinguishesSameDexForms' app/src/test/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcherTest.kt
+          grep -q 'var speciesId: String?' app/src/main/java/com/lucianotoscano/pvppokego/data/Models.kt
+          grep -q 'private fun rankingEntry' app/src/main/java/com/lucianotoscano/pvppokego/data/GameDataRepository.kt
+          grep -q 'identitySource = resolved.source' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'differentFormsCanKeepIndependentEnergyState' app/src/test/java/com/lucianotoscano/pvppokego/engine/BattleStateStoreTest.kt
+          grep -q 'knownRegionalFormSwitchStaysInsideSameBattle' app/src/test/java/com/lucianotoscano/pvppokego/engine/BattleCorrespondenceTrackerTest.kt
+
+      - name: Package offline PvPoke snapshot
+        run: |
+          python3 tools/package_offline_pvpoke_assets.py
+          test -s app/src/main/assets/gamemaster.json
+          test -s app/src/main/assets/rankings-1500.json
+          test -s app/src/main/assets/rankings-2500.json
+          test -s app/src/main/assets/rankings-10000.json
+          test -s app/src/main/assets/pvpoke_snapshot.json
+
+      - name: Build visual Pokémon bank
+        run: |
+          python3 -m venv .venv-visual
+          . .venv-visual/bin/activate
+          python -m pip install --disable-pip-version-check pillow
+          python tools/package_visual_fingerprints.py
+          test -s app/src/main/assets/pokemon_visual_fingerprints.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open("app/src/main/assets/pokemon_visual_fingerprints.json"))
+          assert p["format"]=="PvPPokeGo-visual-fingerprints"
+          assert p.get("version", 0) >= 2, p.get("version")
+          assert len(p["entries"]) >= 500, len(p["entries"])
+          assert all(e.get("speciesId") for e in p["entries"]), "speciesId missing from form-aware bank"
+          assert any("_alolan" in e.get("speciesId","") for e in p["entries"]), "regional forms missing"
+          print("visual bank entries", len(p["entries"]), "version", p.get("version"))
+          PY
+
+      - name: Validate PvPoke types
+        run: |
+          python3 - <<'PY'
+          import json
+          gm=json.load(open("app/src/main/assets/gamemaster.json"))
+          by={p.get("speciesId","").lower(): p for p in gm.get("pokemon",[])}
+          assert by["cramorant"]["types"] == ["flying","water"], by["cramorant"]["types"]
+          assert by["rillaboom"]["types"] == ["grass","none"], by["rillaboom"]["types"]
+          assert by["houndoom"]["types"] == ["dark","fire"], by["houndoom"]["types"]
+          assert int(by["cramorant"].get("dex",0)) > 0
+          print("PvPoke source sanity OK")
+          PY
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Test and build APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify packaged APK
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          unzip -t app/build/outputs/apk/debug/app-debug.apk
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'pokemon_visual_fingerprints.json'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'pvppokego_launcher.png'
+
+      - name: Package APK
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo-0.5.20.apk
+          shasum -a 256 artifact/PvPPokeGo-0.5.20.apk > artifact/PvPPokeGo-0.5.20.apk.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.20
+          path: artifact/
+          retention-days: 14

@@ -9,6 +9,7 @@ import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
+import com.lucianotoscano.pvppokego.data.ReserveCardEvidence
 import com.lucianotoscano.pvppokego.data.ReserveState
 import java.text.Normalizer
 
@@ -30,9 +31,13 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val ownStates = BattleStateStore()
 
     private var playerName: String? = null
+    private var playerSpeciesId: String? = null
     private var playerCp: Int? = null
     private var enemyName: String? = null
+    private var enemySpeciesId: String? = null
     private var enemyCp: Int? = null
+    private val playerCpTracker = StableCpTracker()
+    private val enemyCpTracker = StableCpTracker()
 
     private var tracker = EnergyTracker()
     private var activeState: BattlePokemonState? = null
@@ -49,7 +54,18 @@ class BattleEngine(private val repo: GameDataRepository) {
     private data class OwnTeamSlot(
         val slot: Int,
         var name: String,
-        var cp: Int?
+        var cp: Int?,
+        var speciesId: String? = null,
+        var dex: Int? = null,
+        var identityConfidence: Float = 0f
+    )
+
+    private data class TeamIdentityCandidate(
+        val name: String,
+        val cp: Int?,
+        val confidence: Float,
+        val speciesId: String?,
+        val dex: Int?
     )
 
     private val ownTeam = linkedMapOf<String, Int?>()
@@ -59,10 +75,18 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val reserveCardCps = arrayOfNulls<Int>(2)
     private val reserveCpCandidate = arrayOfNulls<Int>(2)
     private val reserveCpStreak = IntArray(2)
+    private val reserveCardDexes = arrayOfNulls<Int>(2)
+    private val reserveDexCandidate = arrayOfNulls<Int>(2)
+    private val reserveDexStreak = IntArray(2)
+    private val reserveCardSpeciesIds = arrayOfNulls<String>(2)
+    private val reserveSpeciesCandidate = arrayOfNulls<String>(2)
+    private val reserveSpeciesStreak = IntArray(2)
     private var ownSwitchReadyAtMs: Long = 0L
     private var opponentSwitchReadyAtMs: Long = 0L
     private var chargedPendingSinceMs: Long? = null
     private var lastChargedConfirmedAtMs: Long = 0L
+    private val enemyChargedCycle = ChargedAnimationCycleGate()
+    private val ownChargedCycle = ChargedAnimationCycleGate()
     private var ignoreFastUntilMs: Long = 0L
     private var lastAutoSource: String = "-"
     private var lastOwnAutoSource: String = "-"
@@ -74,9 +98,13 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun resetBattle() {
         playerName = null
+        playerSpeciesId = null
         playerCp = null
         enemyName = null
+        enemySpeciesId = null
         enemyCp = null
+        playerCpTracker.reset()
+        enemyCpTracker.reset()
         tracker.reset()
         ownTracker.reset()
         activeState = null
@@ -94,10 +122,18 @@ class BattleEngine(private val repo: GameDataRepository) {
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
         reserveCpStreak.fill(0)
+        reserveCardDexes.fill(null)
+        reserveDexCandidate.fill(null)
+        reserveDexStreak.fill(0)
+        reserveCardSpeciesIds.fill(null)
+        reserveSpeciesCandidate.fill(null)
+        reserveSpeciesStreak.fill(0)
         ownSwitchReadyAtMs = 0L
         opponentSwitchReadyAtMs = 0L
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = 0L
+        enemyChargedCycle.reset()
+        ownChargedCycle.reset()
         ignoreFastUntilMs = 0L
         lastAutoSource = "-"
         lastOwnAutoSource = "-"
@@ -116,22 +152,77 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun onDetection(d: BattleDetection): DetectionChanges {
         val oldPlayer = playerName
+        val oldPlayerSpeciesId = playerSpeciesId
         val oldEnemy = enemyName
+        val oldEnemySpeciesId = enemySpeciesId
 
-        d.player?.let {
-            val canonical = repo.canonicalPokemonName(it.name) ?: it.name
-            rememberOwnPokemon(canonical, it.cp)
-            if (!canonical.equals(playerName, ignoreCase = true)) onPlayerChanged(canonical, it.cp)
-            else if (it.cp != null) playerCp = it.cp
-        }
-        d.opponent?.let {
-            val canonical = repo.canonicalPokemonName(it.name) ?: it.name
-            enemyCp = it.cp ?: enemyCp
-            if (!canonical.equals(enemyName, ignoreCase = true)) onEnemyChanged(canonical)
+        d.player?.let { detected ->
+            val ocrCanonical = repo.canonicalPokemonName(detected.name) ?: detected.name
+            val cpPinnedSlot = detected.cp?.let { rawCp ->
+                ownTeamSlots.filter { slot -> slot.cp == rawCp }.singleOrNull()
+            }
+            val visualDef = detected.visualSpeciesId
+                ?.takeIf(String::isNotBlank)
+                ?.takeIf { (detected.visualConfidence ?: 0f) >= IdentityThresholds.ACTIVE_VISUAL_MIN_CONFIDENCE }
+                ?.let(repo::pokemon)
+            val ocrDef = repo.pokemon(ocrCanonical)
+            val resolvedDef = cpPinnedSlot?.speciesId?.let(repo::pokemon)
+                ?: visualDef
+                ?: ocrDef
+            val canonical = cpPinnedSlot?.name ?: resolvedDef?.speciesName ?: ocrCanonical
+            val speciesId = cpPinnedSlot?.speciesId
+                ?: resolvedDef?.speciesId
+            val dex = cpPinnedSlot?.dex
+                ?: resolvedDef?.dex?.takeIf { it > 0 }
+            val stableCp = playerCpTracker.observe(
+                normalize(speciesId ?: canonical),
+                detected.cp
+            )
+
+            rememberOwnPokemon(
+                canonical,
+                stableCp,
+                speciesId,
+                dex,
+                maxOf(detected.confidence, detected.visualConfidence ?: 0f)
+            )
+            if (!samePokemonIdentity(playerName, playerSpeciesId, canonical, speciesId)) {
+                onPlayerChanged(canonical, stableCp, speciesId)
+            } else {
+                playerName = canonical
+                if (!speciesId.isNullOrBlank()) playerSpeciesId = speciesId
+                if (stableCp != null) playerCp = stableCp
+                rebindOwnActiveStateToStableSlot()
+            }
         }
 
-        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
-        val enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
+        d.opponent?.let { detected ->
+            val ocrCanonical = repo.canonicalPokemonName(detected.name) ?: detected.name
+            val visualDef = detected.visualSpeciesId
+                ?.takeIf(String::isNotBlank)
+                ?.takeIf { (detected.visualConfidence ?: 0f) >= IdentityThresholds.ACTIVE_VISUAL_MIN_CONFIDENCE }
+                ?.let(repo::pokemon)
+            val resolvedDef = visualDef ?: repo.pokemon(ocrCanonical)
+            val canonical = resolvedDef?.speciesName ?: ocrCanonical
+            val speciesId = resolvedDef?.speciesId
+            val stableCp = enemyCpTracker.observe(
+                normalize(speciesId ?: canonical),
+                detected.cp
+            )
+            if (!samePokemonIdentity(enemyName, enemySpeciesId, canonical, speciesId)) {
+                onEnemyChanged(canonical, speciesId)
+                enemyCp = stableCp
+            } else {
+                enemyName = canonical
+                if (!speciesId.isNullOrBlank()) enemySpeciesId = speciesId
+                if (stableCp != null) enemyCp = stableCp
+            }
+        }
+
+        val playerChanged = oldPlayer != null &&
+            !samePokemonIdentity(oldPlayer, oldPlayerSpeciesId, playerName, playerSpeciesId)
+        val enemyChanged = oldEnemy != null &&
+            !samePokemonIdentity(oldEnemy, oldEnemySpeciesId, enemyName, enemySpeciesId)
         val now = System.currentTimeMillis()
         if (playerChanged) {
             reserveSlotVisible.fill(null)
@@ -144,42 +235,117 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     fun onOwnTeamDetected(team: List<DetectedPokemon>) {
-        val canonical = team
-            .map { p -> Triple(repo.canonicalPokemonName(p.name) ?: p.name, p.cp, p.confidence) }
-            // Same species can exist on both sides (e.g. enemy Cramorant PC1483 and
-            // own reserve Cramorant PC1485). Never discard an own Pokemon by name alone.
-            .filterNot { (name, cp, _) ->
-                val sameSpecies = name.equals(enemyName, ignoreCase = true)
-                val sameExactCard = enemyCp != null && cp != null && enemyCp == cp
-                sameSpecies && sameExactCard
+        val candidates = team
+            .mapNotNull(::resolveTeamIdentityCandidate)
+            // Same species can exist on both sides. Only discard an exact opponent card,
+            // never a same-name reserve with a different CP or form.
+            .filterNot { candidate ->
+                val sameIdentity = samePokemonIdentity(
+                    candidate.name,
+                    candidate.speciesId,
+                    enemyName,
+                    enemySpeciesId
+                )
+                val sameExactCard = enemyCp != null &&
+                    candidate.cp != null &&
+                    enemyCp == candidate.cp
+                sameIdentity && sameExactCard
             }
-            .distinctBy { (name, cp, _) -> "${normalize(name)}:${cp ?: 0}" }
+            .distinctBy { candidate ->
+                "${normalize(candidate.speciesId ?: candidate.name)}:${candidate.cp ?: 0}"
+            }
             .take(3)
 
-        // A complete team scan defines stable slot identities for the whole battle.
-        // Require name+CP for all three cards before replacing the stable mapping;
-        // a partial/uncertain OCR result may enrich existing slots but may not reorder them.
-        val completeTeam = canonical.size >= 3 && canonical.take(3).all { (_, cp, confidence) ->
-            cp != null && confidence >= 0.90f
+        // Only a complete, high-confidence scan may replace all slot identities.
+        val completeTeam = candidates.size >= 3 && candidates.take(3).all { candidate ->
+            candidate.cp != null &&
+                candidate.confidence >= IdentityThresholds.MIN_STABLE_TEAM_CONFIDENCE &&
+                !candidate.speciesId.isNullOrBlank()
         }
+
         if (completeTeam) {
             ownTeamSlots.clear()
-            canonical.forEachIndexed { index, (name, cp, _) ->
-                ownTeamSlots += OwnTeamSlot(index, name, cp)
-                rememberOwnPokemon(name, cp)
+            candidates.forEachIndexed { index, candidate ->
+                ownTeamSlots += OwnTeamSlot(
+                    slot = index,
+                    name = candidate.name,
+                    cp = candidate.cp,
+                    speciesId = candidate.speciesId,
+                    dex = candidate.dex,
+                    identityConfidence = candidate.confidence
+                )
+                rememberOwnPokemon(
+                    candidate.name,
+                    candidate.cp,
+                    candidate.speciesId,
+                    candidate.dex
+                )
             }
         } else {
-            canonical.forEach { (name, cp, _) ->
-                rememberOwnPokemon(name, cp)
-                val existing = ownTeamSlots.firstOrNull { it.name.equals(name, true) && (cp == null || it.cp == null || it.cp == cp) }
+            candidates.forEach { candidate ->
+                rememberOwnPokemon(
+                    candidate.name,
+                    candidate.cp,
+                    candidate.speciesId,
+                    candidate.dex
+                )
+                val existing = findOwnSlot(
+                    name = candidate.name,
+                    cp = candidate.cp,
+                    speciesId = candidate.speciesId
+                )
                 if (existing != null) {
-                    if (cp != null) existing.cp = cp
+                    if (candidate.cp != null) existing.cp = candidate.cp
+                    if (!candidate.speciesId.isNullOrBlank()) existing.speciesId = candidate.speciesId
+                    if (candidate.dex != null && candidate.dex > 0) existing.dex = candidate.dex
+                    existing.identityConfidence = maxOf(existing.identityConfidence, candidate.confidence)
+                    existing.name = candidate.name
                 } else if (ownTeamSlots.size < 3) {
-                    ownTeamSlots += OwnTeamSlot(ownTeamSlots.size, name, cp)
+                    ownTeamSlots += OwnTeamSlot(
+                        slot = ownTeamSlots.size,
+                        name = candidate.name,
+                        cp = candidate.cp,
+                        speciesId = candidate.speciesId,
+                        dex = candidate.dex,
+                        identityConfidence = candidate.confidence
+                    )
                 }
             }
         }
         rebindOwnActiveStateToStableSlot()
+    }
+
+    private fun resolveTeamIdentityCandidate(pokemon: DetectedPokemon): TeamIdentityCandidate? {
+        val ocrCanonical = repo.canonicalPokemonName(pokemon.name) ?: pokemon.name
+        val ocrDef = repo.pokemon(ocrCanonical)
+        val visualDef = if (
+            (pokemon.visualConfidence ?: 0f) >= IdentityThresholds.TEAM_VISUAL_MIN_CONFIDENCE
+        ) {
+            repo.pokemonForVisualIdentity(
+                pokemon.visualSpeciesId,
+                pokemon.visualDex ?: 0
+            )
+        } else {
+            null
+        }
+
+        // The OCR detector has already rejected strong cross-dex conflicts. Here the
+        // visual identity is used to preserve the exact regional/form speciesId.
+        val resolved = when {
+            visualDef == null -> ocrDef
+            ocrDef == null -> visualDef
+            visualDef.dex <= 0 || ocrDef.dex <= 0 || visualDef.dex == ocrDef.dex -> visualDef
+            else -> ocrDef
+        }
+        val name = resolved?.speciesName ?: ocrCanonical
+        if (name.isBlank()) return null
+        return TeamIdentityCandidate(
+            name = name,
+            cp = pokemon.cp,
+            confidence = pokemon.confidence,
+            speciesId = resolved?.speciesId ?: pokemon.visualSpeciesId,
+            dex = resolved?.dex?.takeIf { it > 0 } ?: pokemon.visualDex
+        )
     }
 
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
@@ -198,15 +364,14 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     /**
-     * Receives CPs OCR'd directly from Pokemon GO's two native reserve cards.
-     * Two equal observations are required before a CP becomes authoritative.
+     * Fuses OCR CP and visual National Dex evidence from Pokemon GO's two reserve cards.
+     * CP always has priority. Image evidence is accepted only when it is strong and maps
+     * to exactly one known team member.
      */
-    fun onReserveCardCps(topCp: Int?, bottomCp: Int?) {
-        fun update(index: Int, cp: Int?) {
+    fun onReserveCardEvidence(top: ReserveCardEvidence, bottom: ReserveCardEvidence) {
+        fun updateCp(index: Int, cp: Int?) {
             if (cp == null) return
 
-            // With three independently OCR'd team cards, a reserve CP that uniquely
-            // matches one stable team member is safe to accept immediately.
             val uniqueKnownCp = ownTeamSlots.count { it.cp == cp } == 1
             if (uniqueKnownCp) {
                 reserveCardCps[index] = cp
@@ -223,54 +388,271 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
             if (reserveCpStreak[index] >= 2) reserveCardCps[index] = cp
         }
-        update(0, topCp)
-        update(1, bottomCp)
+
+        fun updateSpecies(index: Int, evidence: ReserveCardEvidence) {
+            val speciesId = evidence.visualSpeciesId?.takeIf { it.isNotBlank() } ?: return
+            val confidence = evidence.visualConfidence ?: return
+            if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
+
+            val matchingMembers = ownTeamSlots.filter { slot ->
+                slot.speciesId.equals(speciesId, ignoreCase = true)
+            }
+            if (matchingMembers.size != 1) return
+
+            if (reserveSpeciesCandidate[index].equals(speciesId, ignoreCase = true)) {
+                reserveSpeciesStreak[index]++
+            } else {
+                reserveSpeciesCandidate[index] = speciesId
+                reserveSpeciesStreak[index] = 1
+            }
+
+            if (
+                confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
+                reserveSpeciesStreak[index] >= RESERVE_VISUAL_CONFIRM_FRAMES
+            ) {
+                reserveCardSpeciesIds[index] = speciesId
+            }
+        }
+
+        fun updateDex(index: Int, evidence: ReserveCardEvidence) {
+            val dex = evidence.visualDex ?: return
+            val confidence = evidence.visualConfidence ?: return
+            if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
+
+            val matchingMembers = ownTeamSlots.filter { slot ->
+                (slot.dex ?: slotDefinition(slot)?.dex?.takeIf { it > 0 }) == dex
+            }
+            if (matchingMembers.size != 1) return
+
+            if (reserveDexCandidate[index] == dex) {
+                reserveDexStreak[index]++
+            } else {
+                reserveDexCandidate[index] = dex
+                reserveDexStreak[index] = 1
+            }
+
+            if (
+                confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
+                reserveDexStreak[index] >= RESERVE_VISUAL_CONFIRM_FRAMES
+            ) {
+                reserveCardDexes[index] = dex
+            }
+        }
+
+        listOf(top, bottom).forEachIndexed { index, evidence ->
+            updateCp(index, evidence.cp)
+            updateSpecies(index, evidence)
+            updateDex(index, evidence)
+        }
     }
 
+    fun onReserveCardCps(topCp: Int?, bottomCp: Int?) =
+        onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
+
     fun needsReserveCardScan(): Boolean =
-        ownTeamSlots.size >= 2 && reserveCardCps.any { it == null }
+        ownTeamSlots.size >= 2 &&
+            reserveCardCps.indices.any { index ->
+                reserveCardCps[index] == null &&
+                    reserveCardSpeciesIds[index] == null &&
+                    reserveCardDexes[index] == null
+            }
 
     private fun clearReserveCardIdentity() {
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
         reserveCpStreak.fill(0)
+        reserveCardDexes.fill(null)
+        reserveDexCandidate.fill(null)
+        reserveDexStreak.fill(0)
+        reserveCardSpeciesIds.fill(null)
+        reserveSpeciesCandidate.fill(null)
+        reserveSpeciesStreak.fill(0)
     }
 
     fun needsOwnTeamScan(): Boolean =
         ownTeamSlots.size < 3 || ownTeamSlots.any { it.cp == null }
+    internal fun battleCorrespondenceContext(
+        inactiveForMs: Long,
+        sessionAgeMs: Long
+    ): BattleCorrespondenceTracker.Context {
+        fun identity(
+            name: String?,
+            cp: Int?,
+            speciesId: String? = null
+        ): BattleCorrespondenceTracker.Identity? {
+            if (name.isNullOrBlank() && speciesId.isNullOrBlank()) return null
+            val def = speciesId?.let(repo::pokemon) ?: repo.pokemon(name)
+            return BattleCorrespondenceTracker.Identity(
+                name = def?.speciesName ?: name,
+                speciesId = speciesId ?: def?.speciesId,
+                cp = cp,
+                confidence = 1f
+            )
+        }
+
+        val team = if (ownTeamSlots.isNotEmpty()) {
+            ownTeamSlots.map { slot ->
+                BattleCorrespondenceTracker.Identity(
+                    name = slot.name,
+                    speciesId = slot.speciesId ?: slotDefinition(slot)?.speciesId,
+                    cp = slot.cp,
+                    confidence = slot.identityConfidence
+                        .coerceAtLeast(IdentityThresholds.MIN_STABLE_TEAM_CONFIDENCE)
+                )
+            }
+        } else {
+            ownTeam.mapNotNull { (name, cp) -> identity(name, cp) }
+        }
+        val opponents = enemyStates.all()
+            .mapNotNull { state -> identity(state.speciesName, null, state.speciesId) }
+            .distinctBy { it.stableKey() }
+
+        return BattleCorrespondenceTracker.Context(
+            activePlayer = identity(playerName, playerCp, playerSpeciesId),
+            activeOpponent = identity(enemyName, enemyCp, enemySpeciesId),
+            ownTeam = team,
+            knownOpponents = opponents,
+            inactiveForMs = inactiveForMs.coerceAtLeast(0L),
+            sessionAgeMs = sessionAgeMs.coerceAtLeast(0L)
+        )
+    }
+
+    internal fun battleCorrespondenceObservation(
+        detection: BattleDetection,
+        pairedCards: Boolean,
+        battleTextEvidence: Boolean,
+        switchPrompt: Boolean
+    ): BattleCorrespondenceTracker.Observation {
+        fun identity(
+            pokemon: DetectedPokemon?,
+            ownPlayer: Boolean
+        ): BattleCorrespondenceTracker.Identity? {
+            pokemon ?: return null
+
+            // For our side, a CP uniquely pinned to one already-known team slot is
+            // stronger than a generic top-card OCR name and preserves regional/forms.
+            val pinnedOwn = if (ownPlayer && pokemon.cp != null) {
+                ownTeamSlots.filter { it.cp == pokemon.cp }.singleOrNull()
+            } else {
+                null
+            }
+            val def = pinnedOwn?.speciesId?.let(repo::pokemon)
+                ?: pinnedOwn?.let(::slotDefinition)
+                ?: pokemon.visualSpeciesId?.let(repo::pokemon)
+                ?: repo.pokemon(pokemon.name)
+            val confidence = maxOf(
+                pokemon.confidence,
+                pokemon.visualConfidence ?: 0f
+            ).coerceIn(0f, 1f)
+            return BattleCorrespondenceTracker.Identity(
+                name = def?.speciesName ?: pinnedOwn?.name ?: pokemon.name,
+                speciesId = pinnedOwn?.speciesId ?: def?.speciesId ?: pokemon.visualSpeciesId,
+                cp = pokemon.cp,
+                confidence = confidence
+            )
+        }
+        return BattleCorrespondenceTracker.Observation(
+            player = identity(detection.player, ownPlayer = true),
+            opponent = identity(detection.opponent, ownPlayer = false),
+            pairedCards = pairedCards,
+            battleTextEvidence = battleTextEvidence,
+            switchPrompt = switchPrompt
+        )
+    }
+
     fun activePlayerName(): String? = playerName
     fun activeEnemyName(): String? = enemyName
+    fun latestPlayerHpRatio(): Float? = lastHpRatio
+    fun latestOpponentHpRatio(): Float? = lastOpponentHpRatio
     fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
     fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
-    private fun rememberOwnPokemon(name: String, cp: Int?) {
+    private fun samePokemonIdentity(
+        aName: String?,
+        aSpeciesId: String?,
+        bName: String?,
+        bSpeciesId: String?
+    ): Boolean {
+        if (!aSpeciesId.isNullOrBlank() && !bSpeciesId.isNullOrBlank()) {
+            return normalize(aSpeciesId) == normalize(bSpeciesId)
+        }
+        if (aName.isNullOrBlank() || bName.isNullOrBlank()) return aName == bName
+        val ad = aSpeciesId?.let(repo::pokemon) ?: repo.pokemon(aName)
+        val bd = bSpeciesId?.let(repo::pokemon) ?: repo.pokemon(bName)
+        if (ad != null && bd != null) {
+            return normalize(ad.speciesId) == normalize(bd.speciesId)
+        }
+        return aName.equals(bName, ignoreCase = true)
+    }
+
+    private fun slotDefinition(slot: OwnTeamSlot) =
+        slot.speciesId?.let(repo::pokemon) ?: repo.pokemon(slot.name)
+
+    private fun findOwnSlot(name: String, cp: Int?, speciesId: String?): OwnTeamSlot? {
+        speciesId?.takeIf { it.isNotBlank() }?.let { exact ->
+            ownTeamSlots.firstOrNull {
+                !it.speciesId.isNullOrBlank() && normalize(it.speciesId!!) == normalize(exact)
+            }?.let { return it }
+        }
+        cp?.let { value ->
+            ownTeamSlots.filter { it.cp == value }.singleOrNull()?.let { return it }
+        }
+        return ownTeamSlots.firstOrNull {
+            it.name.equals(name, ignoreCase = true) &&
+                (cp == null || it.cp == null || it.cp == cp)
+        }
+    }
+
+    private fun rememberOwnPokemon(
+        name: String,
+        cp: Int?,
+        speciesId: String? = null,
+        dex: Int? = null,
+        confidence: Float = 0f
+    ) {
         val existingKey = ownTeam.keys.firstOrNull { it.equals(name, ignoreCase = true) }
         if (existingKey == null && ownTeam.size < 3) ownTeam[name] = cp
         else if (existingKey != null && cp != null) ownTeam[existingKey] = cp
 
-        val slot = ownTeamSlots.firstOrNull {
-            it.name.equals(name, ignoreCase = true) && (cp == null || it.cp == null || it.cp == cp)
+        val slot = findOwnSlot(name, cp, speciesId)
+        if (slot != null) {
+            if (cp != null) slot.cp = cp
+            if (!speciesId.isNullOrBlank()) slot.speciesId = speciesId
+            if (dex != null && dex > 0) slot.dex = dex
+            slot.identityConfidence = maxOf(slot.identityConfidence, confidence)
+            slotDefinition(slot)?.let { def ->
+                slot.name = def.speciesName
+                slot.speciesId = def.speciesId
+                if (def.dex > 0) slot.dex = def.dex
+            }
         }
-        if (slot != null && cp != null) slot.cp = cp
     }
 
-    private fun ownIdentityKey(name: String, cp: Int?): String {
-        val exact = ownTeamSlots.firstOrNull {
-            it.name.equals(name, ignoreCase = true) && (cp == null || it.cp == null || it.cp == cp)
-        }
+    private fun ownIdentityKey(
+        name: String,
+        cp: Int?,
+        speciesId: String? = null
+    ): String {
+        val exact = findOwnSlot(name, cp, speciesId ?: repo.pokemon(name)?.speciesId)
         return if (exact != null) {
-            "slot${exact.slot}:${normalize(exact.name)}:${exact.cp ?: cp ?: 0}"
+            val identity = exact.speciesId ?: slotDefinition(exact)?.speciesId ?: exact.name
+            "slot${exact.slot}:${normalize(identity)}:${exact.cp ?: cp ?: 0}"
         } else {
-            "own:${normalize(name)}:${cp ?: 0}"
+            val identity = speciesId ?: repo.pokemon(name)?.speciesId ?: name
+            "own:${normalize(identity)}:${cp ?: 0}"
         }
     }
 
     private fun rebindOwnActiveStateToStableSlot() {
         val name = playerName ?: return
         val old = ownActiveState ?: return
-        val stableKey = ownIdentityKey(name, playerCp)
-        if (old.key == stableKey) return
-        val target = ownStates.getOrCreate(stableKey, name)
+        val stableKey = ownIdentityKey(name, playerCp, playerSpeciesId)
+        if (old.key == stableKey) {
+            if (!playerSpeciesId.isNullOrBlank()) old.speciesId = playerSpeciesId
+            return
+        }
+        val target = ownStates.getOrCreate(stableKey, name, playerSpeciesId)
+        target.speciesId = playerSpeciesId ?: old.speciesId
         target.fastMoveId = old.fastMoveId
         target.chargedMove1Id = old.chargedMove1Id
         target.chargedMove2Id = old.chargedMove2Id
@@ -291,16 +673,32 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownActiveState = target
     }
 
-    private fun onPlayerChanged(name: String, cp: Int?) {
+    private fun onPlayerChanged(name: String, cp: Int?, speciesId: String? = null) {
         saveOwnActiveState()
+        ownChargedCycle.reset()
         playerName = name
-        playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value ?: playerCp
-        val key = ownIdentityKey(name, playerCp)
-        ownActiveState = ownStates.getOrCreate(key, name)
+        playerSpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
+        playerCp = cp
+
+        val exactSlot = findOwnSlot(name, cp, playerSpeciesId)
+        if (exactSlot != null) {
+            playerName = slotDefinition(exactSlot)?.speciesName ?: exactSlot.name
+            playerSpeciesId = exactSlot.speciesId ?: slotDefinition(exactSlot)?.speciesId ?: playerSpeciesId
+            // The exact form slot is safer than a display-name fallback when two forms
+            // can share a name. Keep a valid observed CP, otherwise restore the slot CP.
+            playerCp = cp ?: exactSlot.cp
+        } else if (playerCp == null) {
+            playerCp = ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value
+        }
+
+        val displayName = playerName ?: name
+        val lookup = playerSpeciesId ?: displayName
+        val key = ownIdentityKey(displayName, playerCp, playerSpeciesId)
+        ownActiveState = ownStates.getOrCreate(key, displayName, playerSpeciesId)
         val saved = ownActiveState!!
-        val likely = repo.likelyMoveset(name)
-        ownFast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        resolveChargedPair(name, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
+        val likely = repo.likelyMoveset(lookup)
+        ownFast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(lookup).firstOrNull()
+        resolveChargedPair(lookup, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
             ownCharge1 = c1
             ownCharge2 = c2
         }
@@ -310,17 +708,20 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveOwnActiveState()
     }
 
-    private fun onEnemyChanged(name: String) {
+    private fun onEnemyChanged(name: String, speciesId: String? = null) {
         saveActiveState()
         enemyName = name
+        enemySpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         chargedPendingSinceMs = null
+        enemyChargedCycle.reset()
         ignoreFastUntilMs = 0L
-        val key = normalize(name)
-        activeState = enemyStates.getOrCreate(key, name)
+        val lookup = enemySpeciesId ?: name
+        val key = normalize(lookup)
+        activeState = enemyStates.getOrCreate(key, name, enemySpeciesId)
         val saved = activeState!!
-        val likely = repo.likelyMoveset(name)
-        fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        resolveChargedPair(name, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
+        val likely = repo.likelyMoveset(lookup)
+        fast = repo.move(saved.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(lookup).firstOrNull()
+        resolveChargedPair(lookup, saved.chargedMove1Id, saved.chargedMove2Id, likely.second, likely.third).also { (c1, c2) ->
             charge1 = c1
             charge2 = c2
         }
@@ -339,7 +740,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun clearFastManualOverride() {
         val state = activeState ?: return
         state.fastMoveManual = false
-        val recommended = enemyName?.let(repo::likelyMoveset)?.first ?: return
+        val recommended = (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::likelyMoveset)
+            ?.first ?: return
         fast = recommended
         state.fastMoveId = recommended.moveId
         saveActiveState()
@@ -359,11 +762,12 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun clearChargedManualOverride(index: Int) {
         val state = activeState ?: return
-        val likely = enemyName?.let(repo::likelyMoveset) ?: return
+        val rankingKey = activeState?.speciesId ?: enemySpeciesId ?: enemyName ?: return
+        val likely = repo.likelyMoveset(rankingKey)
         when (index) {
             0 -> {
                 state.charge1Manual = false
-                val recommended = likely.second ?: repo.possibleChargedMoves(state.speciesName).getOrNull(0)
+                val recommended = likely.second ?: repo.possibleChargedMoves(state.speciesId ?: state.speciesName).getOrNull(0)
                 if (recommended != null && recommended.moveId != charge2?.moveId) {
                     charge1 = recommended; state.chargedMove1Id = recommended.moveId
                     state.charge1Confirmed = recommended.moveId in state.observedChargedMoveIds
@@ -371,7 +775,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
             1 -> {
                 state.charge2Manual = false
-                val recommended = likely.third ?: repo.possibleChargedMoves(state.speciesName).getOrNull(1)
+                val recommended = likely.third ?: repo.possibleChargedMoves(state.speciesId ?: state.speciesName).getOrNull(1)
                 if (recommended != null && recommended.moveId != charge1?.moveId) {
                     charge2 = recommended; state.chargedMove2Id = recommended.moveId
                     state.charge2Confirmed = recommended.moveId in state.observedChargedMoveIds
@@ -472,33 +876,52 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     private fun autoLearnObservedCharged(state: BattlePokemonState, move: MoveDef) {
-        val replaceIndex = when {
-            !state.charge1Manual && !state.charge1Confirmed -> 0
-            !state.charge2Manual && !state.charge2Confirmed -> 1
-            !state.charge1Manual && charge1?.moveId !in state.observedChargedMoveIds -> 0
-            !state.charge2Manual && charge2?.moveId !in state.observedChargedMoveIds -> 1
-            else -> -1
-        }
+        val replaceIndex = ChargedMoveSlotResolver.choose(
+            observedMoveId = move.moveId,
+            slot1Id = charge1?.moveId,
+            slot2Id = charge2?.moveId,
+            slot1Manual = state.charge1Manual,
+            slot2Manual = state.charge2Manual,
+            slot1Confirmed = state.charge1Confirmed,
+            slot2Confirmed = state.charge2Confirmed
+        )
         when (replaceIndex) {
-            0 -> { charge1 = move; state.chargedMove1Id = move.moveId; state.charge1Confirmed = true }
-            1 -> { charge2 = move; state.chargedMove2Id = move.moveId; state.charge2Confirmed = true }
+            0 -> {
+                charge1 = move
+                state.chargedMove1Id = move.moveId
+                state.charge1Confirmed = true
+            }
+            1 -> {
+                charge2 = move
+                state.chargedMove2Id = move.moveId
+                state.charge2Confirmed = true
+            }
         }
     }
 
     fun onBattleText(raw: String, nowMs: Long = System.currentTimeMillis()): BattleTextResult {
-        if (raw.isBlank()) return BattleTextResult()
+        if (raw.isBlank()) {
+            ownChargedCycle.observe(null, nowMs)
+            enemyChargedCycle.observe(null, nowMs)
+            return BattleTextResult()
+        }
+
         val text = normalizeText(raw)
         var newPrompt = false
 
         if (CHARGED_PROMPTS.any { text.contains(it) }) {
-            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
         }
 
         val actionVerbPresent = ACTION_VERBS.any { text.contains(it) }
-        if (!actionVerbPresent) return BattleTextResult(newPrompt, false, false)
+        if (!actionVerbPresent) {
+            ownChargedCycle.observe(null, nowMs)
+            enemyChargedCycle.observe(null, nowMs)
+            return BattleTextResult(newPrompt, false, false)
+        }
 
         val normalizedPlayer = playerName?.let(::normalizeText).orEmpty()
         val normalizedEnemy = enemyName?.let(::normalizeText).orEmpty()
@@ -506,25 +929,43 @@ class BattleEngine(private val repo: GameDataRepository) {
         val enemyActor = normalizedEnemy.isNotBlank() && text.contains(normalizedEnemy)
 
         if (playerActor) {
-            val ownCandidates = playerName?.let(repo::possibleChargedMoves).orEmpty().ifEmpty { listOfNotNull(ownCharge1, ownCharge2) }
+            enemyChargedCycle.observe(null, nowMs)
+            val ownCandidates = (ownActiveState?.speciesId ?: playerSpeciesId ?: playerName)
+                ?.let(repo::possibleChargedMoves)
+                .orEmpty()
+                .ifEmpty { listOfNotNull(ownCharge1, ownCharge2) }
             val ownMatched = findMoveMention(text, ownCandidates)
             if (ownMatched != null) {
-                observedOwnChargedUsed(ownMatched)
-                return BattleTextResult(newPrompt, false, true, ownChargedMove = ownMatched)
+                val signature = ChargedAnimationCycleGate.Signature(
+                    actorKey = normalizeText(playerName ?: "voce"),
+                    moveId = ownMatched.moveId
+                )
+                if (ownChargedCycle.observe(signature, nowMs)) {
+                    observedOwnChargedUsed(ownMatched)
+                    return BattleTextResult(newPrompt, false, true, ownChargedMove = ownMatched)
+                }
+                return BattleTextResult(newPrompt, false, false)
             }
+            ownChargedCycle.observe(null, nowMs)
         }
 
         if (enemyActor || !playerActor) {
+            ownChargedCycle.observe(null, nowMs)
             val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
             val matched = findMoveMention(text, candidates)
             if (matched != null) {
-                if (nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+                val signature = ChargedAnimationCycleGate.Signature(
+                    actorKey = normalizeText(enemyName ?: "inimigo"),
+                    moveId = matched.moveId
+                )
+                if (enemyChargedCycle.observe(signature, nowMs)) {
                     observedChargedUsed(matched, nowMs)
                     return BattleTextResult(newPrompt, true, false, enemyChargedMove = matched)
                 }
                 return BattleTextResult(newPrompt, false, false)
             }
-            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+            enemyChargedCycle.observe(null, nowMs)
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
@@ -541,7 +982,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun maybeConfirmPendingCharged(nowMs: Long = System.currentTimeMillis()): Boolean {
         val since = chargedPendingSinceMs ?: return false
         if (nowMs - since < PENDING_CONFIRM_DELAY_MS) return false
-        if (nowMs - lastChargedConfirmedAtMs <= CHARGED_DEBOUNCE_MS) {
+        if (nowMs - lastChargedConfirmedAtMs <= UNKNOWN_CHARGED_DEBOUNCE_MS) {
             chargedPendingSinceMs = null
             return false
         }
@@ -555,15 +996,22 @@ class BattleEngine(private val repo: GameDataRepository) {
      */
     private fun effectiveEnemyFastMove(): MoveDef? {
         fast?.takeIf { it.energyGain > 0 }?.let { return it }
-        val fallback = enemyName
+        val fallback = (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
             ?.let(repo::possibleFastMoves)
             .orEmpty()
             .firstOrNull { it.energyGain > 0 }
         return fallback
     }
 
-    fun possibleFastMoves(): List<MoveDef> = enemyName?.let(repo::possibleFastMoves).orEmpty()
-    fun possibleChargedMoves(): List<MoveDef> = enemyName?.let(repo::possibleChargedMoves).orEmpty()
+    fun possibleFastMoves(): List<MoveDef> =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::possibleFastMoves)
+            .orEmpty()
+
+    fun possibleChargedMoves(): List<MoveDef> =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::possibleChargedMoves)
+            .orEmpty()
 
     private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {
         val remaining = readyAtMs - nowMs
@@ -572,8 +1020,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     fun uiState(debug: Boolean = false): BattleUiState {
-        val pTypes = repo.pokemon(playerName)?.types.orEmpty()
-        val eTypes = repo.pokemon(enemyName)?.types.orEmpty()
+        val pTypes = repo.pokemon(playerSpeciesId ?: playerName)?.types.orEmpty()
+        val eTypes = repo.pokemon(enemySpeciesId ?: enemyName)?.types.orEmpty()
         val matchup = classify(pTypes, eTypes)
         val f = fast
         val of = ownFast
@@ -582,32 +1030,49 @@ class BattleEngine(private val repo: GameDataRepository) {
             .take(2)
             .mapIndexed { index, resolved ->
                 val slot = resolved.slot
-                val name = slot.name
+                val def = slotDefinition(slot)
+                val name = def?.speciesName ?: slot.name
                 val cp = slot.cp
-                val types = repo.pokemon(name)?.types.orEmpty()
-                val identity = ownIdentityKey(name, cp)
+                val speciesKey = slot.speciesId ?: def?.speciesId ?: name
+                val types = repo.pokemon(speciesKey)?.types.orEmpty()
+                val identity = ownIdentityKey(name, cp, slot.speciesId ?: def?.speciesId)
                 val saved = ownStates.find(identity)
-                val likely = repo.likelyMoveset(name)
-                val reserveFast = repo.move(saved?.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
+                val rankingKey = saved?.speciesId ?: speciesKey
+                val likely = repo.likelyMoveset(rankingKey)
+                val reserveFast = repo.move(saved?.fastMoveId)
+                    ?: likely.first
+                    ?: repo.possibleFastMoves(rankingKey).firstOrNull()
                 val (reserveC1, reserveC2) = resolveChargedPair(
-                    name,
+                    rankingKey,
                     saved?.chargedMove1Id,
                     saved?.chargedMove2Id,
                     likely.second,
                     likely.third
                 )
-                val score = if (resolved.confirmed) reserveScore(name, cp, types, eTypes) else 0.0
+                val score = if (resolved.confirmed) {
+                    reserveScore(
+                        name = name,
+                        cp = cp,
+                        speciesId = slot.speciesId ?: def?.speciesId,
+                        myTypes = types,
+                        enemyTypes = eTypes
+                    )
+                } else {
+                    0.0
+                }
                 ReserveState(
                     name = name,
+                    speciesId = slot.speciesId ?: def?.speciesId,
                     cp = cp,
                     types = types,
-                    matchup = classify(types, eTypes),
+                    matchup = if (resolved.confirmed) classify(types, eTypes) else MatchupState.UNKNOWN,
                     visible = reserveSlotVisible.getOrNull(index) != false,
                     score = score,
                     teamSlot = slot.slot,
                     identityKey = identity,
                     cardCp = resolved.cardCp,
                     identityConfirmed = resolved.confirmed,
+                    identitySource = resolved.source,
                     fastMove = reserveFast,
                     chargedMove1 = reserveC1,
                     chargedMove2 = reserveC2,
@@ -680,7 +1145,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.minEnergy}-${tracker.maxEnergy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
                 appendLine("Battle conf=${"%.2f".format(lastBattleConfidence)} HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"}/${lastOpponentHpRatio?.let { "%.3f".format(it) } ?: "?"}")
-                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }}")
+                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }} DEXcards=${reserveCardDexes.joinToString { it?.toString() ?: "?" }} FORMS=${reserveCardSpeciesIds.joinToString { it ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
                 append("Own C1=${ownCharge1?.name ?: "?"} C2=${ownCharge2?.name ?: "?"} state=${os?.speciesName ?: "?"}")
@@ -696,18 +1161,38 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun ownEnergyConfidence(): EnergyConfidence = when {
         ownTracker.isRange -> EnergyConfidence.RANGE
-        (playerName?.let(repo::possibleFastMoves)?.size ?: 0) <= 1 -> EnergyConfidence.CONFIRMED
+        ((ownActiveState?.speciesId ?: playerSpeciesId ?: playerName)
+            ?.let(repo::possibleFastMoves)
+            ?.size ?: 0) <= 1 -> EnergyConfidence.CONFIRMED
         else -> EnergyConfidence.ESTIMATED
     }
 
-    private fun reserveScore(name: String, cp: Int?, myTypes: List<String>, enemyTypes: List<String>): Double {
+    private fun reserveScore(
+        name: String,
+        cp: Int?,
+        speciesId: String?,
+        myTypes: List<String>,
+        enemyTypes: List<String>
+    ): Double {
         if (myTypes.isEmpty() || enemyTypes.isEmpty()) return 0.0
-        val saved = ownStates.find(ownIdentityKey(name, cp))
-        val likely = repo.likelyMoveset(name)
-        val resolvedFast = repo.move(saved?.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        val (resolvedC1, resolvedC2) = resolveChargedPair(name, saved?.chargedMove1Id, saved?.chargedMove2Id, likely.second, likely.third)
+
+        val saved = ownStates.find(ownIdentityKey(name, cp, speciesId))
+        val ownRankingKey = saved?.speciesId ?: speciesId ?: name
+        val likely = repo.likelyMoveset(ownRankingKey)
+        val resolvedFast = repo.move(saved?.fastMoveId)
+            ?: likely.first
+            ?: repo.possibleFastMoves(ownRankingKey).firstOrNull()
+        val (resolvedC1, resolvedC2) = resolveChargedPair(
+            ownRankingKey,
+            saved?.chargedMove1Id,
+            saved?.chargedMove2Id,
+            likely.second,
+            likely.third
+        )
         val myMoves = listOfNotNull(resolvedFast, resolvedC1, resolvedC2)
-        val enemyLikely = enemyName?.let(repo::likelyMoveset)
+
+        val enemyRankingKey = activeState?.speciesId ?: enemySpeciesId ?: enemyName
+        val enemyLikely = enemyRankingKey?.let(repo::likelyMoveset)
         val enemyMoves = listOfNotNull(enemyLikely?.first, enemyLikely?.second, enemyLikely?.third)
         val offense = myMoves.maxOfOrNull { TypeChart.multiplier(it.type, enemyTypes) } ?: 1.0
         val danger = enemyMoves.maxOfOrNull { TypeChart.multiplier(it.type, myTypes) } ?: 1.0
@@ -722,7 +1207,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private data class ResolvedOwnReserve(
         val slot: OwnTeamSlot,
         val cardCp: Int?,
-        val confirmed: Boolean
+        val confirmed: Boolean,
+        val source: String
     )
 
     /**
@@ -735,15 +1221,26 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
         if (slots.isEmpty()) return emptyList()
 
-        val members = slots.map { ReserveCardMatcher.Member(it.slot, it.name, it.cp) }
+        val members = slots.map { slot ->
+            val def = slotDefinition(slot)
+            ReserveCardMatcher.Member(
+                slot = slot.slot,
+                name = def?.speciesName ?: slot.name,
+                cp = slot.cp,
+                dex = slot.dex ?: def?.dex?.takeIf { it > 0 },
+                speciesId = slot.speciesId ?: def?.speciesId
+            )
+        }
         return ReserveCardMatcher.resolve(
             team = members,
             activeName = playerName,
             activeCp = playerCp,
-            cardCps = reserveCardCps.toList()
+            cardCps = reserveCardCps.toList(),
+            cardDexes = reserveCardDexes.toList(),
+            cardSpeciesIds = reserveCardSpeciesIds.toList()
         ).mapNotNull { match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
-                ResolvedOwnReserve(slot, match.cardCp, match.confirmed)
+                ResolvedOwnReserve(slot, match.cardCp, match.confirmed, match.source)
             }
         }
     }
@@ -802,6 +1299,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun saveActiveState() {
         val state = activeState ?: return
+        if (!enemySpeciesId.isNullOrBlank()) state.speciesId = enemySpeciesId
         state.fastMoveId = fast?.moveId
         state.chargedMove1Id = charge1?.moveId
         state.chargedMove2Id = charge2?.moveId
@@ -815,6 +1313,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun saveOwnActiveState() {
         val state = ownActiveState ?: return
+        if (!playerSpeciesId.isNullOrBlank()) state.speciesId = playerSpeciesId
         state.fastMoveId = ownFast?.moveId
         state.chargedMove1Id = ownCharge1?.moveId
         state.chargedMove2Id = ownCharge2?.moveId
@@ -838,8 +1337,17 @@ class BattleEngine(private val repo: GameDataRepository) {
         .replace(Regex("\\p{M}+"), "")
         .replace(Regex("[^a-z0-9]+"), "")
 
+    private object IdentityThresholds {
+        const val MIN_STABLE_TEAM_CONFIDENCE = 0.90f
+        const val TEAM_VISUAL_MIN_CONFIDENCE = 0.76f
+        const val ACTIVE_VISUAL_MIN_CONFIDENCE = 0.80f
+    }
+
     companion object {
-        private const val CHARGED_DEBOUNCE_MS = 4_200L
+        private const val RESERVE_VISUAL_MIN_CONFIDENCE = 0.76f
+        private const val RESERVE_VISUAL_IMMEDIATE_CONFIDENCE = 0.88f
+        private const val RESERVE_VISUAL_CONFIRM_FRAMES = 2
+        private const val UNKNOWN_CHARGED_DEBOUNCE_MS = 4_200L
         private const val SWITCH_COOLDOWN_MS = 50_000L
         private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
         private const val CHARGED_FAST_GUARD_MS = 2_200L

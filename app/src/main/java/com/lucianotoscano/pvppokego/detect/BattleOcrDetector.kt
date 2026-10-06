@@ -1,5 +1,6 @@
 package com.lucianotoscano.pvppokego.detect
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.google.android.gms.tasks.Task
@@ -10,6 +11,7 @@ import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.BattleLeagueTextDetector
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.GameDataRepository
+import com.lucianotoscano.pvppokego.data.ReserveCardEvidence
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -21,8 +23,12 @@ import kotlin.math.abs
  * OCR uses small ROIs for the two top cards and a separate central/lower text ROI for
  * battle prompts. A larger party ROI is scanned less often to remember the user's team.
  */
-class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
+class BattleOcrDetector(
+    context: Context,
+    private val repo: GameDataRepository
+) : AutoCloseable {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    private val visualRecognizer = PokemonVisualRecognizer(context.applicationContext)
 
     suspend fun detect(frame: Bitmap): BattleDetection = coroutineScope {
         if (frame.isRecycled) return@coroutineScope BattleDetection(null, null)
@@ -58,10 +64,28 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
      * in top-to-bottom order. CP is used to bind the HUD types/matchup to the correct
      * reserve after switches, avoiding slot-order guesses.
      */
-    suspend fun detectReserveCps(frame: Bitmap): Pair<Int?, Int?> = coroutineScope {
-        if (frame.isRecycled) return@coroutineScope null to null
-        val top = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_1, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_1)
-        val bottom = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_2, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_2)
+    suspend fun detectReserveEvidence(frame: Bitmap): Pair<ReserveCardEvidence, ReserveCardEvidence> = coroutineScope {
+        if (frame.isRecycled) {
+            return@coroutineScope ReserveCardEvidence(null) to ReserveCardEvidence(null)
+        }
+
+        val topText = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_1, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_1)
+        val bottomText = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_2, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_2)
+        val topPortrait = crop(
+            frame,
+            RESERVE_PORTRAIT_LEFT,
+            RESERVE_PORTRAIT_TOP_1,
+            RESERVE_PORTRAIT_RIGHT,
+            RESERVE_PORTRAIT_BOTTOM_1
+        )
+        val bottomPortrait = crop(
+            frame,
+            RESERVE_PORTRAIT_LEFT,
+            RESERVE_PORTRAIT_TOP_2,
+            RESERVE_PORTRAIT_RIGHT,
+            RESERVE_PORTRAIT_BOTTOM_2
+        )
+
         try {
             fun parseCp(raw: String): Int? = CP_REGEX.find(raw)
                 ?.groupValues
@@ -69,12 +93,30 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
                 ?.toIntOrNull()
                 ?.takeIf { it in 10..10000 }
 
-            val topJob = async { parseCp(recognize(top)) }
-            val bottomJob = async { parseCp(recognize(bottom)) }
+            suspend fun read(textRoi: Bitmap, portraitRoi: Bitmap): ReserveCardEvidence = coroutineScope {
+                val cpJob = async { parseCp(recognize(textRoi)) }
+                val visualJob = async { visualRecognizer.match(portraitRoi) }
+                val visual = visualJob.await()
+                ReserveCardEvidence(
+                    cp = cpJob.await(),
+                    visualDex = visual?.dex,
+                    visualSpeciesId = visual?.speciesId,
+                    visualConfidence = visual?.confidence
+                )
+            }
+
+            val topJob = async { read(topText, topPortrait) }
+            val bottomJob = async { read(bottomText, bottomPortrait) }
             topJob.await() to bottomJob.await()
         } finally {
-            top.recycle(); bottom.recycle()
+            topText.recycle(); bottomText.recycle()
+            topPortrait.recycle(); bottomPortrait.recycle()
         }
+    }
+
+    suspend fun detectReserveCps(frame: Bitmap): Pair<Int?, Int?> {
+        val evidence = detectReserveEvidence(frame)
+        return evidence.first.cp to evidence.second.cp
     }
 
     /**
@@ -84,26 +126,43 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
     suspend fun detectOwnTeam(frame: Bitmap): List<DetectedPokemon> = coroutineScope {
         if (frame.isRecycled) return@coroutineScope emptyList()
 
-        // Read each team card independently. This preserves the real pairing between
-        // name and CP and prevents a shifted list such as Houndoom=1485, Cramorant=1500.
-        val slot1 = crop(frame, TEAM_SLOT_1_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_1_RIGHT, TEAM_SLOT_BOTTOM)
-        val slot2 = crop(frame, TEAM_SLOT_2_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_2_RIGHT, TEAM_SLOT_BOTTOM)
-        val slot3 = crop(frame, TEAM_SLOT_3_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_3_RIGHT, TEAM_SLOT_BOTTOM)
+        // OCR and portrait recognition are independent signals. Every column is isolated so
+        // name, CP and image can never slide into the neighbouring Pokémon.
+        val textRois = listOf(
+            crop(frame, TEAM_SLOT_1_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_1_RIGHT, TEAM_SLOT_BOTTOM),
+            crop(frame, TEAM_SLOT_2_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_2_RIGHT, TEAM_SLOT_BOTTOM),
+            crop(frame, TEAM_SLOT_3_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_3_RIGHT, TEAM_SLOT_BOTTOM)
+        )
+        val portraitRois = listOf(
+            crop(frame, TEAM_PORTRAIT_1_LEFT, TEAM_PORTRAIT_TOP, TEAM_PORTRAIT_1_RIGHT, TEAM_PORTRAIT_BOTTOM),
+            crop(frame, TEAM_PORTRAIT_2_LEFT, TEAM_PORTRAIT_TOP, TEAM_PORTRAIT_2_RIGHT, TEAM_PORTRAIT_BOTTOM),
+            crop(frame, TEAM_PORTRAIT_3_LEFT, TEAM_PORTRAIT_TOP, TEAM_PORTRAIT_3_RIGHT, TEAM_PORTRAIT_BOTTOM)
+        )
+
         try {
-            val jobs = listOf(
-                async { recognizeTeamSlot(slot1) },
-                async { recognizeTeamSlot(slot2) },
-                async { recognizeTeamSlot(slot3) }
-            )
+            val jobs = textRois.indices.map { index ->
+                async {
+                    val ocrJob = async { recognizeTeamSlotEvidence(textRois[index]) }
+                    val visualJob = async { visualRecognizer.match(portraitRois[index]) }
+                    fuseTeamSlotEvidence(ocrJob.await(), visualJob.await())
+                }
+            }
             jobs.mapNotNull { it.await() }
         } finally {
-            slot1.recycle(); slot2.recycle(); slot3.recycle()
+            textRois.forEach { it.recycle() }
+            portraitRois.forEach { it.recycle() }
         }
     }
 
-    private suspend fun recognizeTeamSlot(roi: Bitmap): DetectedPokemon? {
-        suspend fun parse(raw: String, confidence: Float): DetectedPokemon? {
-            if (raw.isBlank()) return null
+    private data class TeamSlotEvidence(
+        val name: String?,
+        val cp: Int?,
+        val raw: String,
+        val confidence: Float
+    )
+
+    private suspend fun recognizeTeamSlotEvidence(roi: Bitmap): TeamSlotEvidence {
+        fun parse(raw: String, confidence: Float): TeamSlotEvidence {
             val cp = CP_REGEX.find(raw)
                 ?.groupValues
                 ?.getOrNull(1)
@@ -120,20 +179,98 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
                     }
                     .mapNotNull(repo::canonicalPokemonName)
                     .firstOrNull()
-            if (name == null) return null
-            return DetectedPokemon(name, cp, confidence, raw)
+            return TeamSlotEvidence(name, cp, raw, confidence)
         }
 
         val raw = recognize(roi)
-        parse(raw, if (CP_REGEX.containsMatchIn(raw)) 0.98f else 0.90f)?.let { return it }
+        val first = parse(raw, if (CP_REGEX.containsMatchIn(raw)) 0.98f else 0.90f)
+        if (first.name != null || first.cp != null) return first
 
-        // Color isolation is now a fallback only, so the common path costs one OCR pass/card.
         val filtered = filterByColor(roi, TARGET_TEXT_COLOR, COLOR_TOLERANCE)
         return try {
             parse(recognize(filtered), 0.90f)
         } finally {
             filtered.recycle()
         }
+    }
+
+    private fun fuseTeamSlotEvidence(
+        ocr: TeamSlotEvidence,
+        visual: PokemonVisualRecognizer.Match?
+    ): DetectedPokemon? {
+        val visualCandidate = visual?.let { repo.pokemonForVisualIdentity(it.speciesId, it.dex) }
+        val ocrPokemon = ocr.name?.let(repo::pokemon)
+        val ocrDex = ocrPokemon?.dex?.takeIf { it > 0 }
+        val ocrSpeciesId = ocrPokemon?.speciesId
+
+        if (ocr.name != null && visual != null) {
+            val sameDex = ocrDex != null && ocrDex == visual.dex
+            val exactFormMatch = visual.speciesId == null ||
+                ocrSpeciesId.equals(visual.speciesId, ignoreCase = true)
+
+            // Exact form agreement is the strongest identity signal.
+            if (sameDex && exactFormMatch) {
+                return DetectedPokemon(
+                    name = ocr.name,
+                    cp = ocr.cp,
+                    confidence = 0.995f,
+                    rawText = ocr.raw,
+                    visualDex = visual.dex,
+                    visualSpeciesId = visual.speciesId,
+                    visualConfidence = visual.confidence
+                )
+            }
+
+            // Same dex but a form-aware image resolves a different PvPoke identity.
+            // Prefer the image only at high confidence; OCR often shows only the base
+            // display name and cannot distinguish regional/stance forms.
+            if (
+                sameDex &&
+                visualCandidate != null &&
+                visual.speciesId != null &&
+                visual.confidence >= VISUAL_FORM_ACCEPT_CONFIDENCE
+            ) {
+                return DetectedPokemon(
+                    name = visualCandidate.speciesName,
+                    cp = ocr.cp,
+                    confidence = 0.97f,
+                    rawText = ocr.raw,
+                    visualDex = visual.dex,
+                    visualSpeciesId = visual.speciesId,
+                    visualConfidence = visual.confidence
+                )
+            }
+
+            // Different dex = true conflict. Keep OCR but lower confidence so one noisy
+            // frame cannot redefine the stable team.
+            val conflict = ocrDex != null && ocrDex != visual.dex &&
+                visual.confidence >= VISUAL_CONFLICT_CONFIDENCE
+            return DetectedPokemon(
+                name = ocr.name,
+                cp = ocr.cp,
+                confidence = if (conflict) 0.70f else ocr.confidence,
+                rawText = ocr.raw,
+                visualDex = visual.dex,
+                visualSpeciesId = visual.speciesId,
+                visualConfidence = visual.confidence
+            )
+        }
+
+        // Image-only recovery accepts an exact form-aware speciesId when available.
+        // Older dex-only banks remain supported, but only for unambiguous dex entries.
+        if (visualCandidate != null && visual != null && visual.confidence >= VISUAL_ACCEPT_CONFIDENCE) {
+            return DetectedPokemon(
+                name = visualCandidate.speciesName,
+                cp = ocr.cp,
+                confidence = if (ocr.cp != null) 0.94f else 0.86f,
+                rawText = ocr.raw,
+                visualDex = visual.dex,
+                visualSpeciesId = visual.speciesId,
+                visualConfidence = visual.confidence
+            )
+        }
+
+        return null
     }
 
     private suspend fun recognizeCard(roi: Bitmap): DetectedPokemon? {
@@ -225,6 +362,15 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private const val RESERVE_TOP_2 = 0.640f
         private const val RESERVE_BOTTOM_2 = 0.750f
 
+        // Portrait-only regions inside the two reserve cards. Visual recognition is
+        // auxiliary: CP/OCR remains authoritative whenever available.
+        private const val RESERVE_PORTRAIT_LEFT = 0.835f
+        private const val RESERVE_PORTRAIT_RIGHT = 0.985f
+        private const val RESERVE_PORTRAIT_TOP_1 = 0.565f
+        private const val RESERVE_PORTRAIT_BOTTOM_1 = 0.625f
+        private const val RESERVE_PORTRAIT_TOP_2 = 0.660f
+        private const val RESERVE_PORTRAIT_BOTTOM_2 = 0.725f
+
         // Team selection card, read as three independent columns.
         private const val TEAM_SLOT_TOP = 0.615f
         private const val TEAM_SLOT_BOTTOM = 0.835f
@@ -235,6 +381,16 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private const val TEAM_SLOT_3_LEFT = 0.645f
         private const val TEAM_SLOT_3_RIGHT = 0.945f
 
+        // Portrait-only subregions used by the visual fingerprint recognizer.
+        private const val TEAM_PORTRAIT_TOP = 0.675f
+        private const val TEAM_PORTRAIT_BOTTOM = 0.790f
+        private const val TEAM_PORTRAIT_1_LEFT = 0.105f
+        private const val TEAM_PORTRAIT_1_RIGHT = 0.315f
+        private const val TEAM_PORTRAIT_2_LEFT = 0.395f
+        private const val TEAM_PORTRAIT_2_RIGHT = 0.605f
+        private const val TEAM_PORTRAIT_3_LEFT = 0.685f
+        private const val TEAM_PORTRAIT_3_RIGHT = 0.895f
+
         // Lobby/rules text can appear across a large central portion of the screen.
         private const val LEAGUE_LEFT_FRAC = 0.04f
         private const val LEAGUE_TOP_FRAC = 0.04f
@@ -244,5 +400,8 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private val TARGET_TEXT_COLOR = Color.parseColor("#2f5971")
         private const val COLOR_TOLERANCE = 34
         private val CP_REGEX = Regex("(?i)(?:PC|CP)\\s*[: ]?\\s*(\\d{2,5})")
+        private const val VISUAL_ACCEPT_CONFIDENCE = 0.76f
+        private const val VISUAL_FORM_ACCEPT_CONFIDENCE = 0.86f
+        private const val VISUAL_CONFLICT_CONFIDENCE = 0.80f
     }
 }

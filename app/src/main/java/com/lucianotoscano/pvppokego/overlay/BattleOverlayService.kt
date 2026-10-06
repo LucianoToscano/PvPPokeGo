@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
@@ -24,9 +25,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import com.lucianotoscano.pvppokego.BuildConfig
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.R
+import com.lucianotoscano.pvppokego.capture.AccessibilityScreenCapture
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
 import com.lucianotoscano.pvppokego.capture.ScreenFrameRecorder
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
@@ -36,12 +40,15 @@ import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.GameDataRepository
+import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.detect.BattleFrameEventDetector
 import com.lucianotoscano.pvppokego.detect.BattleOcrDetector
 import com.lucianotoscano.pvppokego.detect.BattlePresenceTracker
 import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
+import com.lucianotoscano.pvppokego.engine.BattleContinuityPolicy
+import com.lucianotoscano.pvppokego.engine.BattleCorrespondenceTracker
 import com.lucianotoscano.pvppokego.engine.BattleEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -66,10 +73,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var detector: BattleOcrDetector? = null
     private var frameDetector: BattleFrameEventDetector? = null
     private val presenceTracker = BattlePresenceTracker()
+    private val battleCorrespondence = BattleCorrespondenceTracker()
     private var lastNativeTopCardY: Int? = null
     private var lastEditSnapshot: Triple<String, Float, Float>? = null
     private var projection: MediaProjection? = null
     private var capture: ScreenCapture? = null
+    @Volatile private var projectionRevokedBySystem = false
+    @Volatile private var usingAccessibilityFallback = false
+    @Volatile private var destroyingService = false
+    private var lastAccessibilityFrameAtMs = 0L
     private var screenRecorder: ScreenFrameRecorder? = null
     private var windowManager: WindowManager? = null
     private var overlayView: BattleOverlayView? = null
@@ -97,6 +109,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var battleActive = false
     private var lastBattleEvidenceAtMs = 0L
     private var switchChoicePromptUntilMs = 0L
+    private var lastHistoryStateAtMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -116,12 +129,16 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         gameRepo = GameDataRepository(this)
         historyRecorder = BattleHistoryRecorder(BattleHistoryRepository(this))
         screenRecorder = ScreenFrameRecorder(this)
-        startForeground(NOTIFICATION_ID, notification("Aguardando captura de tela"))
+        setForegroundNotification(notification("Aguardando captura de tela"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> { historyRecorder.finish(); stopSelf(); return START_NOT_STICKY }
+            ACTION_START_ACCESSIBILITY_CAPTURE -> {
+                startAccessibilityCaptureMode()
+                return START_STICKY
+            }
             ACTION_TOGGLE_VISION -> {
                 visionPaused = !visionPaused
                 refreshForegroundNotification()
@@ -187,9 +204,57 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (code != Int.MIN_VALUE && data != null && projection == null) {
             startProjection(code, data)
         } else if (projection == null && overlayView == null && intent?.action == null) {
-            startForeground(NOTIFICATION_ID, notification("Toque em Iniciar overlay para reativar a captura"))
+            setForegroundNotification(notification("Toque em Iniciar overlay para reativar a captura"))
         }
         return START_STICKY
+    }
+
+    private fun startAccessibilityCaptureMode() {
+        if (!AccessibilityScreenCapture.isConnected) {
+            setForegroundNotification(
+                notification("Ative PvPPokeGo em Acessibilidade para usar com gravador externo")
+            )
+            return
+        }
+
+        scope.launch {
+            try {
+                currentLeagueCp = settingsRepo.configuredLeagueCp()
+                    ?: settingsRepo.lastDetectedLeagueCp.takeIf { it in SUPPORTED_LEAGUE_CPS }
+                    ?: 1500
+
+                withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
+                historyRecorder.setMetadata(BuildConfig.VERSION_NAME, gameRepo.offlineSnapshotVersion())
+                if (engine == null) engine = BattleEngine(gameRepo)
+                detector?.close()
+                detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
+                if (frameDetector == null) frameDetector = BattleFrameEventDetector()
+                if (!battleActive && !historyRecorder.hasActiveSession()) {
+                    presenceTracker.reset()
+                    battleCorrespondence.reset()
+                }
+
+                projectionRevokedBySystem = true
+                usingAccessibilityFallback = true
+                lastAccessibilityFrameAtMs = 0L
+                AccessibilityScreenCapture.clearLatest()
+
+                withContext(Dispatchers.Main) {
+                    attachOverlay()
+                    setForegroundNotification(
+                        notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • modo gravador externo")
+                    )
+                    redraw()
+                }
+                startScanLoop()
+            } catch (t: Throwable) {
+                withContext(Dispatchers.Main) {
+                    setForegroundNotification(
+                        notification("Erro no modo gravador externo: ${t.javaClass.simpleName}")
+                    )
+                }
+            }
+        }
     }
 
     private fun startProjection(resultCode: Int, resultData: Intent) {
@@ -200,25 +265,35 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     ?: 1500
 
                 withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
+                historyRecorder.setMetadata(BuildConfig.VERSION_NAME, gameRepo.offlineSnapshotVersion())
                 engine = BattleEngine(gameRepo)
-                detector = BattleOcrDetector(gameRepo)
+                detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
                 frameDetector = BattleFrameEventDetector()
                 presenceTracker.reset()
+                battleCorrespondence.reset()
 
                 val pm = getSystemService(MediaProjectionManager::class.java)
                 val mediaProjection = pm.getMediaProjection(resultCode, resultData)
                     ?: error("MediaProjection indisponível")
                 mediaProjection.registerCallback(object : MediaProjection.Callback() {
-                    override fun onStop() { stopSelf() }
+                    override fun onStop() {
+                        if (!destroyingService) {
+                            scope.launch { handleProjectionRevoked() }
+                        }
+                    }
                 }, null)
                 projection = mediaProjection
+                projectionRevokedBySystem = false
+                usingAccessibilityFallback = false
+                lastAccessibilityFrameAtMs = 0L
+                AccessibilityScreenCapture.clearLatest()
 
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("0.5.19 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                setForegroundNotification(notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
-                startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
+                setForegroundNotification(notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
             }
         }
@@ -1029,6 +1104,83 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         return normalizedBattleText(raw).contains("quer trocar por um pokemon")
     }
 
+    private fun battleResultFromText(raw: String): String? {
+        if (raw.isBlank()) return null
+        val compact = normalizedBattleText(raw).replace(Regex("[^a-z0-9]+"), "")
+        return when {
+            listOf("vocevenceu", "youwin", "victory").any(compact::contains) -> "Vitória"
+            listOf("bomesforco", "voceperdeu", "youlost", "defeat").any(compact::contains) -> "Derrota"
+            else -> null
+        }
+    }
+
+    private fun updateHistorySession(
+        isActive: Boolean,
+        nowMs: Long,
+        startedMidBattleEvidence: Boolean = false
+    ) {
+        val hadSession = historyRecorder.hasActiveSession()
+        historyRecorder.setBattleActive(isActive, currentLeagueCp, nowMs)
+        val hasSession = historyRecorder.hasActiveSession()
+
+        if (!hadSession && hasSession && startedMidBattleEvidence) {
+            historyRecorder.markStartedMidBattle()
+        }
+
+        if (hadSession && !hasSession) {
+            clearBattleContextAfterConfirmedEnd()
+        }
+    }
+
+    private fun clearBattleContextAfterConfirmedEnd() {
+        lastRecordedAdviceKey = null
+        lastReserveDiagnosticKey = null
+        lastHistoryStateAtMs = 0L
+        engine?.resetBattle()
+        frameDetector?.reset()
+        presenceTracker.reset()
+        battleCorrespondence.reset()
+        battleActive = false
+        lastNativeTopCardY = null
+        lastBattleEvidenceAtMs = 0L
+        switchChoicePromptUntilMs = 0L
+        dismissMoveMenu()
+    }
+
+    private fun recordHistoryState(ui: BattleUiState, nowMs: Long, force: Boolean = false) {
+        if (!historyRecorder.hasActiveSession()) return
+        if (!force && nowMs - lastHistoryStateAtMs < HISTORY_STATE_INTERVAL_MS) return
+        lastHistoryStateAtMs = nowMs
+
+        val ownEnergy = ui.ownCharged1 ?: ui.ownCharged2
+        val enemyEnergy = ui.charged1 ?: ui.charged2
+
+        historyRecorder.recordState(
+            actor = "VOCÊ",
+            pokemon = ui.playerName,
+            hpRatio = engine?.latestPlayerHpRatio(),
+            energyMin = ownEnergy?.minEnergy,
+            energyMax = ownEnergy?.maxEnergy,
+            confidence = ownEnergy?.confidence?.let(::energyConfidenceLabel),
+            nowMs = nowMs
+        )
+        historyRecorder.recordState(
+            actor = "INIMIGO",
+            pokemon = ui.opponentName,
+            hpRatio = engine?.latestOpponentHpRatio(),
+            energyMin = enemyEnergy?.minEnergy,
+            energyMax = enemyEnergy?.maxEnergy,
+            confidence = enemyEnergy?.confidence?.let(::energyConfidenceLabel),
+            nowMs = nowMs
+        )
+    }
+
+    private fun energyConfidenceLabel(value: EnergyConfidence): String = when (value) {
+        EnergyConfidence.CONFIRMED -> "CONFIRMADO"
+        EnergyConfidence.ESTIMATED -> "ESTIMADO"
+        EnergyConfidence.RANGE -> "FAIXA"
+    }
+
     private fun startScanLoop() {
         scanJob?.cancel()
         scanJob = scope.launch {
@@ -1044,7 +1196,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     continue
                 }
                 runCatching { capture?.ensureMatchesCurrentDisplay() }
-                val frame = capture?.acquireLatestBitmap()
+                val nowForFrame = System.currentTimeMillis()
+                val frame = acquireAnalysisFrame(nowForFrame)
                 if (frame != null) {
                     try {
                         screenRecorder?.recordFrame(frame)
@@ -1085,7 +1238,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     visualConfidence = event.battleConfidence,
                                     nowMs = now
                                 )
-                                historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
+                                updateHistorySession(battleActive, now)
                                 e.onBattleConfidence(presenceTracker.confidence)
                                 if (event.battleUiVisible) markBattleEvidence(now)
                                 if (battleActive || event.battleUiVisible) {
@@ -1132,8 +1285,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             (battleActive || now - lastBattleEvidenceAtMs <= BATTLE_VISIBILITY_GRACE_MS) &&
                             now - lastReserveOcrAt >= RESERVE_OCR_INTERVAL_MS
                         ) {
-                            detector?.detectReserveCps(frame)?.let { (topCp, bottomCp) ->
-                                e.onReserveCardCps(topCp, bottomCp)
+                            detector?.detectReserveEvidence(frame)?.let { (topCard, bottomCard) ->
+                                e.onReserveCardEvidence(topCard, bottomCard)
                             }
                             lastReserveOcrAt = now
                         }
@@ -1154,29 +1307,133 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 val pairedCards = d.player != null && d.opponent != null
                                 val textEvidence = battleTextLooksActive(d.battleText)
                                 val switchPrompt = switchChoicePromptDetected(d.battleText)
-                                if (pairedCards || textEvidence || switchPrompt) {
+                                val hasBattleEvidence = pairedCards || textEvidence || switchPrompt
+                                val previousEvidenceGap = if (lastBattleEvidenceAtMs > 0L) {
+                                    (now - lastBattleEvidenceAtMs).coerceAtLeast(0L)
+                                } else {
+                                    Long.MAX_VALUE
+                                }
+
+                                val correspondenceEngine = e
+                                val correspondenceDecision = if (
+                                    historyRecorder.hasActiveSession() && correspondenceEngine != null
+                                ) {
+                                    battleCorrespondence.observe(
+                                        context = correspondenceEngine.battleCorrespondenceContext(
+                                            inactiveForMs = previousEvidenceGap,
+                                            sessionAgeMs = historyRecorder.activeElapsedMs(now) ?: 0L
+                                        ),
+                                        observation = correspondenceEngine.battleCorrespondenceObservation(
+                                            detection = d,
+                                            pairedCards = pairedCards,
+                                            battleTextEvidence = textEvidence,
+                                            switchPrompt = switchPrompt
+                                        ),
+                                        nowMs = now
+                                    )
+                                } else {
+                                    battleCorrespondence.reset()
+                                    BattleCorrespondenceTracker.Decision.CONTINUE
+                                }
+
+                                if (correspondenceDecision == BattleCorrespondenceTracker.Decision.NEW_BATTLE) {
+                                    // The old session survived a visibility gap, but a repeated,
+                                    // incompatible player+opponent pair proves a new match.
+                                    // Finish it before letting the new identities mutate energy/team state.
+                                    historyRecorder.finish(
+                                        nowMs = now,
+                                        reason = "Nova partida confirmada por identidade visual/OCR"
+                                    )
+                                    clearBattleContextAfterConfirmedEnd()
+                                    e = engine
+                                }
+
+                                if (hasBattleEvidence) {
                                     battleActive = presenceTracker.update(
                                         pairedPokemonCards = pairedCards,
                                         battleTextEvidence = textEvidence,
                                         switchPrompt = switchPrompt,
                                         nowMs = now
                                     )
-                                    historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
+                                    updateHistorySession(
+                                        battleActive,
+                                        now,
+                                        startedMidBattleEvidence =
+                                            correspondenceDecision == BattleCorrespondenceTracker.Decision.NEW_BATTLE &&
+                                                textEvidence
+                                    )
                                     e?.onBattleConfidence(presenceTracker.confidence)
                                     markBattleEvidence(now)
                                 }
                                 if (switchPrompt) {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
-                                val changes = e?.onDetection(d)
+
+                                // While a possible new-match pair is waiting for its second
+                                // confirming frame, preserve the old battle state untouched.
+                                val holdIdentityMutation =
+                                    correspondenceDecision == BattleCorrespondenceTracker.Decision.HOLD_CURRENT ||
+                                        (
+                                            correspondenceDecision == BattleCorrespondenceTracker.Decision.INSUFFICIENT &&
+                                                battleCorrespondence.hasPendingNewBattleCandidate
+                                            )
+
+                                val before = e?.uiState()
+                                val changes = if (!holdIdentityMutation) e?.onDetection(d) else null
+                                val after = e?.uiState()
                                 if (changes?.playerChanged == true) lastReserveOcrAt = 0L
-                                if (battleActive) historyRecorder.observeDetection(d, currentLeagueCp, now)
+
+                                if (battleActive && after != null) {
+                                    historyRecorder.observeStableState(
+                                        playerName = after.playerName,
+                                        playerCp = after.playerCp,
+                                        opponentName = after.opponentName,
+                                        opponentCp = after.opponentCp,
+                                        leagueCp = currentLeagueCp,
+                                        nowMs = now
+                                    )
+                                }
+
+                                if (changes?.playerChanged == true && after != null) {
+                                    historyRecorder.recordSwitch(
+                                        actor = "VOCÊ",
+                                        fromPokemon = before?.playerName,
+                                        toPokemon = after.playerName,
+                                        cp = after.playerCp,
+                                        nowMs = now,
+                                        confidence = "CONFIRMADO"
+                                    )
+                                    recordHistoryState(after, now, force = true)
+                                }
+                                if (changes?.enemyChanged == true && after != null) {
+                                    historyRecorder.recordSwitch(
+                                        actor = "INIMIGO",
+                                        fromPokemon = before?.opponentName,
+                                        toPokemon = after.opponentName,
+                                        cp = after.opponentCp,
+                                        nowMs = now,
+                                        confidence = "CONFIRMADO"
+                                    )
+                                    recordHistoryState(after, now, force = true)
+                                }
+
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
-                                val textEvent = e?.onBattleText(d.battleText, now)
-                                if (textEvent != null) {
+
+                                val textEngine = e
+                                val textEvent = if (!holdIdentityMutation) textEngine?.onBattleText(d.battleText, now) else null
+                                if (textEvent != null && textEngine != null) {
+                                    val chargedAtSessionStart =
+                                        historyRecorder.activeElapsedMs(now)?.let { it <= 3_500L } == true &&
+                                            (
+                                                textEvent.newChargedPrompt ||
+                                                    textEvent.chargedMoveConfirmed ||
+                                                    textEvent.ownChargedMoveConfirmed
+                                                )
+                                    if (chargedAtSessionStart) historyRecorder.markStartedMidBattle()
+
                                     textEvent.enemyChargedMove?.let { move ->
-                                        val snapshot = e.uiState()
+                                        val snapshot = textEngine.uiState()
                                         historyRecorder.recordCharged(
                                             "INIMIGO",
                                             gameRepo.localizedMoveName(move),
@@ -1185,6 +1442,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                             confidence = chargedKnowledgeLabel(snapshot, move.moveId, own = false),
                                             source = "OCR"
                                         )
+                                        recordHistoryState(snapshot, now, force = true)
                                     }
                                     textEvent.ownChargedMove?.let { move ->
                                         val snapshot = e.uiState()
@@ -1196,10 +1454,23 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                             confidence = chargedKnowledgeLabel(snapshot, move.moveId, own = true),
                                             source = "OCR"
                                         )
+                                        recordHistoryState(snapshot, now, force = true)
                                     }
                                     when {
                                         textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
-                                        textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
+                                        textEvent.chargedMoveConfirmed || textEvent.ownChargedMoveConfirmed ->
+                                            frameDetector?.freezeForCharged(now, 2_200L)
+                                    }
+                                }
+
+                                battleResultFromText(d.battleText)?.let { result ->
+                                    if (historyRecorder.hasActiveSession()) {
+                                        historyRecorder.finish(
+                                            nowMs = now,
+                                            reason = "Resultado identificado na tela",
+                                            result = result
+                                        )
+                                        clearBattleContextAfterConfirmedEnd()
                                     }
                                 }
                             }
@@ -1207,15 +1478,35 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         e = engine
+                        val mayBeBackOnTeamScreen =
+                            !battleActive &&
+                                historyRecorder.hasActiveSession() &&
+                                now - lastBattleEvidenceAtMs >= BattleContinuityPolicy.MIN_OUT_OF_BATTLE_MS
                         if (
                             settingsRepo.autoRecognition &&
                             e != null &&
-                            e.needsOwnTeamScan() &&
                             !battleActive &&
-                            e.activeEnemyName() == null &&
+                            (e.needsOwnTeamScan() || mayBeBackOnTeamScreen) &&
                             now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS
                         ) {
-                            detector?.detectOwnTeam(frame)?.let(e::onOwnTeamDetected)
+                            val team = detector?.detectOwnTeam(frame).orEmpty()
+                            if (
+                                historyRecorder.hasActiveSession() &&
+                                BattleContinuityPolicy.confirmedTeamSelectionBoundary(
+                                    team = team,
+                                    battleActive = battleActive,
+                                    msSinceBattleEvidence = (now - lastBattleEvidenceAtMs).coerceAtLeast(0L)
+                                )
+                            ) {
+                                historyRecorder.finish(
+                                    nowMs = now,
+                                    reason = "Tela de seleção da equipe confirmada"
+                                )
+                                clearBattleContextAfterConfirmedEnd()
+                                engine?.onOwnTeamDetected(team)
+                            } else if (e.needsOwnTeamScan() && team.isNotEmpty()) {
+                                e.onOwnTeamDetected(team)
+                            }
                             lastTeamOcrAt = now
                         }
 
@@ -1233,8 +1524,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         battleActive = presenceTracker.tick(now)
-                        historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
+                        updateHistorySession(battleActive, now)
                         engine?.onBattleConfidence(presenceTracker.confidence)
+                        engine?.uiState()?.let { recordHistoryState(it, now) }
                         if (!battleActive) switchChoicePromptUntilMs = 0L
 
                         consecutiveErrors = 0
@@ -1319,6 +1611,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private suspend fun reloadLeague(cp: Int) {
         if (cp == currentLeagueCp) return
         withContext(Dispatchers.IO) { gameRepo.load(cp) }
+        historyRecorder.setMetadata(BuildConfig.VERSION_NAME, gameRepo.offlineSnapshotVersion())
         currentLeagueCp = cp
         engine = BattleEngine(gameRepo)
         frameDetector?.reset()
@@ -1327,7 +1620,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("0.5.19 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            setForegroundNotification(notification("0.5.20 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -1364,6 +1657,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         hudLockTouch?.visibility = if (chromeEnabled && !hudCollapsed) View.VISIBLE else View.GONE
         // Original lock/eye icons are drawn on the HUD canvas; touch views stay transparent.
         quickMenu?.setVisible(chromeEnabled && !hudCollapsed)
+        quickMenu?.setBattleActive(battleActive)
         if (!hudCollapsed) quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()
     }
@@ -1406,7 +1700,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             val uri = recorder.stop()
             Toast.makeText(
                 this,
-                if (uri != null) "Gravação salva em Movies/PvPPokeGo" else "Gravação encerrada",
+                if (uri != null) {
+                    "Gravação salva em Movies/PvPPokeGo"
+                } else {
+                    "Gravação não foi salva: " + (recorder.lastErrorMessage ?: "erro desconhecido")
+                },
                 Toast.LENGTH_LONG
             ).show()
         } else {
@@ -1414,12 +1712,63 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             val ok = c != null && c.width > 0 && c.height > 0 && recorder.start(c.width, c.height)
             Toast.makeText(
                 this,
-                if (ok) "Gravação PvPPokeGo iniciada" else "Inicie a captura do overlay antes de gravar",
+                if (ok) {
+                    "Gravação PvPPokeGo iniciada"
+                } else {
+                    recorder.lastErrorMessage ?: "Inicie a captura do overlay antes de gravar"
+                },
                 Toast.LENGTH_LONG
             ).show()
         }
         refreshForegroundNotification()
         quickMenu?.refreshPanelFromService()
+    }
+
+    /**
+     * Returns the next frame from MediaProjection, or from the screenshot-only
+     * Accessibility fallback after another recorder revokes MediaProjection.
+     */
+    private fun acquireAnalysisFrame(nowMs: Long): android.graphics.Bitmap? {
+        capture?.acquireLatestBitmap()?.let {
+            usingAccessibilityFallback = false
+            return it
+        }
+
+        if (!projectionRevokedBySystem || !AccessibilityScreenCapture.isConnected) return null
+        usingAccessibilityFallback = true
+        AccessibilityScreenCapture.requestScreenshot(nowMs)
+        val fresh = AccessibilityScreenCapture.acquireLatestBitmap(lastAccessibilityFrameAtMs) ?: return null
+        lastAccessibilityFrameAtMs = fresh.second
+        return fresh.first
+    }
+
+    private suspend fun handleProjectionRevoked() {
+        projectionRevokedBySystem = true
+        projection = null
+        runCatching { capture?.stop() }
+        capture = null
+
+        if (screenRecorder?.isRecording == true) {
+            runCatching { screenRecorder?.stop() }
+        }
+
+        usingAccessibilityFallback = AccessibilityScreenCapture.isConnected
+        if (usingAccessibilityFallback) {
+            AccessibilityScreenCapture.clearLatest()
+            lastAccessibilityFrameAtMs = 0L
+        }
+        withContext(Dispatchers.Main) {
+            if (usingAccessibilityFallback) {
+                refreshForegroundNotification(
+                    "Gravador externo ativo • compatibilidade por screenshot • análise reduzida"
+                )
+            } else {
+                refreshForegroundNotification(
+                    "Captura tomada por outro gravador • ative Compatibilidade com gravador externo"
+                )
+            }
+            redraw()
+        }
     }
 
     private fun currentBattleModeLabelText(): String {
@@ -1446,12 +1795,24 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     private fun refreshForegroundNotification(baseText: String? = null) {
         val state = when {
+            usingAccessibilityFallback -> "Gravador externo • captura compatível (análise reduzida)"
+            projectionRevokedBySystem && !AccessibilityScreenCapture.isConnected ->
+                "Captura pausada pelo gravador externo • ative compatibilidade"
             screenRecorder?.isRecording == true -> "● GRAVANDO • ${leagueLabel(currentLeagueCp)} • HUD ativo"
             overlaySuppressed -> "Sobreposição oculta"
             visionPaused -> "Visão pausada"
             else -> baseText ?: "${leagueLabel(currentLeagueCp)} • HUD PvP ativo"
         }
-        startForeground(NOTIFICATION_ID, notification(state))
+        setForegroundNotification(notification(state))
+    }
+
+    private fun setForegroundNotification(value: Notification) {
+        val type = when {
+            Build.VERSION.SDK_INT >= 34 && projection == null -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            Build.VERSION.SDK_INT >= 29 && projection != null -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            else -> 0
+        }
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, value, type)
     }
 
     private fun notification(text: String): Notification {
@@ -1496,6 +1857,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     override fun onDestroy() {
+        destroyingService = true
         if (::historyRecorder.isInitialized) historyRecorder.finish()
         scanJob?.cancel()
         dismissMoveMenu()
@@ -1524,6 +1886,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         capture = null
         projection?.stop()
         projection = null
+        AccessibilityScreenCapture.clearLatest()
         settingsRepo.overlayServiceRunning = false
         scope.cancel()
         super.onDestroy()
@@ -1548,6 +1911,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         const val ACTION_TOGGLE_VISION = "com.lucianotoscano.pvppokego.TOGGLE_VISION"
         const val ACTION_TOGGLE_OVERLAY = "com.lucianotoscano.pvppokego.TOGGLE_OVERLAY"
         const val ACTION_TOGGLE_RECORDING = "com.lucianotoscano.pvppokego.TOGGLE_RECORDING"
+        const val ACTION_START_ACCESSIBILITY_CAPTURE = "com.lucianotoscano.pvppokego.START_ACCESSIBILITY_CAPTURE"
         const val ACTION_APP_FOREGROUND = "com.lucianotoscano.pvppokego.APP_FOREGROUND"
         const val ACTION_APP_BACKGROUND = "com.lucianotoscano.pvppokego.APP_BACKGROUND"
         private const val NOTIFICATION_ID = 1107
@@ -1558,6 +1922,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
         private const val BATTLE_VISIBILITY_GRACE_MS = 3_800L
         private const val SWITCH_CHOICE_PROMPT_GRACE_MS = 2_400L
+        private const val HISTORY_STATE_INTERVAL_MS = 5_000L
         private const val EDIT_LONG_PRESS_MS = 180L
         private val SUPPORTED_LEAGUE_CPS = setOf(1500, 2500, 10000)
         private val BATTLE_TEXT_MARKERS = listOf(

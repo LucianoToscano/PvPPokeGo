@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.lucianotoscano.pvppokego.capture.AccessibilityScreenCapture
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.overlay.BattleOverlayService
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var settingsRepo: SettingsRepository
     private lateinit var historyRepo: BattleHistoryRepository
     private var overlayGranted by mutableStateOf(false)
+    private var recorderCompatibilityEnabled by mutableStateOf(false)
     private var historyRevision by mutableStateOf(0)
     private var pendingHistoryExportBattleId: Long? = null
     /** True after capture permission succeeds until the service-running flag catches up. */
@@ -68,7 +70,7 @@ class MainActivity : ComponentActivity() {
                         entry(
                             "device.txt",
                             buildString {
-                                appendLine("PvPPokeGo=0.5.19")
+                                appendLine("PvPPokeGo=0.5.20")
                                 appendLine("package=" + packageName)
                                 appendLine("manufacturer=" + android.os.Build.MANUFACTURER)
                                 appendLine("model=" + android.os.Build.MODEL)
@@ -81,7 +83,7 @@ class MainActivity : ComponentActivity() {
                         )
                         entry(
                             "README.txt",
-                            "Diagnóstico PvPPokeGo 0.5.19\n" +
+                            "Diagnóstico PvPPokeGo 0.5.20\n" +
                                 "Inclui configurações, posições, histórico de batalhas, fontes/confiança dos eventos e dados do aparelho.\n"
                         )
                     }
@@ -120,7 +122,7 @@ class MainActivity : ComponentActivity() {
                         entry(
                             "README.txt",
                             buildString {
-                                appendLine("PvPPokeGo 0.5.18 — exportação de histórico")
+                                appendLine("PvPPokeGo 0.5.20 — exportação de histórico")
                                 appendLine()
                                 appendLine("Envie este ZIP diretamente para análise.")
                                 appendLine("historico-legivel.txt: leitura humana, separada por VOCÊ / INIMIGO / ASSISTENTE / DIAGNÓSTICO.")
@@ -188,6 +190,9 @@ class MainActivity : ComponentActivity() {
                 historyRevision = historyRevision,
                 overlayPermissionGranted = overlayGranted,
                 onRequestOverlayPermission = ::requestOverlayPermission,
+                recorderCompatibilityEnabled = recorderCompatibilityEnabled,
+                onOpenRecorderCompatibility = ::openRecorderCompatibility,
+                onStartExternalRecorderMode = ::startExternalRecorderMode,
                 onStartOverlay = ::startOverlay,
                 onStopOverlay = ::stopOverlay,
                 onResetBattle = ::resetBattle,
@@ -204,6 +209,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         overlayGranted = Settings.canDrawOverlays(this)
+        recorderCompatibilityEnabled = AccessibilityScreenCapture.isConnected
+        window.decorView.postDelayed({
+            recorderCompatibilityEnabled = AccessibilityScreenCapture.isConnected
+        }, 700L)
         historyRevision++
         if (::settingsRepo.isInitialized && settingsRepo.overlayServiceRunning) {
             overlayStarting = false
@@ -235,6 +244,37 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun openRecorderCompatibility() {
+        Toast.makeText(
+            this,
+            "Ative PvPPokeGo em Acessibilidade. Ele usa somente captura de tela de compatibilidade e não executa toques.",
+            Toast.LENGTH_LONG
+        ).show()
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+    private fun startExternalRecorderMode() {
+        if (!Settings.canDrawOverlays(this)) {
+            requestOverlayPermission()
+            return
+        }
+        if (!AccessibilityScreenCapture.isConnected) {
+            openRecorderCompatibility()
+            return
+        }
+        overlayStarting = true
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, BattleOverlayService::class.java)
+                .setAction(BattleOverlayService.ACTION_START_ACCESSIBILITY_CAPTURE)
+        )
+        Toast.makeText(
+            this,
+            "Modo gravador externo iniciado. Agora você pode iniciar o gravador Samsung/terceiro.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
     private fun startOverlay() {
         if (!Settings.canDrawOverlays(this)) {
             requestOverlayPermission()
@@ -252,21 +292,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportSettings() {
-        exportSettingsLauncher.launch("PvPPokeGo-0.5.19-config.json")
+        exportSettingsLauncher.launch("PvPPokeGo-0.5.20-config.json")
     }
 
     private fun exportDiagnostics() {
-        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.19-diagnostico.zip")
+        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.20-diagnostico.zip")
     }
 
     private fun exportHistory() {
         pendingHistoryExportBattleId = null
-        exportHistoryLauncher.launch("PvPPokeGo-0.5.19-historico.zip")
+        exportHistoryLauncher.launch("PvPPokeGo-0.5.20-historico.zip")
     }
 
     private fun exportBattle(id: Long) {
         pendingHistoryExportBattleId = id
-        exportHistoryLauncher.launch("PvPPokeGo-0.5.19-batalha-$id.zip")
+        exportHistoryLauncher.launch("PvPPokeGo-0.5.20-batalha-$id.zip")
     }
 
     private fun toggleRecording() {
