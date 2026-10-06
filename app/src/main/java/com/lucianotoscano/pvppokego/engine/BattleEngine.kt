@@ -1408,7 +1408,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     // mapped, do not mark a known team member dead just because the
                     // opposite card temporarily disappeared.
                     visible = if (resolved.confirmed) {
-                        reserveSlotVisible.getOrNull(index) != false
+                        reserveSlotVisible.getOrNull(resolved.cardIndex) != false
                     } else {
                         true
                     },
@@ -1424,7 +1424,22 @@ class BattleEngine(private val repo: GameDataRepository) {
                     chargedMove2 = reserveC2,
                     fastMoveKnowledge = moveKnowledge(saved, 0, reserveFast),
                     chargedMove1Knowledge = moveKnowledge(saved, 1, reserveC1),
-                    chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2)
+                    chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2),
+                    hpRatio = if (resolved.confirmed) {
+                        reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: saved?.lastHpRatio
+                    } else {
+                        saved?.lastHpRatio
+                    },
+                    status = when {
+                        saved?.fainted == true -> TeamPokemonStatus.FAINTED
+                        resolved.confirmed &&
+                            reserveSlotVisible.getOrNull(resolved.cardIndex) == false ->
+                            TeamPokemonStatus.FAINTED
+                        resolved.confirmed &&
+                            (reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: 1f) <= .01f ->
+                            TeamPokemonStatus.FAINTED
+                        else -> TeamPokemonStatus.RESERVE
+                    }
                 )
             }
         val bestVisibleScore = rawReserves
@@ -1576,6 +1591,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private data class ResolvedOwnReserve(
         val slot: OwnTeamSlot,
+        val cardIndex: Int,
         val cardCp: Int?,
         val confirmed: Boolean,
         val source: String
@@ -1608,9 +1624,9 @@ class BattleEngine(private val repo: GameDataRepository) {
             cardCps = reserveCardCps.toList(),
             cardDexes = reserveCardDexes.toList(),
             cardSpeciesIds = reserveCardSpeciesIds.toList()
-        ).mapNotNull { match ->
+        ).mapIndexedNotNull { cardIndex, match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
-                ResolvedOwnReserve(slot, match.cardCp, match.confirmed, match.source)
+                ResolvedOwnReserve(slot, cardIndex, match.cardCp, match.confirmed, match.source)
             }
         }
     }
