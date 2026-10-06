@@ -206,11 +206,25 @@ object BattleAssistAdvisor {
         val enemyReady = enemyCharged.filter { it.ready }
         if (enemyReady.isNotEmpty()) {
             val cheapest = enemyReady.minByOrNull { it.energyCost }
+            val pattern = state.strategyPatternHint
+                ?.takeIf { state.strategyPatternConfidence >= .58f }
+                ?.let { " • $it" }
+                .orEmpty()
             return Advice(
                 "ATENÇÃO",
-                cheapest?.let { "Pode usar ${shortName(it.move.name)} • ${energyLabel(it)}" } ?: "Charged inimigo disponível",
+                (cheapest?.let { "Pode usar ${shortName(it.move.name)} • ${energyLabel(it)}" }
+                    ?: "Charged inimigo disponível") + pattern,
                 Color.rgb(245, 175, 52),
                 75
+            )
+        }
+
+        if (state.strategyPatternConfidence >= .68f && !state.strategyPatternHint.isNullOrBlank()) {
+            return Advice(
+                "PADRÃO LOCAL",
+                state.strategyPatternHint,
+                Color.rgb(126, 156, 220),
+                52
             )
         }
 
