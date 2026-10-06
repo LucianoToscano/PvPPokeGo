@@ -7,6 +7,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.opengl.EGL14
 import android.opengl.EGLExt
@@ -78,20 +79,27 @@ class ScreenFrameRecorder(private val context: Context) {
             MAX_OUTPUT_WIDTH.toFloat() / width.toFloat(),
             MAX_OUTPUT_HEIGHT.toFloat() / height.toFloat()
         )
-        val evenW = ((width * scale).toInt().coerceAtLeast(2)) and 1.inv()
-        val evenH = ((height * scale).toInt().coerceAtLeast(2)) and 1.inv()
-        outputWidth = evenW
-        outputHeight = evenH
+        // Many Samsung/Qualcomm AVC encoders are happiest with macroblock-aligned
+        // dimensions. 720x1600 exceeded common AVC level limits and could produce
+        // an MP4 that existed but was not decodable by Gallery.
+        fun align16(value: Int): Int = ((value.coerceAtLeast(16)) / 16) * 16
+        outputWidth = align16((width * scale).toInt())
+        outputHeight = align16((height * scale).toInt())
         tempFile = File(context.cacheDir, "pvppokego-recording-" + System.currentTimeMillis() + ".mp4")
 
         return runCatching {
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, evenW, evenH).apply {
+            val format = MediaFormat.createVideoFormat(
+                MediaFormat.MIMETYPE_VIDEO_AVC,
+                outputWidth,
+                outputHeight
+            ).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                setInteger(MediaFormat.KEY_BIT_RATE, suggestedBitrate(evenW, evenH))
+                setInteger(MediaFormat.KEY_BIT_RATE, suggestedBitrate(outputWidth, outputHeight))
                 setInteger(MediaFormat.KEY_FRAME_RATE, TARGET_FPS)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
-                setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+                // Deliberately avoid forcing profile/bitrate mode. Several OEM codecs
+                // accept the surface but later emit an unreadable stream when those
+                // optional constraints are unsupported.
             }
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).also {
@@ -193,7 +201,8 @@ class ScreenFrameRecorder(private val context: Context) {
         val file = tempFile
         tempFile = null
         val validFile = muxerStarted && encodedSampleCount > 0 &&
-            file != null && file.exists() && file.length() >= MIN_VALID_MP4_BYTES
+            file != null && file.exists() && file.length() >= MIN_VALID_MP4_BYTES &&
+            validateMp4(file)
         val published = file?.takeIf { validFile }?.let(::publishToMediaStore)
         if (published != null) {
             lastSavedUri = published
@@ -369,6 +378,25 @@ class ScreenFrameRecorder(private val context: Context) {
         firstFrameSubmitted = false
     }
 
+    private fun validateMp4(file: File): Boolean = runCatching {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(file.absolutePath)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?: 0L
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                ?.toIntOrNull()
+                ?: 0
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                ?.toIntOrNull()
+                ?: 0
+            durationMs > 0L && width > 0 && height > 0
+        } finally {
+            retriever.release()
+        }
+    }.getOrDefault(false)
+
     private fun publishToMediaStore(file: File): Uri? = runCatching {
         val resolver = context.contentResolver
         val displayName = "PvPPokeGo-" +
@@ -394,11 +422,11 @@ class ScreenFrameRecorder(private val context: Context) {
         (width.toLong() * height.toLong() * 2L).coerceIn(3_000_000L, 12_000_000L).toInt()
 
     companion object {
-        private const val TARGET_FPS = 12
-        private const val FRAME_INTERVAL_NS = 83_333_333L
+        private const val TARGET_FPS = 10
+        private const val FRAME_INTERVAL_NS = 100_000_000L
         private const val EGL_RECORDABLE_ANDROID = 0x3142
         private const val MAX_OUTPUT_WIDTH = 720
-        private const val MAX_OUTPUT_HEIGHT = 1600
+        private const val MAX_OUTPUT_HEIGHT = 1280
         private const val MIN_VALID_MP4_BYTES = 16_384L
 
         private val VERTICES: FloatBuffer = ByteBuffer
