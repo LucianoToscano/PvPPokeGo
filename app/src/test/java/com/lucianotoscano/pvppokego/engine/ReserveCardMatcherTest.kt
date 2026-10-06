@@ -106,4 +106,24 @@ class ReserveCardMatcherTest {
         assertFalse(r[1].confirmed)
     }
 
+    @Test
+    fun formAwareVisualEvidenceDistinguishesSameDexForms() {
+        val forms = listOf(
+            ReserveCardMatcher.Member(0, "Ninetales", 1490, 38, "ninetales"),
+            ReserveCardMatcher.Member(1, "Ninetales (Alolan)", 1488, 38, "ninetales_alolan"),
+            ReserveCardMatcher.Member(2, "Azumarill", 1498, 184, "azumarill")
+        )
+        val result = ReserveCardMatcher.resolve(
+            team = forms,
+            activeName = "Azumarill",
+            activeCp = 1498,
+            cardCps = listOf(null, null),
+            cardDexes = listOf(38, 38),
+            cardSpeciesIds = listOf("ninetales_alolan", "ninetales")
+        )
+        assertEquals(listOf("Ninetales (Alolan)", "Ninetales"), result.map { it.member.name })
+        assertTrue(result.all { it.confirmed })
+        assertEquals(listOf("image-form", "image-form"), result.map { it.source })
+    }
+
 }
