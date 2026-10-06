@@ -297,6 +297,8 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownTeamSlots.size < 3 || ownTeamSlots.any { it.cp == null }
     fun activePlayerName(): String? = playerName
     fun activeEnemyName(): String? = enemyName
+    fun latestPlayerHpRatio(): Float? = lastHpRatio
+    fun latestOpponentHpRatio(): Float? = lastOpponentHpRatio
     fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
     fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
