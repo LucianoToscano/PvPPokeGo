@@ -198,4 +198,39 @@ class BattleCorrespondenceTrackerTest {
         )
     }
 
+    @Test
+    fun sameDisplayNameDifferentFormsRemainDistinctIdentities() {
+        val normal = id("Ninetales", 1490, "ninetales")
+        val alolan = id("Ninetales", 1488, "ninetales_alolan")
+        assertEquals(false, BattleCorrespondenceTracker.sameIdentity(normal, alolan))
+    }
+
+    @Test
+    fun knownRegionalFormSwitchStaysInsideSameBattle() {
+        val tracker = BattleCorrespondenceTracker()
+        val formTeam = listOf(
+            id("Ninetales", 1490, "ninetales"),
+            id("Ninetales (Alolan)", 1488, "ninetales_alolan"),
+            id("Azumarill", 1498, "azumarill")
+        )
+        val context = BattleCorrespondenceTracker.Context(
+            activePlayer = formTeam[2],
+            activeOpponent = id("Sneasel", 1465, "sneasel"),
+            ownTeam = formTeam,
+            knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+            inactiveForMs = 250,
+            sessionAgeMs = 35_000
+        )
+        val observation = BattleCorrespondenceTracker.Observation(
+            player = formTeam[1],
+            opponent = id("Sneasel", 1465, "sneasel"),
+            pairedCards = true
+        )
+
+        assertEquals(
+            BattleCorrespondenceTracker.Decision.SWITCH_WITHIN_BATTLE,
+            tracker.observe(context, observation, 70_000)
+        )
+    }
+
 }
