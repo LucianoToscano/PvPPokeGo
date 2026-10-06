@@ -492,7 +492,6 @@ private fun BattleHistoryCard(
     val decisions = battle.events.count { it.actor == "ASSISTENTE" || it.category == "DECISÃO" }
     val diagnostics = battle.events.count { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
     var showDiagnostics by remember(battle.id) { mutableStateOf(false) }
-    var showTimeline by remember(battle.id) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -556,47 +555,26 @@ private fun BattleHistoryCard(
 
             if (expanded) {
                 HorizontalDivider()
-                Text("Detalhes da batalha", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Conversa da batalha",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Os eventos aparecem na ordem em que aconteceram. Você fica à direita, o inimigo à esquerda e o assistente em destaque.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-                val ownEvents = battle.events.filter {
-                    it.actor == "VOCÊ" && it.category != "ESTADO"
-                }
-                val enemyEvents = battle.events.filter {
-                    it.actor == "INIMIGO" && it.category != "ESTADO"
-                }
-                val assistantEvents = battle.events.filter {
-                    it.actor == "ASSISTENTE" || it.category == "DECISÃO"
-                }
-                val stateEvents = battle.events.filter {
-                    it.actor == "PARTIDA" || it.category == "TROCA" || it.category == "ESTADO"
-                }
-                val normalEvents = battle.events.filterNot {
-                    it.actor == "APP" || it.category == "DIAGNÓSTICO"
-                }
+                val conversationEvents = battle.events
+                    .filterNot { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
+                    .sortedBy { it.elapsedMs }
 
-                BattleHistorySection("VOCÊ", ownEvents)
-                BattleHistorySection("INIMIGO", enemyEvents)
-                BattleHistorySection("ASSISTENTE", assistantEvents)
-                BattleHistorySection("TROCAS E ESTADO", stateEvents)
-
-                OutlinedButton(
-                    onClick = { showTimeline = !showTimeline },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (showTimeline) "Ocultar linha do tempo completa" else "Ver linha do tempo completa")
-                }
-                if (showTimeline) {
-                    Text(
-                        "Linha do tempo cronológica",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (normalEvents.isEmpty()) {
-                        Text("Nenhum evento identificado.", style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        normalEvents.sortedBy { it.elapsedMs }.forEach { event ->
-                            BattleHistoryEventCard(event)
-                        }
+                if (conversationEvents.isEmpty()) {
+                    Text("Nenhum evento identificado.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    conversationEvents.forEach { event ->
+                        BattleHistoryEventCard(event)
                     }
                 }
 
@@ -605,15 +583,20 @@ private fun BattleHistoryCard(
                         onClick = { showDiagnostics = !showDiagnostics },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (showDiagnostics) "Ocultar diagnóstico técnico" else "Mostrar diagnóstico técnico ($diagnostics)")
+                        Text(
+                            if (showDiagnostics) "Ocultar diagnóstico técnico"
+                            else "Diagnóstico técnico ($diagnostics)"
+                        )
                     }
                     if (showDiagnostics) {
                         Text(
-                            "Diagnóstico técnico — útil para investigar erros de identificação.",
-                            style = MaterialTheme.typography.labelMedium
+                            "Leituras, confiança e fontes usadas pelo motor.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         battle.events
                             .filter { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
+                            .sortedBy { it.elapsedMs }
                             .forEach { event -> BattleHistoryEventCard(event, technical = true) }
                     }
                 }
@@ -655,77 +638,137 @@ private fun BattleHistoryEventCard(
 ) {
     val seconds = event.elapsedMs / 1000.0
     val actorLabel = when (event.actor) {
-        "VOCÊ" -> "VOCÊ"
-        "INIMIGO" -> "INIMIGO"
-        "ASSISTENTE" -> "ASSISTENTE"
-        else -> "APP"
+        "VOCÊ" -> "Você"
+        "INIMIGO" -> "Inimigo"
+        "ASSISTENTE" -> "Assistente"
+        "PARTIDA" -> "Partida"
+        else -> "Sistema"
     }
+    val isOwn = event.actor == "VOCÊ"
+    val isEnemy = event.actor == "INIMIGO"
+    val isAssistant = event.actor == "ASSISTENTE" || event.category == "DECISÃO"
+    val isSystem = !isOwn && !isEnemy && !isAssistant
+
     val container = when {
-        technical -> MaterialTheme.colorScheme.surface
-        event.actor == "VOCÊ" -> MaterialTheme.colorScheme.primaryContainer
-        event.actor == "INIMIGO" -> MaterialTheme.colorScheme.errorContainer
-        event.actor == "ASSISTENTE" -> MaterialTheme.colorScheme.tertiaryContainer
+        technical -> MaterialTheme.colorScheme.surfaceVariant
+        isOwn -> MaterialTheme.colorScheme.primaryContainer
+        isEnemy -> MaterialTheme.colorScheme.surfaceVariant
+        isAssistant -> MaterialTheme.colorScheme.tertiaryContainer
         else -> MaterialTheme.colorScheme.surface
     }
     val content = when {
-        technical -> MaterialTheme.colorScheme.onSurface
-        event.actor == "VOCÊ" -> MaterialTheme.colorScheme.onPrimaryContainer
-        event.actor == "INIMIGO" -> MaterialTheme.colorScheme.onErrorContainer
-        event.actor == "ASSISTENTE" -> MaterialTheme.colorScheme.onTertiaryContainer
+        technical -> MaterialTheme.colorScheme.onSurfaceVariant
+        isOwn -> MaterialTheme.colorScheme.onPrimaryContainer
+        isAssistant -> MaterialTheme.colorScheme.onTertiaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val count = if (event.count > 1) " ×${event.count}" else ""
+    val bubbleFraction = when {
+        technical -> .94f
+        isAssistant -> .92f
+        isSystem -> .78f
+        else -> .84f
+    }
+    val arrangement = when {
+        isOwn -> Arrangement.End
+        isEnemy -> Arrangement.Start
+        else -> Arrangement.Center
+    }
+
+    val count = if (event.count > 1) " ×" + event.count else ""
     val source = friendlyHistorySource(event.source)
     val confidence = friendlyConfidence(event.confidence)
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = container,
-        contentColor = content,
-        tonalElevation = if (technical) 0.dp else 1.dp
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = arrangement
     ) {
-        Column(
-            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth(bubbleFraction),
+            shape = when {
+                isOwn -> RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)
+                isEnemy -> RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)
+                else -> RoundedCornerShape(14.dp)
+            },
+            color = container,
+            contentColor = content,
+            tonalElevation = if (technical) 0.dp else 1.dp
         ) {
-            Text(
-                "+${"%.1f".format(Locale.US, seconds)}s  •  $actorLabel  •  ${event.category}",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                event.moveName + count,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            val detail = buildList {
-                event.pokemon?.takeIf { it.isNotBlank() }?.let { add(it) }
-                confidence?.let { add(it) }
-                source?.let { add(it) }
-            }.joinToString(" • ")
-            if (detail.isNotBlank()) {
-                Text(detail, style = MaterialTheme.typography.bodySmall)
-            }
-            if (event.details.isNotEmpty()) {
+            Column(
+                Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        actorLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "+" + "%.1f".format(Locale.US, seconds) + "s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = .68f)
+                    )
+                }
+
                 Text(
-                    event.details.entries.joinToString(" • ") { (key, value) ->
-                        when (key) {
-                            "hpPercent" -> "HP $value%"
-                            "energyMin" -> "Energia mín. $value"
-                            "energyMax" -> "Energia máx. $value"
-                            "shields" -> "Escudos $value"
-                            "de" -> "De: $value"
-                            "para" -> "Para: $value"
-                            "pc" -> "PC $value"
-                            else -> "$key: $value"
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall
+                    event.moveName + count,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
                 )
-            }
-            event.reason?.takeIf { it.isNotBlank() }?.let { reason ->
-                Text("Motivo: $reason", style = MaterialTheme.typography.bodySmall)
+
+                if (event.category.isNotBlank()) {
+                    Text(
+                        event.category,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = .72f)
+                    )
+                }
+
+                val detail = buildList {
+                    event.pokemon?.takeIf { it.isNotBlank() }?.let { add(it) }
+                    confidence?.let { add(it) }
+                    source?.let { add(it) }
+                }.joinToString(" • ")
+                if (detail.isNotBlank()) {
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = content.copy(alpha = .80f)
+                    )
+                }
+
+                if (event.details.isNotEmpty()) {
+                    Text(
+                        event.details.entries.joinToString(" • ") { (key, value) ->
+                            when (key) {
+                                "hpPercent" -> "HP $value%"
+                                "energyMin" -> "Energia mín. $value"
+                                "energyMax" -> "Energia máx. $value"
+                                "shields" -> "Escudos $value"
+                                "de" -> "De: $value"
+                                "para" -> "Para: $value"
+                                "pc" -> "PC $value"
+                                else -> "$key: $value"
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = content.copy(alpha = .82f)
+                    )
+                }
+
+                event.reason?.takeIf { it.isNotBlank() }?.let { reason ->
+                    Text(
+                        reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = content.copy(alpha = .78f)
+                    )
+                }
             }
         }
     }
