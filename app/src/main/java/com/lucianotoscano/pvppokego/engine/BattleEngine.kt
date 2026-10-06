@@ -646,6 +646,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             return
         }
         val target = ownStates.getOrCreate(stableKey, name, playerSpeciesId)
+        target.speciesId = playerSpeciesId ?: old.speciesId
         target.fastMoveId = old.fastMoveId
         target.chargedMove1Id = old.chargedMove1Id
         target.chargedMove2Id = old.chargedMove2Id
@@ -729,7 +730,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun clearFastManualOverride() {
         val state = activeState ?: return
         state.fastMoveManual = false
-        val recommended = enemyName?.let(repo::likelyMoveset)?.first ?: return
+        val recommended = (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::likelyMoveset)
+            ?.first ?: return
         fast = recommended
         state.fastMoveId = recommended.moveId
         saveActiveState()
@@ -749,11 +752,12 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun clearChargedManualOverride(index: Int) {
         val state = activeState ?: return
-        val likely = enemyName?.let(repo::likelyMoveset) ?: return
+        val rankingKey = activeState?.speciesId ?: enemySpeciesId ?: enemyName ?: return
+        val likely = repo.likelyMoveset(rankingKey)
         when (index) {
             0 -> {
                 state.charge1Manual = false
-                val recommended = likely.second ?: repo.possibleChargedMoves(state.speciesName).getOrNull(0)
+                val recommended = likely.second ?: repo.possibleChargedMoves(state.speciesId ?: state.speciesName).getOrNull(0)
                 if (recommended != null && recommended.moveId != charge2?.moveId) {
                     charge1 = recommended; state.chargedMove1Id = recommended.moveId
                     state.charge1Confirmed = recommended.moveId in state.observedChargedMoveIds
@@ -761,7 +765,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
             1 -> {
                 state.charge2Manual = false
-                val recommended = likely.third ?: repo.possibleChargedMoves(state.speciesName).getOrNull(1)
+                val recommended = likely.third ?: repo.possibleChargedMoves(state.speciesId ?: state.speciesName).getOrNull(1)
                 if (recommended != null && recommended.moveId != charge1?.moveId) {
                     charge2 = recommended; state.chargedMove2Id = recommended.moveId
                     state.charge2Confirmed = recommended.moveId in state.observedChargedMoveIds
@@ -982,15 +986,22 @@ class BattleEngine(private val repo: GameDataRepository) {
      */
     private fun effectiveEnemyFastMove(): MoveDef? {
         fast?.takeIf { it.energyGain > 0 }?.let { return it }
-        val fallback = enemyName
+        val fallback = (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
             ?.let(repo::possibleFastMoves)
             .orEmpty()
             .firstOrNull { it.energyGain > 0 }
         return fallback
     }
 
-    fun possibleFastMoves(): List<MoveDef> = enemyName?.let(repo::possibleFastMoves).orEmpty()
-    fun possibleChargedMoves(): List<MoveDef> = enemyName?.let(repo::possibleChargedMoves).orEmpty()
+    fun possibleFastMoves(): List<MoveDef> =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::possibleFastMoves)
+            .orEmpty()
+
+    fun possibleChargedMoves(): List<MoveDef> =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::possibleChargedMoves)
+            .orEmpty()
 
     private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {
         val remaining = readyAtMs - nowMs
@@ -999,8 +1010,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     fun uiState(debug: Boolean = false): BattleUiState {
-        val pTypes = repo.pokemon(playerName)?.types.orEmpty()
-        val eTypes = repo.pokemon(enemyName)?.types.orEmpty()
+        val pTypes = repo.pokemon(playerSpeciesId ?: playerName)?.types.orEmpty()
+        val eTypes = repo.pokemon(enemySpeciesId ?: enemyName)?.types.orEmpty()
         val matchup = classify(pTypes, eTypes)
         val f = fast
         val of = ownFast
@@ -1009,23 +1020,39 @@ class BattleEngine(private val repo: GameDataRepository) {
             .take(2)
             .mapIndexed { index, resolved ->
                 val slot = resolved.slot
-                val name = slot.name
+                val def = slotDefinition(slot)
+                val name = def?.speciesName ?: slot.name
                 val cp = slot.cp
-                val types = repo.pokemon(name)?.types.orEmpty()
-                val identity = ownIdentityKey(name, cp)
+                val speciesKey = slot.speciesId ?: def?.speciesId ?: name
+                val types = repo.pokemon(speciesKey)?.types.orEmpty()
+                val identity = ownIdentityKey(name, cp, slot.speciesId ?: def?.speciesId)
                 val saved = ownStates.find(identity)
-                val likely = repo.likelyMoveset(name)
-                val reserveFast = repo.move(saved?.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
+                val rankingKey = saved?.speciesId ?: speciesKey
+                val likely = repo.likelyMoveset(rankingKey)
+                val reserveFast = repo.move(saved?.fastMoveId)
+                    ?: likely.first
+                    ?: repo.possibleFastMoves(rankingKey).firstOrNull()
                 val (reserveC1, reserveC2) = resolveChargedPair(
-                    name,
+                    rankingKey,
                     saved?.chargedMove1Id,
                     saved?.chargedMove2Id,
                     likely.second,
                     likely.third
                 )
-                val score = if (resolved.confirmed) reserveScore(name, cp, types, eTypes) else 0.0
+                val score = if (resolved.confirmed) {
+                    reserveScore(
+                        name = name,
+                        cp = cp,
+                        speciesId = slot.speciesId ?: def?.speciesId,
+                        myTypes = types,
+                        enemyTypes = eTypes
+                    )
+                } else {
+                    0.0
+                }
                 ReserveState(
                     name = name,
+                    speciesId = slot.speciesId ?: def?.speciesId,
                     cp = cp,
                     types = types,
                     matchup = classify(types, eTypes),
@@ -1035,6 +1062,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     identityKey = identity,
                     cardCp = resolved.cardCp,
                     identityConfirmed = resolved.confirmed,
+                    identitySource = resolved.source,
                     fastMove = reserveFast,
                     chargedMove1 = reserveC1,
                     chargedMove2 = reserveC2,
@@ -1123,18 +1151,38 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun ownEnergyConfidence(): EnergyConfidence = when {
         ownTracker.isRange -> EnergyConfidence.RANGE
-        (playerName?.let(repo::possibleFastMoves)?.size ?: 0) <= 1 -> EnergyConfidence.CONFIRMED
+        ((ownActiveState?.speciesId ?: playerSpeciesId ?: playerName)
+            ?.let(repo::possibleFastMoves)
+            ?.size ?: 0) <= 1 -> EnergyConfidence.CONFIRMED
         else -> EnergyConfidence.ESTIMATED
     }
 
-    private fun reserveScore(name: String, cp: Int?, myTypes: List<String>, enemyTypes: List<String>): Double {
+    private fun reserveScore(
+        name: String,
+        cp: Int?,
+        speciesId: String?,
+        myTypes: List<String>,
+        enemyTypes: List<String>
+    ): Double {
         if (myTypes.isEmpty() || enemyTypes.isEmpty()) return 0.0
-        val saved = ownStates.find(ownIdentityKey(name, cp))
-        val likely = repo.likelyMoveset(name)
-        val resolvedFast = repo.move(saved?.fastMoveId) ?: likely.first ?: repo.possibleFastMoves(name).firstOrNull()
-        val (resolvedC1, resolvedC2) = resolveChargedPair(name, saved?.chargedMove1Id, saved?.chargedMove2Id, likely.second, likely.third)
+
+        val saved = ownStates.find(ownIdentityKey(name, cp, speciesId))
+        val ownRankingKey = saved?.speciesId ?: speciesId ?: name
+        val likely = repo.likelyMoveset(ownRankingKey)
+        val resolvedFast = repo.move(saved?.fastMoveId)
+            ?: likely.first
+            ?: repo.possibleFastMoves(ownRankingKey).firstOrNull()
+        val (resolvedC1, resolvedC2) = resolveChargedPair(
+            ownRankingKey,
+            saved?.chargedMove1Id,
+            saved?.chargedMove2Id,
+            likely.second,
+            likely.third
+        )
         val myMoves = listOfNotNull(resolvedFast, resolvedC1, resolvedC2)
-        val enemyLikely = enemyName?.let(repo::likelyMoveset)
+
+        val enemyRankingKey = activeState?.speciesId ?: enemySpeciesId ?: enemyName
+        val enemyLikely = enemyRankingKey?.let(repo::likelyMoveset)
         val enemyMoves = listOfNotNull(enemyLikely?.first, enemyLikely?.second, enemyLikely?.third)
         val offense = myMoves.maxOfOrNull { TypeChart.multiplier(it.type, enemyTypes) } ?: 1.0
         val danger = enemyMoves.maxOfOrNull { TypeChart.multiplier(it.type, myTypes) } ?: 1.0
@@ -1149,7 +1197,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private data class ResolvedOwnReserve(
         val slot: OwnTeamSlot,
         val cardCp: Int?,
-        val confirmed: Boolean
+        val confirmed: Boolean,
+        val source: String
     )
 
     /**
@@ -1181,7 +1230,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             cardSpeciesIds = reserveCardSpeciesIds.toList()
         ).mapNotNull { match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
-                ResolvedOwnReserve(slot, match.cardCp, match.confirmed)
+                ResolvedOwnReserve(slot, match.cardCp, match.confirmed, match.source)
             }
         }
     }
@@ -1240,6 +1289,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun saveActiveState() {
         val state = activeState ?: return
+        if (!enemySpeciesId.isNullOrBlank()) state.speciesId = enemySpeciesId
         state.fastMoveId = fast?.moveId
         state.chargedMove1Id = charge1?.moveId
         state.chargedMove2Id = charge2?.moveId
@@ -1253,6 +1303,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun saveOwnActiveState() {
         val state = ownActiveState ?: return
+        if (!playerSpeciesId.isNullOrBlank()) state.speciesId = playerSpeciesId
         state.fastMoveId = ownFast?.moveId
         state.chargedMove1Id = ownCharge1?.moveId
         state.chargedMove2Id = ownCharge2?.moveId
