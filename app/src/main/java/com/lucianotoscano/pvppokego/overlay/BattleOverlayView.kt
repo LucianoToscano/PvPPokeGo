@@ -59,6 +59,7 @@ class BattleOverlayView(
     private var nativeTopCardYpx: Int? = null
     private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
+    private val pokemonIconAtlas = PokemonIconAtlas(context.applicationContext)
 
     fun render(newState: BattleUiState) {
         state = newState
@@ -471,53 +472,175 @@ class BattleOverlayView(
     }
 
     private fun drawReserves(canvas: Canvas) {
-        state.reserves.take(2).forEachIndexed { index,reserve ->
-            if (reserve.name.isNullOrBlank()) return@forEachIndexed
+        state.reserves.take(2).forEachIndexed { index, reserve ->
+            val reserveName = reserve.name?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
             if (settings.isBlockHidden(block)) return@forEachIndexed
+
             val bs = settings.blockScale(block)
             val oldAlpha = blockAlphaMultiplier
             blockAlphaMultiplier = settings.blockOpacity(block)
+
             val (indicatorRefX, cardRefY) = reservePos(index)
             val indicatorX = rx(indicatorRefX)
             val cardCenterY = ry(cardRefY)
+            val identityReady = reserve.identityConfirmed
+            val matchup = if (identityReady) reserve.matchup else MatchupState.UNKNOWN
 
-            if (!reserve.identityConfirmed) {
-                drawMatchupIndicator(canvas, indicatorX, cardCenterY, MatchupState.UNKNOWN, 13.5f*u()*bs)
-                if (settings.showHudText) {
-                    paint.color=hudColor(Color.WHITE,.72f)
-                    paint.textAlign=Paint.Align.CENTER; paint.textSize=8.6f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
-                    paint.setShadowLayer(2f,0f,1f,Color.BLACK)
-                    canvas.drawText("IDENTIFICANDO",indicatorX,cardCenterY+27f*u()*bs,paint)
-                    paint.clearShadowLayer()
+            // Matchup badge belongs to the stable team identity, not to the still-unknown
+            // upper/lower native card mapping.
+            drawMatchupIndicator(
+                canvas,
+                indicatorX,
+                cardCenterY,
+                matchup,
+                13.5f * u() * bs
+            )
+
+            val iconCenterX = indicatorX + rx(43f) * bs
+            val iconRadius = 23f * u() * bs
+            drawReservePokemonIcon(
+                canvas = canvas,
+                reserve = reserve,
+                fallbackName = reserveName,
+                centerX = iconCenterX,
+                centerY = cardCenterY,
+                radius = iconRadius
+            )
+
+            if (settings.showHudText) {
+                val textX = indicatorX + rx(105f) * bs
+                val title = buildString {
+                    append(reserveName)
+                    reserve.cp?.let { append(" PC ").append(it) }
                 }
-                drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
-                blockAlphaMultiplier = oldAlpha
-                return@forEachIndexed
+                paint.textAlign = Paint.Align.CENTER
+                paint.typeface = Typeface.DEFAULT_BOLD
+                paint.textSize = 10.0f * u() * bs
+                paint.color = hudColor(Color.WHITE, .95f)
+                paint.setShadowLayer(2.8f, 0f, 1f, Color.BLACK)
+                canvas.drawText(shortReserveTitle(title), textX, cardCenterY - 8f * u() * bs, paint)
+
+                val matchupText = when {
+                    !identityReady -> "IDENTIFICANDO"
+                    matchup == MatchupState.UNKNOWN -> "ANALISANDO"
+                    else -> reserveMatchupLabel(matchup)
+                }
+                val recommendation = reserve.recommendation
+                    ?.takeIf { it == "MELHOR" || it == "EVITAR" }
+                val status = listOfNotNull(matchupText, recommendation)
+                    .distinct()
+                    .joinToString(" • ")
+
+                paint.textSize = 9.1f * u() * bs
+                paint.color = hudColor(
+                    if (identityReady) reserveMatchupColor(matchup) else Color.rgb(190, 194, 201),
+                    .96f
+                )
+                canvas.drawText(status, textX, cardCenterY + 10f * u() * bs, paint)
+                paint.clearShadowLayer()
             }
 
-            drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u()*bs)
-            if(settings.showReserveTypes && reserve.types.isNotEmpty()){
-                val typeRadius=12f*u()*bs; val spacing=rx(31f)*bs; val centerX=rx(indicatorRefX+98f)
-                var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
-                reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+ry(82f),type,typeRadius);x+=spacing}
+            if (settings.showReserveTypes && reserve.types.isNotEmpty() && identityReady) {
+                val typeRadius = 10.5f * u() * bs
+                val spacing = rx(27f) * bs
+                val centerX = indicatorX + rx(105f) * bs
+                var x = centerX - if (reserve.types.size > 1) spacing / 2f else 0f
+                reserve.types.take(2).forEach { type ->
+                    drawTypeChip(canvas, x, cardCenterY + 31f * u() * bs, type, typeRadius)
+                    x += spacing
+                }
             }
-            if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
-                paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
-                paint.textAlign=Paint.Align.CENTER; paint.textSize=9.2f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,indicatorX,cardCenterY+27f*u()*bs,paint); paint.clearShadowLayer()
-            }
-            drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
+
+            drawEditSelection(
+                canvas,
+                block,
+                indicatorX + rx(72f) * bs,
+                cardCenterY,
+                132f * u() * bs,
+                52f * u() * bs
+            )
             blockAlphaMultiplier = oldAlpha
         }
     }
+
+    private fun drawReservePokemonIcon(
+        canvas: Canvas,
+        reserve: com.lucianotoscano.pvppokego.data.ReserveState,
+        fallbackName: String,
+        centerX: Float,
+        centerY: Float,
+        radius: Float
+    ) {
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(Color.rgb(20, 24, 31), .72f)
+        canvas.drawCircle(centerX, centerY, radius + 2.0f * u(), paint)
+
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 1.7f * u()
+        stroke.color = hudColor(
+            if (reserve.identityConfirmed) reserveMatchupColor(reserve.matchup) else Color.WHITE,
+            .92f
+        )
+        canvas.drawCircle(centerX, centerY, radius + 1.0f * u(), stroke)
+
+        val def = gameRepo.pokemon(reserve.speciesId ?: fallbackName)
+        val destination = RectF(
+            centerX - radius,
+            centerY - radius,
+            centerX + radius,
+            centerY + radius
+        )
+        val oldPaintAlpha = paint.alpha
+        paint.alpha = (hudAlpha * blockAlphaMultiplier).toInt().coerceIn(0, 255)
+        val drawn = pokemonIconAtlas.draw(
+            canvas = canvas,
+            speciesId = reserve.speciesId ?: def?.speciesId,
+            dex = def?.dex?.takeIf { it > 0 },
+            destination = destination,
+            paint = paint
+        )
+        paint.alpha = oldPaintAlpha
+
+        if (!drawn) {
+            paint.color = hudColor(Color.WHITE, .95f)
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.textSize = radius * .72f
+            val initials = fallbackName
+                .split(Regex("\\s+"))
+                .filter { it.isNotBlank() }
+                .take(2)
+                .joinToString("") { it.take(1).uppercase() }
+                .ifBlank { "?" }
+            canvas.drawText(initials, centerX, centerY + radius * .25f, paint)
+        }
+    }
+
+    private fun reserveMatchupLabel(matchup: MatchupState): String = when (matchup) {
+        MatchupState.FAVORABLE -> "FORTE"
+        MatchupState.UNFAVORABLE -> "FRACO"
+        MatchupState.NEUTRAL -> "NEUTRO"
+        MatchupState.UNKNOWN -> "ANALISANDO"
+    }
+
+    private fun reserveMatchupColor(matchup: MatchupState): Int = when (matchup) {
+        MatchupState.FAVORABLE -> Color.rgb(46, 188, 105)
+        MatchupState.UNFAVORABLE -> Color.rgb(232, 61, 72)
+        MatchupState.NEUTRAL -> Color.rgb(188, 191, 196)
+        MatchupState.UNKNOWN -> Color.rgb(155, 160, 169)
+    }
+
+    private fun shortReserveTitle(value: String): String =
+        if (value.length <= 23) value else value.take(22) + "…"
 
     /** During Pokemon GO's switch chooser, show matchup only for a confirmed card identity. */
     private fun drawSwitchChoiceIndicators(canvas: Canvas) {
         val candidates = state.reserves.take(2).mapIndexedNotNull { index, reserve ->
             if (
                 reserveUsableCache.getOrElse(index) { true } &&
-                reserve.identityConfirmed
+                reserve.identityConfirmed &&
+                reserve.cardMappingConfirmed
             ) index to reserve else null
         }
         if (candidates.isEmpty()) return
