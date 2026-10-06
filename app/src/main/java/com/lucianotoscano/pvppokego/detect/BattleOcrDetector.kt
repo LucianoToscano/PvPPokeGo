@@ -401,6 +401,7 @@ class BattleOcrDetector(
         private const val COLOR_TOLERANCE = 34
         private val CP_REGEX = Regex("(?i)(?:PC|CP)\\s*[: ]?\\s*(\\d{2,5})")
         private const val VISUAL_ACCEPT_CONFIDENCE = 0.76f
+        private const val VISUAL_FORM_ACCEPT_CONFIDENCE = 0.86f
         private const val VISUAL_CONFLICT_CONFIDENCE = 0.80f
     }
 }
