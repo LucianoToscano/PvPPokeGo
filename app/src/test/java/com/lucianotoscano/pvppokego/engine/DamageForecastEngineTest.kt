@@ -33,8 +33,8 @@ class DamageForecastEngineTest {
         type = "fire",
         power = 90,
         energyGain = 0,
-        energyDelta = -50,
-        turns = 1
+        energy = -50,
+        cooldown = 500
     )
 
     @Test
