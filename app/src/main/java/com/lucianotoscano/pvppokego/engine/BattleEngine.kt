@@ -24,11 +24,15 @@ import java.text.Normalizer
 class BattleEngine(private val repo: GameDataRepository) {
     data class DetectionChanges(val playerChanged: Boolean, val enemyChanged: Boolean)
     data class DamageObservation(
+        /** Actor that launched the Charged Move: VOCÊ or INIMIGO. */
+        val actor: String,
         val moveId: String,
         val moveName: String,
         val damagePercent: Float,
         val damagePoints: Int,
-        val learnedSamples: Int
+        val learnedSamples: Int,
+        val shielded: Boolean = false,
+        val shieldsRemaining: Int? = null
     )
     data class BattleTextResult(
         val newChargedPrompt: Boolean = false,
@@ -115,7 +119,9 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private val incomingDamageTracker = ObservedDamageTracker()
     private var pendingIncomingChargedHpBefore: Float? = null
-    private data class PendingIncomingChargedDamage(
+    private var pendingOutgoingChargedHpBefore: Float? = null
+    private data class PendingChargedDamage(
+        val actor: String,
         val moveId: String,
         val moveName: String,
         val attackerKey: String,
@@ -123,9 +129,11 @@ class BattleEngine(private val repo: GameDataRepository) {
         val hpBefore: Float,
         val armedAtMs: Long,
         var minimumHpAfter: Float = hpBefore,
-        var firstDropAtMs: Long? = null
+        var firstDropAtMs: Long? = null,
+        var observations: Int = 0
     )
-    private var pendingIncomingChargedDamage: PendingIncomingChargedDamage? = null
+    private var pendingIncomingChargedDamage: PendingChargedDamage? = null
+    private var pendingOutgoingChargedDamage: PendingChargedDamage? = null
 
     fun resetBattle() {
         playerName = null
@@ -181,7 +189,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         captureStatusText = null
         incomingDamageTracker.resetBattle()
         pendingIncomingChargedHpBefore = null
+        pendingOutgoingChargedHpBefore = null
         pendingIncomingChargedDamage = null
+        pendingOutgoingChargedDamage = null
         enemyStates.clearBattle()
         ownStates.clearBattle()
     }
