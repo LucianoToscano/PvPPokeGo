@@ -3,6 +3,9 @@ package com.lucianotoscano.pvppokego.engine
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.BattlePokemonState
 import com.lucianotoscano.pvppokego.data.BattleUiState
+import com.lucianotoscano.pvppokego.data.CaptureHealth
+import com.lucianotoscano.pvppokego.data.DamageForecast
+import com.lucianotoscano.pvppokego.data.DamageForecastConfidence
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
@@ -11,6 +14,7 @@ import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.ReserveCardEvidence
 import com.lucianotoscano.pvppokego.data.ReserveState
+import com.lucianotoscano.pvppokego.data.TeamPokemonStatus
 import java.text.Normalizer
 
 /**
@@ -78,6 +82,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val ownTeam = linkedMapOf<String, Int?>()
     private val ownTeamSlots = mutableListOf<OwnTeamSlot>()
     private val reserveSlotVisible = arrayOfNulls<Boolean>(2)
+    private val reserveCardHpRatios = arrayOfNulls<Float>(2)
     private val reserveMissingStreak = IntArray(2)
     private val reserveCardCps = arrayOfNulls<Int>(2)
     private val reserveCpCandidate = arrayOfNulls<Int>(2)
@@ -101,7 +106,12 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var lastBattleConfidence = 0f
     private var lastHpRatio: Float? = null
     private var lastOpponentHpRatio: Float? = null
+    private var lastPlayerHpBarYFraction: Float? = null
     private var lastMotion = 0f
+    private var ownShieldsRemaining = 2
+    private var opponentShieldsRemaining = 2
+    private var captureHealth = CaptureHealth.FRESH
+    private var captureStatusText: String? = null
 
     private val incomingDamageTracker = ObservedDamageTracker()
     private var pendingIncomingChargedHpBefore: Float? = null
@@ -139,6 +149,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownTeam.clear()
         ownTeamSlots.clear()
         reserveSlotVisible.fill(null)
+        reserveCardHpRatios.fill(null)
         reserveMissingStreak.fill(0)
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
@@ -162,7 +173,12 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastBattleConfidence = 0f
         lastHpRatio = null
         lastOpponentHpRatio = null
+        lastPlayerHpBarYFraction = null
         lastMotion = 0f
+        ownShieldsRemaining = 2
+        opponentShieldsRemaining = 2
+        captureHealth = CaptureHealth.FRESH
+        captureStatusText = null
         incomingDamageTracker.resetBattle()
         pendingIncomingChargedHpBefore = null
         pendingIncomingChargedDamage = null
@@ -173,6 +189,16 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onBattleConfidence(value: Float) {
         lastBattleConfidence = value.coerceIn(0f, 1f)
     }
+
+    fun onCaptureHealth(health: CaptureHealth, statusText: String? = null) {
+        captureHealth = health
+        captureStatusText = statusText
+    }
+
+    fun onPlayerHpBarYFraction(value: Float?) {
+        value?.takeIf { it in 0f..1f }?.let { lastPlayerHpBarYFraction = it }
+    }
+
 
     fun onDetection(d: BattleDetection): DetectionChanges {
         val oldPlayer = playerName
@@ -370,6 +396,12 @@ class BattleEngine(private val repo: GameDataRepository) {
             speciesId = resolved?.speciesId ?: pokemon.visualSpeciesId,
             dex = resolved?.dex?.takeIf { it > 0 } ?: pokemon.visualDex
         )
+    }
+
+    fun onReserveHpRatios(first: Float?, second: Float?) {
+        listOf(first, second).forEachIndexed { index, value ->
+            value?.takeIf { it in 0f..1f }?.let { reserveCardHpRatios[index] = it }
+        }
     }
 
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
