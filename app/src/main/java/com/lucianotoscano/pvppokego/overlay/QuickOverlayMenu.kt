@@ -51,6 +51,7 @@ class QuickOverlayMenu(
     private var leagueParams: WindowManager.LayoutParams? = null
     private var panelView: ScrollView? = null
     private var externallyVisible = false
+    private var battleActiveForLeague = false
     private var panelScrollY = 0
 
     private val metrics get() = context.resources.displayMetrics
@@ -94,9 +95,20 @@ class QuickOverlayMenu(
     fun setVisible(visible: Boolean) {
         externallyVisible = visible
         gearView?.visibility = if (visible) View.VISIBLE else View.GONE
-        leagueView?.visibility = if (visible) View.VISIBLE else View.GONE
+        syncLeagueVisibility()
         if (!visible) removePanel(false)
         if (visible) refreshStatusBadge()
+    }
+
+    fun setBattleActive(active: Boolean) {
+        battleActiveForLeague = active
+        syncLeagueVisibility()
+    }
+
+    private fun syncLeagueVisibility() {
+        leagueView?.visibility = if (
+            externallyVisible && (battleActiveForLeague || settings.editMode)
+        ) View.VISIBLE else View.GONE
     }
 
     /** Shows the active league as a standalone icon, not attached to the gear. */
@@ -410,7 +422,7 @@ class QuickOverlayMenu(
     private fun addSectionHeader(parent: LinearLayout, title: String) {
         parent.addView(TextView(context).apply {
             text = title
-            setTextColor(Color.argb(185, 201, 209, 221))
+            setTextColor(Color.rgb(85, 85, 85))
             textSize = 10f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             setPadding(dp(4), dp(8), dp(4), dp(4))
@@ -437,14 +449,14 @@ class QuickOverlayMenu(
         row.addView(TextView(context).apply {
             text = icon
             gravity = Gravity.CENTER
-            setTextColor(if (danger) Color.rgb(255, 124, 124) else Color.WHITE)
+            setTextColor(Color.WHITE)
             textSize = if (icon.length > 1) 12f else 16f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             background = squareIconBackground(enabled, danger)
         }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(9) })
         row.addView(TextView(context).apply {
             text = label
-            setTextColor(if (danger) Color.rgb(255, 126, 126) else Color.rgb(245, 247, 250))
+            setTextColor(if (danger) Color.rgb(185, 45, 52) else Color.rgb(45, 45, 45))
             textSize = 13f
             maxLines = 1
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -620,27 +632,29 @@ class QuickOverlayMenu(
 
     private fun panelBackground(): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
-        cornerRadius = dp(15).toFloat()
-        setColor(Color.argb(235, 19, 23, 31))
-        setStroke(dp(1), Color.argb(125, 225, 230, 238))
+        cornerRadius = dp(10).toFloat()
+        setColor(Color.argb(248, 250, 250, 247))
+        setStroke(dp(1), Color.argb(150, 210, 214, 210))
     }
 
     private fun menuRowBackground(danger: Boolean): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
-        cornerRadius = dp(9).toFloat()
-        setColor(if (danger) Color.argb(72, 130, 24, 30) else Color.argb(92, 255, 255, 255))
+        cornerRadius = dp(5).toFloat()
+        setColor(if (danger) Color.rgb(255, 240, 240) else Color.rgb(250, 250, 247))
     }
 
     private fun squareIconBackground(enabled: Boolean?, danger: Boolean = false): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
-        cornerRadius = dp(7).toFloat()
-        setColor(if (danger) Color.argb(78, 145, 26, 32) else Color.argb(120, 34, 39, 49))
-        setStroke(dp(1), when {
-            danger -> Color.argb(210, 235, 90, 97)
-            enabled == true -> Color.rgb(111, 220, 146)
-            enabled == false -> Color.argb(120, 170, 177, 188)
-            else -> Color.argb(150, 235, 238, 244)
-        })
+        cornerRadius = dp(2).toFloat()
+        setColor(
+            when {
+                danger -> Color.rgb(167, 89, 89)
+                enabled == true -> Color.rgb(102, 112, 105)
+                enabled == false -> Color.rgb(151, 154, 151)
+                else -> Color.rgb(132, 136, 132)
+            }
+        )
+        setStroke(dp(1), Color.argb(80, 70, 70, 70))
     }
 
     private fun leagueBackground(kind: LeagueKind): GradientDrawable = GradientDrawable().apply {
