@@ -1232,7 +1232,38 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 }
                 if (frame != null) {
                     try {
-                        screenRecorder?.recordFrame(frame)
+                        screenRecorder?.let { recorder ->
+                            recorder.recordFrame(frame)
+                            if (recordingAwaitingEncoder && recorder.hasEncodedSample) {
+                                recordingAwaitingEncoder = false
+                                if (!recordingConfirmedNotified) {
+                                    recordingConfirmedNotified = true
+                                    historyRecorder.recordDiagnostic(
+                                        "Gravação interna",
+                                        "Encoder confirmado • perfil " + recorder.activeProfileLabel + " • " + recorder.submittedFrames + " frames enviados",
+                                        System.currentTimeMillis()
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            this@BattleOverlayService,
+                                            "Gravação confirmada • perfil " + recorder.activeProfileLabel,
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        refreshForegroundNotification()
+                                        quickMenu?.refreshPanelFromService()
+                                    }
+                                }
+                            } else if (recordingAwaitingEncoder && recorder.encoderStalled) {
+                                recordingAwaitingEncoder = false
+                                val message = "Encoder não produziu vídeo nem no perfil compatível"
+                                historyRecorder.recordDiagnostic("Gravação interna", message, System.currentTimeMillis())
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(this@BattleOverlayService, message, Toast.LENGTH_LONG).show()
+                                    refreshForegroundNotification()
+                                    quickMenu?.refreshPanelFromService()
+                                }
+                            }
+                        }
                         if (visionPaused) {
                             consecutiveErrors = 0
                             delay(FRAME_INTERVAL_MS)
