@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 OUT = Path("app/src/main/assets")
 REF = "master"
 RAW = f"https://raw.githubusercontent.com/pvpoke/pvpoke/{REF}/src/data"
+RAW_JS = f"https://raw.githubusercontent.com/pvpoke/pvpoke/{REF}/src/js"
 LEAGUES = (1500, 2500, 10000)
 
 def fetch_json(url: str):
@@ -17,13 +19,38 @@ def fetch_json(url: str):
     with urllib.request.urlopen(req, timeout=90) as r:
         return json.load(r)
 
+def fetch_text(url: str) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "PvPPokeGo-offline-packager/1.0"})
+    with urllib.request.urlopen(req, timeout=90) as r:
+        return r.read().decode("utf-8")
+
+
+def extract_cpms(pokemon_js: str) -> list[float]:
+    match = re.search(r"var\s+cpms\s*=\s*\[([^\]]+)\]", pokemon_js, re.S)
+    if not match:
+        raise RuntimeError("Could not locate PvPoke cpms array in Pokemon.js")
+    values = [
+        float(token.strip())
+        for token in match.group(1).split(",")
+        if token.strip()
+    ]
+    if len(values) < 100:
+        raise RuntimeError(f"PvPoke cpms array is unexpectedly short: {len(values)}")
+    return values
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
     moves = fetch_json(f"{RAW}/gamemaster/moves.json")
     pokemon = fetch_json(f"{RAW}/gamemaster/pokemon.json")
+    pokemon_js_url = f"{RAW_JS}/pokemon/Pokemon.js"
+    cpms = extract_cpms(fetch_text(pokemon_js_url))
     (OUT / "gamemaster.json").write_text(
         json.dumps({"pokemon": pokemon, "moves": moves}, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    (OUT / "pvpoke_cpms.json").write_text(
+        json.dumps({"format": "PvPPokeGo-pvpoke-cpms", "version": 1, "cpms": cpms}, separators=(",", ":")),
         encoding="utf-8",
     )
 
@@ -44,6 +71,7 @@ def main() -> int:
         "gamemasterSources": {
             "moves": f"{RAW}/gamemaster/moves.json",
             "pokemon": f"{RAW}/gamemaster/pokemon.json",
+            "cpms": pokemon_js_url,
         },
         "rankingSources": ranking_sources,
     }
