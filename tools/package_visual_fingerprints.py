@@ -15,6 +15,7 @@ import io
 import json
 import math
 import re
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -92,17 +93,31 @@ DEFAULT_FORMS = (
 
 
 def fetch_bytes(key: str) -> bytes | None:
-    req = urllib.request.Request(
-        BASE_URL.format(key=key),
-        headers={"User-Agent": "PvPPokeGo-visual-bank/2.0"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            return response.read()
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
+    url = BASE_URL.format(key=key)
+    for attempt in range(4):
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "PvPPokeGo-visual-bank/2.0"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            if 500 <= exc.code < 600 and attempt < 3:
+                time.sleep(0.35 * (attempt + 1))
+                continue
+            raise
+        except (urllib.error.URLError, ConnectionError, TimeoutError, OSError):
+            if attempt < 3:
+                time.sleep(0.35 * (attempt + 1))
+                continue
+            # A transient CDN failure for one render must not abort the whole bank.
+            # Missing entries are counted and the build's minimum-coverage gate below
+            # still protects against a catastrophically incomplete asset set.
             return None
-        raise
+    return None
 
 
 def normalized_species_base(entry: dict) -> str:
