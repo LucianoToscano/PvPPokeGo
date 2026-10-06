@@ -7,9 +7,9 @@ import org.junit.Test
 
 class ReserveCardMatcherTest {
     private val team = listOf(
-        ReserveCardMatcher.Member(0, "Houndoom", 1499, 229),
-        ReserveCardMatcher.Member(1, "Cramorant", 1485, 845),
-        ReserveCardMatcher.Member(2, "Rillaboom", 1500, 812)
+        ReserveCardMatcher.Member(0, "Houndoom", 1499, 229, "houndoom"),
+        ReserveCardMatcher.Member(1, "Cramorant", 1485, 845, "cramorant"),
+        ReserveCardMatcher.Member(2, "Rillaboom", 1500, 812, "rillaboom")
     )
 
     @Test
@@ -68,4 +68,42 @@ class ReserveCardMatcherTest {
         assertFalse(r[0].confirmed)
         assertFalse(r[1].confirmed)
     }
+    @Test
+    fun exactVisualFormBeatsAmbiguousSharedDex() {
+        val formTeam = listOf(
+            ReserveCardMatcher.Member(0, "Stunfisk", 1490, 618, "stunfisk"),
+            ReserveCardMatcher.Member(1, "Stunfisk (Galarian)", 1495, 618, "stunfisk_galarian"),
+            ReserveCardMatcher.Member(2, "Cramorant", 1485, 845, "cramorant")
+        )
+        val r = ReserveCardMatcher.resolve(
+            team = formTeam,
+            activeName = "Cramorant",
+            activeCp = 1485,
+            cardCps = listOf(null, null),
+            cardDexes = listOf(618, 618),
+            cardSpeciesIds = listOf("stunfisk_galarian", "stunfisk")
+        )
+        assertEquals(listOf("Stunfisk (Galarian)", "Stunfisk"), r.map { it.member.name })
+        assertEquals(listOf("image-form", "image-form"), r.map { it.source })
+        assertTrue(r.all { it.confirmed })
+    }
+
+    @Test
+    fun dexOnlySharedFormStaysUnconfirmedUntilAnotherSignalExists() {
+        val formTeam = listOf(
+            ReserveCardMatcher.Member(0, "Stunfisk", 1490, 618, "stunfisk"),
+            ReserveCardMatcher.Member(1, "Stunfisk (Galarian)", 1495, 618, "stunfisk_galarian"),
+            ReserveCardMatcher.Member(2, "Cramorant", 1485, 845, "cramorant")
+        )
+        val r = ReserveCardMatcher.resolve(
+            team = formTeam,
+            activeName = "Cramorant",
+            activeCp = 1485,
+            cardCps = listOf(null, null),
+            cardDexes = listOf(618, 618)
+        )
+        assertFalse(r[0].confirmed)
+        assertFalse(r[1].confirmed)
+    }
+
 }
