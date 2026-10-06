@@ -95,7 +95,7 @@ class BattleOcrDetector(
 
             suspend fun read(textRoi: Bitmap, portraitRoi: Bitmap): ReserveCardEvidence = coroutineScope {
                 val cpJob = async { parseCp(recognize(textRoi)) }
-                val visualJob = async { visualRecognizer.match(portraitRoi) }
+                val visualJob = async { visualRecognizer.matchReserveCard(portraitRoi) }
                 val visual = visualJob.await()
                 ReserveCardEvidence(
                     cp = cpJob.await(),
@@ -367,9 +367,9 @@ class BattleOcrDetector(
         private const val RESERVE_PORTRAIT_LEFT = 0.835f
         private const val RESERVE_PORTRAIT_RIGHT = 0.985f
         private const val RESERVE_PORTRAIT_TOP_1 = 0.565f
-        private const val RESERVE_PORTRAIT_BOTTOM_1 = 0.625f
+        private const val RESERVE_PORTRAIT_BOTTOM_1 = 0.620f
         private const val RESERVE_PORTRAIT_TOP_2 = 0.660f
-        private const val RESERVE_PORTRAIT_BOTTOM_2 = 0.725f
+        private const val RESERVE_PORTRAIT_BOTTOM_2 = 0.718f
 
         // Team selection card, read as three independent columns.
         private const val TEAM_SLOT_TOP = 0.615f
