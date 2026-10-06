@@ -27,6 +27,7 @@ import androidx.core.app.NotificationCompat
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.R
+import com.lucianotoscano.pvppokego.capture.AccessibilityScreenCapture
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
 import com.lucianotoscano.pvppokego.capture.ScreenFrameRecorder
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
@@ -70,6 +71,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var lastEditSnapshot: Triple<String, Float, Float>? = null
     private var projection: MediaProjection? = null
     private var capture: ScreenCapture? = null
+    @Volatile private var projectionRevokedBySystem = false
+    @Volatile private var usingAccessibilityFallback = false
+    @Volatile private var destroyingService = false
+    private var lastAccessibilityFrameAtMs = 0L
     private var screenRecorder: ScreenFrameRecorder? = null
     private var windowManager: WindowManager? = null
     private var overlayView: BattleOverlayView? = null
@@ -209,9 +214,15 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 val mediaProjection = pm.getMediaProjection(resultCode, resultData)
                     ?: error("MediaProjection indisponível")
                 mediaProjection.registerCallback(object : MediaProjection.Callback() {
-                    override fun onStop() { stopSelf() }
+                    override fun onStop() {
+                        if (!destroyingService) handleProjectionRevoked()
+                    }
                 }, null)
                 projection = mediaProjection
+                projectionRevokedBySystem = false
+                usingAccessibilityFallback = false
+                lastAccessibilityFrameAtMs = 0L
+                AccessibilityScreenCapture.clearLatest()
 
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
@@ -1044,7 +1055,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     continue
                 }
                 runCatching { capture?.ensureMatchesCurrentDisplay() }
-                val frame = capture?.acquireLatestBitmap()
+                val nowForFrame = System.currentTimeMillis()
+                val frame = acquireAnalysisFrame(nowForFrame)
                 if (frame != null) {
                     try {
                         screenRecorder?.recordFrame(frame)
@@ -1072,7 +1084,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         var e = engine
-                        if (settingsRepo.autoRecognition && e != null) {
+                        if (settingsRepo.autoRecognition && e != null && !usingAccessibilityFallback) {
                             val event = frameDetector?.analyze(
                                 frame,
                                 e.currentFastDurationMs(),
@@ -1422,6 +1434,49 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         quickMenu?.refreshPanelFromService()
     }
 
+    /**
+     * Returns the next frame from MediaProjection, or from the screenshot-only
+     * Accessibility fallback after another recorder revokes MediaProjection.
+     */
+    private fun acquireAnalysisFrame(nowMs: Long): android.graphics.Bitmap? {
+        capture?.acquireLatestBitmap()?.let {
+            usingAccessibilityFallback = false
+            return it
+        }
+
+        if (!projectionRevokedBySystem || !AccessibilityScreenCapture.isConnected) return null
+        usingAccessibilityFallback = true
+        AccessibilityScreenCapture.requestScreenshot(nowMs)
+        val fresh = AccessibilityScreenCapture.acquireLatestBitmap(lastAccessibilityFrameAtMs) ?: return null
+        lastAccessibilityFrameAtMs = fresh.second
+        return fresh.first
+    }
+
+    private fun handleProjectionRevoked() {
+        projectionRevokedBySystem = true
+        projection = null
+        runCatching { capture?.stop() }
+        capture = null
+
+        if (screenRecorder?.isRecording == true) {
+            runCatching { screenRecorder?.stop() }
+        }
+
+        usingAccessibilityFallback = AccessibilityScreenCapture.isConnected
+        if (usingAccessibilityFallback) {
+            AccessibilityScreenCapture.clearLatest()
+            lastAccessibilityFrameAtMs = 0L
+            refreshForegroundNotification(
+                "Gravador externo ativo • compatibilidade por screenshot • análise reduzida"
+            )
+        } else {
+            refreshForegroundNotification(
+                "Captura tomada por outro gravador • ative Compatibilidade com gravador externo"
+            )
+        }
+        redraw()
+    }
+
     private fun currentBattleModeLabelText(): String {
         val league = when (settingsRepo.leagueMode) {
             BattleLeagueMode.AUTO -> when (currentLeagueCp) {
@@ -1446,6 +1501,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     private fun refreshForegroundNotification(baseText: String? = null) {
         val state = when {
+            usingAccessibilityFallback -> "Gravador externo • captura compatível (análise reduzida)"
+            projectionRevokedBySystem && !AccessibilityScreenCapture.isConnected ->
+                "Captura pausada pelo gravador externo • ative compatibilidade"
             screenRecorder?.isRecording == true -> "● GRAVANDO • ${leagueLabel(currentLeagueCp)} • HUD ativo"
             overlaySuppressed -> "Sobreposição oculta"
             visionPaused -> "Visão pausada"
@@ -1496,6 +1554,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     override fun onDestroy() {
+        destroyingService = true
         if (::historyRecorder.isInitialized) historyRecorder.finish()
         scanJob?.cancel()
         dismissMoveMenu()
@@ -1524,6 +1583,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         capture = null
         projection?.stop()
         projection = null
+        AccessibilityScreenCapture.clearLatest()
         settingsRepo.overlayServiceRunning = false
         scope.cancel()
         super.onDestroy()
