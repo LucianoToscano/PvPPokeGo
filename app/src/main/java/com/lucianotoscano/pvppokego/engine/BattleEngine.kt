@@ -1815,10 +1815,10 @@ class BattleEngine(private val repo: GameDataRepository) {
         private const val UNKNOWN_CHARGED_DEBOUNCE_MS = 4_200L
         private const val SWITCH_COOLDOWN_MS = 50_000L
         private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
-        private const val CHARGED_DAMAGE_OBSERVATION_WINDOW_MS = 4_500L
+        private const val CHARGED_DAMAGE_OBSERVATION_WINDOW_MS = 6_000L
         private const val CHARGED_DAMAGE_SETTLE_MS = 420L
-        private const val CHARGED_SHIELD_SETTLE_MS = 1_650L
-        private const val MIN_SHIELD_OBSERVATIONS = 3
+        private const val CHARGED_SHIELD_SETTLE_MS = 2_800L
+        private const val MIN_SHIELD_OBSERVATIONS = 4
         private const val MIN_CHARGED_DAMAGE_SAMPLE_FRACTION = 0.010f
         private const val CHARGED_FAST_GUARD_MS = 2_200L
         private const val PENDING_CONFIRM_DELAY_MS = 2_400L
