@@ -18,12 +18,35 @@ data class MoveDef(
 }
 
 @Serializable
+data class PokemonBaseStats(
+    val atk: Int = 0,
+    val def: Int = 0,
+    val hp: Int = 0
+)
+
+@Serializable
 data class PokemonDef(
     val speciesId: String,
     val speciesName: String,
     val types: List<String> = emptyList(),
     /** National Pokédex number from the PvPoke gamemaster. Used by visual recognition. */
-    val dex: Int = 0
+    val dex: Int = 0,
+    /** PvPoke/Pokémon GO base stats used only for offline damage forecasting. */
+    val baseStats: PokemonBaseStats = PokemonBaseStats(),
+    /** PvPoke default IV combinations, e.g. cp1500 -> [level, atkIV, defIV, hpIV]. */
+    val defaultIVs: Map<String, List<Double>> = emptyMap(),
+    val tags: List<String> = emptyList()
+)
+
+data class EstimatedBattleStats(
+    val attack: Double,
+    val defense: Double,
+    val hp: Int,
+    val level: Double,
+    val atkIv: Int,
+    val defIv: Int,
+    val hpIv: Int,
+    val cp: Int
 )
 
 @Serializable
@@ -78,6 +101,17 @@ enum class MatchupState { FAVORABLE, NEUTRAL, UNFAVORABLE, UNKNOWN }
 enum class EnergyConfidence { CONFIRMED, ESTIMATED, RANGE }
 
 enum class DamageConfidence { FIRST_SAMPLE, ESTIMATED, STABLE }
+enum class DamageForecastConfidence { MODEL, OBSERVED_ESTIMATED, OBSERVED_STABLE }
+
+data class DamageForecast(
+    val moveName: String,
+    val averagePercent: Float,
+    val minPercent: Float,
+    val maxPercent: Float,
+    val projectedRemainingPercent: Float? = null,
+    val source: String,
+    val confidence: DamageForecastConfidence
+)
 
 data class ObservedDamageEstimate(
     val averagePercent: Float,
@@ -95,6 +129,8 @@ data class ObservedDamageEstimate(
  * RANKED = PvPoke/default inference, UNKNOWN = no trustworthy move yet.
  */
 enum class MoveKnowledgeConfidence { CONFIRMED, MANUAL, RANKED, UNKNOWN }
+
+enum class TeamPokemonStatus { ACTIVE, RESERVE, FAINTED, UNKNOWN }
 
 data class ReserveState(
     val name: String?,
@@ -121,7 +157,10 @@ data class ReserveState(
     val chargedMove2: MoveDef? = null,
     val fastMoveKnowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
     val chargedMove1Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
-    val chargedMove2Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN
+    val chargedMove2Knowledge: MoveKnowledgeConfidence = MoveKnowledgeConfidence.UNKNOWN,
+    /** Visible reserve-card HP estimate when the native card is mapped. */
+    val hpRatio: Float? = null,
+    val status: TeamPokemonStatus = TeamPokemonStatus.RESERVE
 )
 
 data class BattlePokemonState(
@@ -168,6 +207,8 @@ data class ChargedPrediction(
     val overflowProgress: Float = 0f
 )
 
+enum class CaptureHealth { FRESH, STALE, PAUSED, COMPATIBILITY }
+
 data class BattleUiState(
     val playerName: String? = null,
     val playerCp: Int? = null,
@@ -197,6 +238,15 @@ data class BattleUiState(
     /** Visible HP-bar estimates. 1.0 = 100%. */
     val playerHpRatio: Float? = null,
     val opponentHpRatio: Float? = null,
+    /** Actual screen Y fraction for the player HP bar when visually detected. */
+    val playerHpBarYFraction: Float? = null,
+    /** Remaining Protect Shields. Starts at two and only decrements on confident evidence. */
+    val ownShieldsRemaining: Int = 2,
+    val opponentShieldsRemaining: Int = 2,
+    /** Best current incoming Charged-Attack forecast for the translucent HP preview. */
+    val incomingDamagePreview: DamageForecast? = null,
+    val captureHealth: CaptureHealth = CaptureHealth.FRESH,
+    val captureStatusText: String? = null,
     /** Damage learned from observations in this battle/matchup. */
     val incomingFastDamage: ObservedDamageEstimate? = null,
     val incomingCharged1Damage: ObservedDamageEstimate? = null,
