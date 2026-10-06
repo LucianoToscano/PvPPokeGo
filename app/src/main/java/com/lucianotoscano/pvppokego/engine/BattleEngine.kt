@@ -420,6 +420,23 @@ class BattleEngine(private val repo: GameDataRepository) {
         listOf(first, second).forEachIndexed { index, value ->
             value?.takeIf { it in 0f..1f }?.let { reserveCardHpRatios[index] = it }
         }
+
+        // Persist HP only after the native card is confidently mapped to a stable team slot.
+        // An unconfirmed upper/lower card must never contaminate another Pokémon's HP.
+        resolvedOwnReserves()
+            .filter { it.confirmed }
+            .forEach { resolved ->
+                val hp = reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: return@forEach
+                val slot = resolved.slot
+                val def = slotDefinition(slot)
+                val name = def?.speciesName ?: slot.name
+                val speciesId = slot.speciesId ?: def?.speciesId
+                val key = ownIdentityKey(name, slot.cp, speciesId)
+                val state = ownStates.getOrCreate(key, name, speciesId)
+                state.lastHpRatio = hp.coerceIn(0f, 1f)
+                if (hp <= .01f) state.fainted = true
+                state.lastSeenAtMs = System.currentTimeMillis()
+            }
     }
 
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
