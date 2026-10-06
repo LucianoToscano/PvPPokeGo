@@ -146,7 +146,13 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onOwnTeamDetected(team: List<DetectedPokemon>) {
         val canonical = team
             .map { p -> Triple(repo.canonicalPokemonName(p.name) ?: p.name, p.cp, p.confidence) }
-            .filterNot { (name, _, _) -> name.equals(enemyName, ignoreCase = true) }
+            // Same species can exist on both sides (e.g. enemy Cramorant PC1483 and
+            // own reserve Cramorant PC1485). Never discard an own Pokemon by name alone.
+            .filterNot { (name, cp, _) ->
+                val sameSpecies = name.equals(enemyName, ignoreCase = true)
+                val sameExactCard = enemyCp != null && cp != null && enemyCp == cp
+                sameSpecies && sameExactCard
+            }
             .distinctBy { (name, cp, _) -> "${normalize(name)}:${cp ?: 0}" }
             .take(3)
 
