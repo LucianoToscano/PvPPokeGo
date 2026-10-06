@@ -52,6 +52,27 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
     }
 
     /**
+     * Reads only the two native reserve cards on the right side and extracts their CPs
+     * in top-to-bottom order. CP is used to bind the HUD types/matchup to the correct
+     * reserve after switches, avoiding slot-order guesses.
+     */
+    suspend fun detectReserveCps(frame: Bitmap): Pair<Int?, Int?> {
+        if (frame.isRecycled) return null to null
+        val roi = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_FRAC, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_FRAC)
+        return try {
+            val raw = recognize(roi)
+            val cps = CP_REGEX.findAll(raw)
+                .mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }
+                .filter { it in 10..10000 }
+                .take(2)
+                .toList()
+            cps.getOrNull(0) to cps.getOrNull(1)
+        } finally {
+            roi.recycle()
+        }
+    }
+
+    /**
      * Scans the team/party area. This is intentionally throttled by the service because
      * it is a larger OCR region than the two battle cards.
      */
@@ -60,16 +81,44 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         val roi = crop(frame, TEAM_LEFT_FRAC, TEAM_TOP_FRAC, TEAM_RIGHT_FRAC, TEAM_BOTTOM_FRAC)
         return try {
             val raw = recognize(roi)
+            val lines = raw.lines().map(String::trim).filter(String::isNotBlank)
+            val paired = linkedMapOf<String, DetectedPokemon>()
+
+            // Prefer a name+CP found on the same OCR line or adjacent line. This avoids
+            // zipping an unrelated CP list onto the Pokemon list when OCR reorders text.
+            lines.forEachIndexed { index, line ->
+                val nearby = buildString {
+                    append(line)
+                    lines.getOrNull(index + 1)?.let { append(' ').append(it) }
+                }
+                val cp = CP_REGEX.find(nearby)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val cleaned = nearby
+                    .replace(CP_REGEX, " ")
+                    .replace(Regex("[^\\p{L}♀♂' .-]+"), " ")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+                val name = repo.canonicalPokemonName(cleaned)
+                if (name != null && cp != null && name !in paired) {
+                    paired[name] = DetectedPokemon(name, cp, 0.91f, raw)
+                }
+            }
+
+            if (paired.size >= 3) return@try paired.values.take(3)
+
+            // Fallback for layouts where the names and CPs are rendered in separate columns.
             val names = repo.findPokemonMentions(raw, 3)
             val cpValues = CP_REGEX.findAll(raw).mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }.toList()
-            names.mapIndexed { index, name ->
-                DetectedPokemon(
-                    name = name,
-                    cp = cpValues.getOrNull(index),
-                    confidence = 0.78f,
-                    rawText = raw
-                )
+            names.forEachIndexed { index, name ->
+                if (name !in paired) {
+                    paired[name] = DetectedPokemon(
+                        name = name,
+                        cp = cpValues.getOrNull(index),
+                        confidence = 0.78f,
+                        rawText = raw
+                    )
+                }
             }
+            paired.values.take(3)
         } finally {
             roi.recycle()
         }
@@ -153,6 +202,12 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private const val BATTLE_TOP_FRAC = 0.12f
         private const val BATTLE_RIGHT_FRAC = 0.94f
         private const val BATTLE_BOTTOM_FRAC = 0.84f
+
+        // Native reserve cards on the right side during battle.
+        private const val RESERVE_LEFT_FRAC = 0.76f
+        private const val RESERVE_TOP_FRAC = 0.50f
+        private const val RESERVE_RIGHT_FRAC = 0.995f
+        private const val RESERVE_BOTTOM_FRAC = 0.77f
 
         // Team-selection/party area. Scanned slowly and stopped once 3 Pokémon are known.
         private const val TEAM_LEFT_FRAC = 0.04f
