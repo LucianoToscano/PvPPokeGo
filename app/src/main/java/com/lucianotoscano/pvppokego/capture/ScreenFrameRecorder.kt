@@ -80,6 +80,12 @@ class ScreenFrameRecorder(private val context: Context) {
     val activeProfileLabel: String
         get() = if (conservativeProfile) "compatível" else "padrão"
 
+    val encoderStalled: Boolean
+        get() = isRecording &&
+            conservativeProfile &&
+            encodedSampleCount == 0 &&
+            submittedFrameCount >= CONSERVATIVE_STALL_FRAMES
+
     fun start(width: Int, height: Int): Boolean {
         if (isRecording) return true
         inputWidth = width
@@ -164,9 +170,21 @@ class ScreenFrameRecorder(private val context: Context) {
      */
     fun recordFrame(bitmap: Bitmap, nowNs: Long = System.nanoTime()) {
         if (!isRecording || bitmap.isRecycled) return
-        if (lastFrameAtNs != 0L && nowNs - lastFrameAtNs < FRAME_INTERVAL_NS) return
-        lastFrameAtNs = nowNs
+        if (lastFrameAtNs != 0L && nowNs - lastFrameAtNs < currentFrameIntervalNs) return
 
+        if (
+            !conservativeProfile &&
+            encodedSampleCount == 0 &&
+            submittedFrameCount >= PRIMARY_RETRY_SUBMITTED_FRAMES &&
+            nowNs - startedAtNs >= PRIMARY_RETRY_AFTER_NS
+        ) {
+            if (retryWithConservativeProfile()) {
+                recordFrame(bitmap, System.nanoTime())
+            }
+            return
+        }
+
+        lastFrameAtNs = nowNs
         runCatching {
             if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) return@runCatching
             GLES20.glViewport(0, 0, outputWidth, outputHeight)
@@ -196,6 +214,7 @@ class ScreenFrameRecorder(private val context: Context) {
                 (nowNs - startedAtNs).coerceAtLeast(0L)
             )
             EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+            submittedFrameCount++
             if (!firstFrameSubmitted) {
                 firstFrameSubmitted = true
                 runCatching {
@@ -408,6 +427,7 @@ class ScreenFrameRecorder(private val context: Context) {
         muxerStarted = false
         trackIndex = -1
         encodedSampleCount = 0
+        submittedFrameCount = 0
         firstFrameSubmitted = false
     }
 
@@ -456,10 +476,16 @@ class ScreenFrameRecorder(private val context: Context) {
 
     companion object {
         private const val TARGET_FPS = 10
+        private const val CONSERVATIVE_FPS = 8
         private const val FRAME_INTERVAL_NS = 100_000_000L
+        private const val PRIMARY_RETRY_AFTER_NS = 2_200_000_000L
+        private const val PRIMARY_RETRY_SUBMITTED_FRAMES = 12
+        private const val CONSERVATIVE_STALL_FRAMES = 24
         private const val EGL_RECORDABLE_ANDROID = 0x3142
         private const val MAX_OUTPUT_WIDTH = 720
         private const val MAX_OUTPUT_HEIGHT = 1280
+        private const val CONSERVATIVE_MAX_OUTPUT_WIDTH = 576
+        private const val CONSERVATIVE_MAX_OUTPUT_HEIGHT = 1024
         private const val MIN_VALID_MP4_BYTES = 16_384L
 
         private val VERTICES: FloatBuffer = ByteBuffer
