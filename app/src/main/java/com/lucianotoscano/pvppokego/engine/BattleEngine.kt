@@ -1094,9 +1094,28 @@ class BattleEngine(private val repo: GameDataRepository) {
         val f = fast
         val of = ownFast
 
-        val rawReserves = resolvedOwnReserves()
-            .take(2)
-            .mapIndexed { index, resolved ->
+        val resolvedByCard = resolvedOwnReserves().associateBy { it.cardIndex }
+        val rawReserves = (0..1).map { cardIndex ->
+            val resolved = resolvedByCard[cardIndex]
+            if (resolved == null) {
+                // Keep the native card position alive even before identity is known.
+                // The HUD can still show the live portrait, but no types/matchup/moves
+                // are invented until the card is safely bound to a team identity.
+                ReserveState(
+                    name = null,
+                    speciesId = null,
+                    cp = reserveCardCps.getOrNull(cardIndex),
+                    types = emptyList(),
+                    matchup = MatchupState.UNKNOWN,
+                    visible = reserveSlotVisible.getOrNull(cardIndex) != false,
+                    score = 0.0,
+                    teamSlot = null,
+                    identityKey = null,
+                    cardCp = reserveCardCps.getOrNull(cardIndex),
+                    identityConfirmed = false,
+                    identitySource = "unresolved"
+                )
+            } else {
                 val slot = resolved.slot
                 val def = slotDefinition(slot)
                 val name = def?.speciesName ?: slot.name
@@ -1134,7 +1153,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     cp = cp,
                     types = types,
                     matchup = if (resolved.confirmed) classify(types, eTypes) else MatchupState.UNKNOWN,
-                    visible = reserveSlotVisible.getOrNull(index) != false,
+                    visible = reserveSlotVisible.getOrNull(cardIndex) != false,
                     score = score,
                     teamSlot = slot.slot,
                     identityKey = identity,
@@ -1149,6 +1168,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                     chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2)
                 )
             }
+        }
+
         val bestVisibleScore = rawReserves
             .filter { it.visible && it.identityConfirmed }
             .maxOfOrNull { it.score }
@@ -1274,6 +1295,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private data class ResolvedOwnReserve(
         val slot: OwnTeamSlot,
+        val cardIndex: Int,
         val cardCp: Int?,
         val confirmed: Boolean,
         val source: String
@@ -1308,7 +1330,13 @@ class BattleEngine(private val repo: GameDataRepository) {
             cardSpeciesIds = reserveCardSpeciesIds.toList()
         ).mapNotNull { match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
-                ResolvedOwnReserve(slot, match.cardCp, match.confirmed, match.source)
+                ResolvedOwnReserve(
+                    slot = slot,
+                    cardIndex = match.cardIndex,
+                    cardCp = match.cardCp,
+                    confirmed = match.confirmed,
+                    source = match.source
+                )
             }
         }
     }
