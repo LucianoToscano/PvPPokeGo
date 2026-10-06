@@ -127,6 +127,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> { historyRecorder.finish(); stopSelf(); return START_NOT_STICKY }
+            ACTION_START_ACCESSIBILITY_CAPTURE -> {
+                startAccessibilityCaptureMode()
+                return START_STICKY
+            }
             ACTION_TOGGLE_VISION -> {
                 visionPaused = !visionPaused
                 refreshForegroundNotification()
@@ -195,6 +199,53 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             startForeground(NOTIFICATION_ID, notification("Toque em Iniciar overlay para reativar a captura"))
         }
         return START_STICKY
+    }
+
+    private fun startAccessibilityCaptureMode() {
+        if (!AccessibilityScreenCapture.isConnected) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification("Ative PvPPokeGo em Acessibilidade para usar com gravador externo")
+            )
+            return
+        }
+
+        scope.launch {
+            try {
+                currentLeagueCp = settingsRepo.configuredLeagueCp()
+                    ?: settingsRepo.lastDetectedLeagueCp.takeIf { it in SUPPORTED_LEAGUE_CPS }
+                    ?: 1500
+
+                withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
+                engine = BattleEngine(gameRepo)
+                detector?.close()
+                detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
+                frameDetector = BattleFrameEventDetector()
+                presenceTracker.reset()
+
+                projectionRevokedBySystem = true
+                usingAccessibilityFallback = true
+                lastAccessibilityFrameAtMs = 0L
+                AccessibilityScreenCapture.clearLatest()
+
+                withContext(Dispatchers.Main) {
+                    attachOverlay()
+                    startForeground(
+                        NOTIFICATION_ID,
+                        notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • modo gravador externo")
+                    )
+                    redraw()
+                }
+                startScanLoop()
+            } catch (t: Throwable) {
+                withContext(Dispatchers.Main) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        notification("Erro no modo gravador externo: ${t.javaClass.simpleName}")
+                    )
+                }
+            }
+        }
     }
 
     private fun startProjection(resultCode: Int, resultData: Intent) {
@@ -1614,6 +1665,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         const val ACTION_TOGGLE_VISION = "com.lucianotoscano.pvppokego.TOGGLE_VISION"
         const val ACTION_TOGGLE_OVERLAY = "com.lucianotoscano.pvppokego.TOGGLE_OVERLAY"
         const val ACTION_TOGGLE_RECORDING = "com.lucianotoscano.pvppokego.TOGGLE_RECORDING"
+        const val ACTION_START_ACCESSIBILITY_CAPTURE = "com.lucianotoscano.pvppokego.START_ACCESSIBILITY_CAPTURE"
         const val ACTION_APP_FOREGROUND = "com.lucianotoscano.pvppokego.APP_FOREGROUND"
         const val ACTION_APP_BACKGROUND = "com.lucianotoscano.pvppokego.APP_BACKGROUND"
         private const val NOTIFICATION_ID = 1107
