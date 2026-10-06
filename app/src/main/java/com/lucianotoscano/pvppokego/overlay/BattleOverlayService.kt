@@ -1255,6 +1255,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 }
                             } else if (recordingAwaitingEncoder && recorder.encoderStalled) {
                                 recordingAwaitingEncoder = false
+                                runCatching { recorder.stop() }
                                 val message = "Encoder não produziu vídeo nem no perfil compatível"
                                 historyRecorder.recordDiagnostic("Gravação interna", message, System.currentTimeMillis())
                                 withContext(Dispatchers.Main) {
