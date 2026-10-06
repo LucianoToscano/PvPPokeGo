@@ -50,8 +50,10 @@ jobs:
 
       - name: Build visual Pokémon bank
         run: |
-          python3 -m pip install --disable-pip-version-check pillow
-          python3 tools/package_visual_fingerprints.py
+          python3 -m venv .venv-visual
+          . .venv-visual/bin/activate
+          python -m pip install --disable-pip-version-check pillow
+          python tools/package_visual_fingerprints.py
           test -s app/src/main/assets/pokemon_visual_fingerprints.json
           python3 - <<'PY'
           import json
