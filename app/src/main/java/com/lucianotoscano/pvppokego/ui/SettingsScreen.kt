@@ -502,6 +502,36 @@ private fun BattleHistoryCard(
     val enemyCharged = battle.events.count { it.actor == "INIMIGO" && it.category == "CARREGADO" }
     val decisions = battle.events.count { it.actor == "ASSISTENTE" || it.category == "DECISÃO" }
     val diagnostics = battle.events.count { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
+    val ownPokemon = remember(battle.id, battle.events.size) {
+        linkedSetOf<String>().apply {
+            battle.playerName?.takeIf { it.isNotBlank() }?.let(::add)
+            battle.events.filter { it.actor == "VOCÊ" }.forEach { event ->
+                event.pokemon?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["de"]?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["para"]?.takeIf { it.isNotBlank() }?.let(::add)
+            }
+        }.take(3)
+    }
+    val enemyPokemon = remember(battle.id, battle.events.size) {
+        linkedSetOf<String>().apply {
+            battle.opponentName?.takeIf { it.isNotBlank() }?.let(::add)
+            battle.events.filter { it.actor == "INIMIGO" }.forEach { event ->
+                event.pokemon?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["de"]?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["para"]?.takeIf { it.isNotBlank() }?.let(::add)
+            }
+        }.take(3)
+    }
+    val ownShieldsUsed = battle.events.count { it.actor == "VOCÊ" && it.category == "ESCUDO" }
+    val enemyShieldsUsed = battle.events.count { it.actor == "INIMIGO" && it.category == "ESCUDO" }
+    val switches = battle.events.count { it.category == "TROCA" }
+    val largestDamage = battle.events
+        .filter { it.category == "DANO" }
+        .mapNotNull { event -> event.details["damagePercent"]?.toFloatOrNull()?.let { it to event } }
+        .maxByOrNull { it.first }
+    val uncertainEvents = battle.events.count {
+        it.confidence == "ESTIMADO" || it.confidence == "DESCONHECIDO" || it.confidence == "FAIXA"
+    }
     var showDiagnostics by remember(battle.id) { mutableStateOf(false) }
 
     Card(
@@ -552,6 +582,22 @@ private fun BattleHistoryCard(
                 }
             }
 
+            if (ownPokemon.isNotEmpty() || enemyPokemon.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .72f)
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        if (ownPokemon.isNotEmpty()) {
+                            Text("Seu time: " + ownPokemon.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (enemyPokemon.isNotEmpty()) {
+                            Text("Inimigos vistos: " + enemyPokemon.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -576,6 +622,31 @@ private fun BattleHistoryCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .78f)
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Momentos-chave", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text("Escudos: você usou $ownShieldsUsed • inimigo usou $enemyShieldsUsed", style = MaterialTheme.typography.bodySmall)
+                        Text("Trocas detectadas: $switches • decisões do assistente: $decisions", style = MaterialTheme.typography.bodySmall)
+                        largestDamage?.let { (damage, event) ->
+                            Text(
+                                "Maior dano observado: ${"%.1f".format(damage)}% • ${event.moveName}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (uncertainEvents > 0) {
+                            Text(
+                                "$uncertainEvents eventos ficaram estimados/indeterminados; veja o diagnóstico para revisar.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
 
                 val conversationEvents = battle.events
                     .filterNot { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
