@@ -11,6 +11,7 @@ import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.BattleLeagueTextDetector
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.GameDataRepository
+import com.lucianotoscano.pvppokego.data.ReserveCardEvidence
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -63,10 +64,28 @@ class BattleOcrDetector(
      * in top-to-bottom order. CP is used to bind the HUD types/matchup to the correct
      * reserve after switches, avoiding slot-order guesses.
      */
-    suspend fun detectReserveCps(frame: Bitmap): Pair<Int?, Int?> = coroutineScope {
-        if (frame.isRecycled) return@coroutineScope null to null
-        val top = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_1, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_1)
-        val bottom = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_2, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_2)
+    suspend fun detectReserveEvidence(frame: Bitmap): Pair<ReserveCardEvidence, ReserveCardEvidence> = coroutineScope {
+        if (frame.isRecycled) {
+            return@coroutineScope ReserveCardEvidence(null) to ReserveCardEvidence(null)
+        }
+
+        val topText = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_1, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_1)
+        val bottomText = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_2, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_2)
+        val topPortrait = crop(
+            frame,
+            RESERVE_PORTRAIT_LEFT,
+            RESERVE_PORTRAIT_TOP_1,
+            RESERVE_PORTRAIT_RIGHT,
+            RESERVE_PORTRAIT_BOTTOM_1
+        )
+        val bottomPortrait = crop(
+            frame,
+            RESERVE_PORTRAIT_LEFT,
+            RESERVE_PORTRAIT_TOP_2,
+            RESERVE_PORTRAIT_RIGHT,
+            RESERVE_PORTRAIT_BOTTOM_2
+        )
+
         try {
             fun parseCp(raw: String): Int? = CP_REGEX.find(raw)
                 ?.groupValues
@@ -74,12 +93,29 @@ class BattleOcrDetector(
                 ?.toIntOrNull()
                 ?.takeIf { it in 10..10000 }
 
-            val topJob = async { parseCp(recognize(top)) }
-            val bottomJob = async { parseCp(recognize(bottom)) }
+            suspend fun read(textRoi: Bitmap, portraitRoi: Bitmap): ReserveCardEvidence = coroutineScope {
+                val cpJob = async { parseCp(recognize(textRoi)) }
+                val visualJob = async { visualRecognizer.match(portraitRoi) }
+                val visual = visualJob.await()
+                ReserveCardEvidence(
+                    cp = cpJob.await(),
+                    visualDex = visual?.dex,
+                    visualConfidence = visual?.confidence
+                )
+            }
+
+            val topJob = async { read(topText, topPortrait) }
+            val bottomJob = async { read(bottomText, bottomPortrait) }
             topJob.await() to bottomJob.await()
         } finally {
-            top.recycle(); bottom.recycle()
+            topText.recycle(); bottomText.recycle()
+            topPortrait.recycle(); bottomPortrait.recycle()
         }
+    }
+
+    suspend fun detectReserveCps(frame: Bitmap): Pair<Int?, Int?> {
+        val evidence = detectReserveEvidence(frame)
+        return evidence.first.cp to evidence.second.cp
     }
 
     /**
@@ -296,6 +332,15 @@ class BattleOcrDetector(
         private const val RESERVE_BOTTOM_1 = 0.645f
         private const val RESERVE_TOP_2 = 0.640f
         private const val RESERVE_BOTTOM_2 = 0.750f
+
+        // Portrait-only regions inside the two reserve cards. Visual recognition is
+        // auxiliary: CP/OCR remains authoritative whenever available.
+        private const val RESERVE_PORTRAIT_LEFT = 0.835f
+        private const val RESERVE_PORTRAIT_RIGHT = 0.985f
+        private const val RESERVE_PORTRAIT_TOP_1 = 0.565f
+        private const val RESERVE_PORTRAIT_BOTTOM_1 = 0.625f
+        private const val RESERVE_PORTRAIT_TOP_2 = 0.660f
+        private const val RESERVE_PORTRAIT_BOTTOM_2 = 0.725f
 
         // Team selection card, read as three independent columns.
         private const val TEAM_SLOT_TOP = 0.615f
