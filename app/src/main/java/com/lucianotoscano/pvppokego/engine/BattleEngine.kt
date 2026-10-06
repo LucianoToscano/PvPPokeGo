@@ -2,6 +2,7 @@ package com.lucianotoscano.pvppokego.engine
 
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.BattlePokemonState
+import com.lucianotoscano.pvppokego.data.BattleStrategyProfile
 import com.lucianotoscano.pvppokego.data.BattleUiState
 import com.lucianotoscano.pvppokego.data.CaptureHealth
 import com.lucianotoscano.pvppokego.data.DamageForecast
@@ -116,6 +117,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var opponentShieldsRemaining = 2
     private var captureHealth = CaptureHealth.FRESH
     private var captureStatusText: String? = null
+    private var localStrategyProfile: BattleStrategyProfile? = null
 
     private val incomingDamageTracker = ObservedDamageTracker()
     private var pendingIncomingChargedHpBefore: Float? = null
@@ -187,6 +189,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         opponentShieldsRemaining = 2
         captureHealth = CaptureHealth.FRESH
         captureStatusText = null
+        localStrategyProfile = null
         incomingDamageTracker.resetBattle()
         pendingIncomingChargedHpBefore = null
         pendingOutgoingChargedHpBefore = null
@@ -203,6 +206,11 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onCaptureHealth(health: CaptureHealth, statusText: String? = null) {
         captureHealth = health
         captureStatusText = statusText
+    }
+    fun onLocalStrategyProfile(profile: BattleStrategyProfile?) {
+        localStrategyProfile = profile?.takeIf {
+            enemyName == null || it.opponentName.equals(enemyName, ignoreCase = true)
+        }
     }
 
     fun onPlayerHpBarYFraction(value: Float?) {
@@ -1520,6 +1528,27 @@ class BattleEngine(private val repo: GameDataRepository) {
             incomingDamagePreview = incomingPreview,
             captureHealth = captureHealth,
             captureStatusText = captureStatusText,
+            strategyPatternHint = localStrategyProfile?.let { profile ->
+                when {
+                    profile.firstChargedMove != null &&
+                        profile.chargedSamples >= 3 &&
+                        profile.firstChargedRate >= .60f ->
+                        "Histórico local: " + profile.firstChargedMove + " foi o primeiro carregado em " +
+                            "%.0f".format(profile.firstChargedRate * 100f) + "% de " + profile.battles + " batalha(s)"
+                    profile.mostCommonChargedMove != null && profile.chargedSamples >= 4 ->
+                        "Histórico local: " + profile.mostCommonChargedMove + " apareceu em " +
+                            "%.0f".format(profile.mostCommonChargedRate * 100f) + "% dos carregados observados"
+                    else -> null
+                }
+            },
+            strategyPatternConfidence = localStrategyProfile?.let { profile ->
+                when {
+                    profile.chargedSamples >= 8 -> .85f
+                    profile.chargedSamples >= 4 -> .68f
+                    profile.chargedSamples >= 3 -> .58f
+                    else -> 0f
+                }
+            } ?: 0f,
             incomingFastDamage = incomingDamageTracker.estimate(
                 currentEnemyDamageKey(),
                 currentPlayerDamageKey(),
