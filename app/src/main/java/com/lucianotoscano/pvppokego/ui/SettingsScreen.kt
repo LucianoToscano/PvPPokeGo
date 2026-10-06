@@ -50,6 +50,7 @@ fun SettingsScreen(
     onRequestOverlayPermission: () -> Unit,
     recorderCompatibilityEnabled: Boolean,
     onOpenRecorderCompatibility: () -> Unit,
+    onStartExternalRecorderMode: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
     onResetBattle: () -> Unit,
@@ -160,6 +161,20 @@ fun SettingsScreen(
                         "Android normalmente permite apenas uma sessão principal de captura. Um gravador externo pode retirar a MediaProjection do PvPPokeGo. " +
                             "Ative esta opção antes de gravar para o app continuar com OCR, tipos e matchup por capturas de compatibilidade."
                     },
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Button(
+                    onClick = onStartExternalRecorderMode,
+                    enabled = recorderCompatibilityEnabled,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Iniciar overlay para gravador Samsung / externo")
+                }
+                Text(
+                    "Use este botão quando quiser gravar com outro aplicativo. Nesse modo o PvPPokeGo não abre MediaProjection própria, " +
+                        "então não disputa a captura com o gravador. A análise de identidade, tipos e matchup continua; o detector de FAST " +
+                        "de alta frequência fica limitado pela taxa de screenshots do Android.",
                     style = MaterialTheme.typography.bodySmall
                 )
 
