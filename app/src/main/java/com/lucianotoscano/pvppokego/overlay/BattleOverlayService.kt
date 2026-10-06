@@ -1508,7 +1508,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 val changes = if (!holdIdentityMutation) e?.onDetection(d) else null
                                 val after = e?.uiState()
                                 after?.opponentName?.takeIf { it.isNotBlank() }?.let { opponent ->
-                                    val key = normalizeForComparison(opponent)
+                                    val key = normalizedBattleText(opponent).replace(Regex("[^a-z0-9]+"), "")
                                     if (key != lastStrategyOpponentKey) {
                                         lastStrategyOpponentKey = key
                                         e?.onLocalStrategyProfile(historyRepository.strategyProfile(opponent))
