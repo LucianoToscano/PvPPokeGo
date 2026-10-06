@@ -1,44 +1,44 @@
-name: Build PvPPokeGo 0.5.15
+name: Build PvPPokeGo 0.5.15 trial15
 
 on:
   push:
-    branches: [release/0.5.15]
+    branches: [build/trial15-chatgpt-20261006]
   workflow_dispatch:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
+      - name: Publish this run ID
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          gh issue create --repo "$REPO" --title "[CI] release-workflow trial15 run $RUN_ID" --body "run_id=$RUN_ID"$'\n'"head_sha=$HEAD_SHA"$'\n'"artifact=PvPPokeGo-0.5.15-trial15-signed"
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate 0.5.15 invariants
+      - name: Apply exact uploaded trial15 source changes
+        run: python3 .github/scripts/apply_trial15_uploaded.py
+
+      - name: Validate exact source hashes
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'versionName = "0.5.15"' app/build.gradle.kts
-          grep -q 'ensureApprovedLayoutV15' app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
-          grep -q 'hud_enemy_moves_x", 723.6773682f' app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
-          grep -q 'hud_enemy_moves_y", 233.8441772f' app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt
-          grep -q 'chargedY=fastY+ry(112f)' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt
-          grep -q 'fastY + 129f' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          grep -q 'android.R.drawable.ic_menu_preferences' app/src/main/java/com/lucianotoscano/pvppokego/overlay/QuickOverlayMenu.kt
-          grep -q 'pendingEnemyHpDropPx' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleFrameEventDetector.kt
-          grep -q 'player-hp-microdrop' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleFrameEventDetector.kt
-          grep -q 'effectiveEnemyFastMove' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
-          if grep -q 'DelicateGearView' app/src/main/java/com/lucianotoscano/pvppokego/overlay/QuickOverlayMenu.kt; then
-            echo "Old custom sun-like gear still present"
-            exit 1
-          fi
-          grep -q 'ACTION_TOGGLE_VISION' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          grep -q 'ACTION_TOGGLE_OVERLAY' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
-          if grep -q '(hudLockTouch as? TextView)?.text' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt; then
-            echo "Legacy emoji lock setter returned"
-            exit 1
-          fi
+          echo "a2678a6ab744e397b4632c7324d83090188a6b7819dc41c64523a4beb49d273d  app/build.gradle.kts" | shasum -a 256 -c -
+          echo "a2fb4dcac26b42276250f66abe35200946ae12d12999504ed81195b60910060d  app/proguard-rules.pro" | shasum -a 256 -c -
+          echo "826df11d451443eb214fa2597c47c4e87a1ce2ae57b0c3ff03b1b20c6356dc48  app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt" | shasum -a 256 -c -
+          echo "762a1b380ad8536c8739115d502da3d239605fe424c5fff26541f3e3df39bb4d  app/src/main/java/com/lucianotoscano/pvppokego/PvPPokeGoApp.kt" | shasum -a 256 -c -
+          echo "a885fbd48a290f4c822a0a8bc64fa1e193a0ac02f2eb63dd86d514f12b53089f  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt" | shasum -a 256 -c -
+          echo "da73ab4e2f3edd653d8891dc8544c98f4870d8ec3d296ce47345e235a46c7908  app/src/main/java/com/lucianotoscano/pvppokego/security/TrialManager.kt" | shasum -a 256 -c -
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -51,18 +51,26 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Test and build APK
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+      - name: Test and build minified release
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleRelease
 
-      - name: Package APK
+      - name: Sign release APK
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p artifact
-          cp app/build/outputs/apk/debug/app-debug.apk artifact/PvPPokeGo-0.5.15.apk
-          shasum -a 256 artifact/PvPPokeGo-0.5.15.apk > artifact/PvPPokeGo-0.5.15.apk.sha256
+          keytool -genkeypair -v -keystore /tmp/trial15.jks -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=PvPPokeGo Trial15, O=PvPPokeGo, C=BR"
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
+          "$BT/zipalign" -f 4 app/build/outputs/apk/release/app-release-unsigned.apk artifact/PvPPokeGo-0.5.15-trial15-aligned.apk
+          "$BT/apksigner" sign --ks /tmp/trial15.jks --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out artifact/PvPPokeGo-0.5.15-trial15.apk artifact/PvPPokeGo-0.5.15-trial15-aligned.apk
+          "$BT/apksigner" verify --verbose --print-certs artifact/PvPPokeGo-0.5.15-trial15.apk
+          rm artifact/PvPPokeGo-0.5.15-trial15-aligned.apk
+          shasum -a 256 artifact/PvPPokeGo-0.5.15-trial15.apk > artifact/PvPPokeGo-0.5.15-trial15.apk.sha256
+          if [ -f app/build/outputs/mapping/release/mapping.txt ]; then cp app/build/outputs/mapping/release/mapping.txt artifact/mapping.txt; fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PvPPokeGo-0.5.15
+          name: PvPPokeGo-0.5.15-trial15-signed
           path: artifact/
           retention-days: 14
