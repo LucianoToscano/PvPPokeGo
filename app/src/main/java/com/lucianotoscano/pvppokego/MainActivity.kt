@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
                         entry(
                             "device.txt",
                             buildString {
-                                appendLine("PvPPokeGo=0.5.19")
+                                appendLine("PvPPokeGo=0.5.20")
                                 appendLine("package=" + packageName)
                                 appendLine("manufacturer=" + android.os.Build.MANUFACTURER)
                                 appendLine("model=" + android.os.Build.MODEL)
@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
                         )
                         entry(
                             "README.txt",
-                            "Diagnóstico PvPPokeGo 0.5.19\n" +
+                            "Diagnóstico PvPPokeGo 0.5.20\n" +
                                 "Inclui configurações, posições, histórico de batalhas, fontes/confiança dos eventos e dados do aparelho.\n"
                         )
                     }
@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
                         entry(
                             "README.txt",
                             buildString {
-                                appendLine("PvPPokeGo 0.5.18 — exportação de histórico")
+                                appendLine("PvPPokeGo 0.5.20 — exportação de histórico")
                                 appendLine()
                                 appendLine("Envie este ZIP diretamente para análise.")
                                 appendLine("historico-legivel.txt: leitura humana, separada por VOCÊ / INIMIGO / ASSISTENTE / DIAGNÓSTICO.")
@@ -289,21 +289,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportSettings() {
-        exportSettingsLauncher.launch("PvPPokeGo-0.5.19-config.json")
+        exportSettingsLauncher.launch("PvPPokeGo-0.5.20-config.json")
     }
 
     private fun exportDiagnostics() {
-        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.19-diagnostico.zip")
+        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.20-diagnostico.zip")
     }
 
     private fun exportHistory() {
         pendingHistoryExportBattleId = null
-        exportHistoryLauncher.launch("PvPPokeGo-0.5.19-historico.zip")
+        exportHistoryLauncher.launch("PvPPokeGo-0.5.20-historico.zip")
     }
 
     private fun exportBattle(id: Long) {
         pendingHistoryExportBattleId = id
-        exportHistoryLauncher.launch("PvPPokeGo-0.5.19-batalha-$id.zip")
+        exportHistoryLauncher.launch("PvPPokeGo-0.5.20-batalha-$id.zip")
     }
 
     private fun toggleRecording() {
