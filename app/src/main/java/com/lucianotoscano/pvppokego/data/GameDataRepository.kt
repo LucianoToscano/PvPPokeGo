@@ -93,6 +93,13 @@ class GameDataRepository(private val context: Context) {
         return candidates.singleOrNull()
     }
 
+    fun pokemonForVisualIdentity(speciesId: String?, dex: Int): PokemonDef? {
+        speciesId?.takeIf { it.isNotBlank() }?.let { exact ->
+            pokemon(exact)?.takeIf { it.dex <= 0 || dex <= 0 || it.dex == dex }?.let { return it }
+        }
+        return uniquePokemonForVisualDex(dex)
+    }
+
     fun possibleFastMoves(speciesName: String): List<MoveDef> {
         val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
         return entry?.moves?.fastMoves.orEmpty()
