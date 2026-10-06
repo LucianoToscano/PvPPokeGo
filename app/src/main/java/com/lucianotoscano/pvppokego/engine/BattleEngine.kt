@@ -34,6 +34,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var playerCp: Int? = null
     private var enemyName: String? = null
     private var enemyCp: Int? = null
+    private val playerCpTracker = StableCpTracker()
+    private val enemyCpTracker = StableCpTracker()
 
     private var tracker = EnergyTracker()
     private var activeState: BattlePokemonState? = null
@@ -83,6 +85,8 @@ class BattleEngine(private val repo: GameDataRepository) {
         playerCp = null
         enemyName = null
         enemyCp = null
+        playerCpTracker.reset()
+        enemyCpTracker.reset()
         tracker.reset()
         ownTracker.reset()
         activeState = null
@@ -131,14 +135,20 @@ class BattleEngine(private val repo: GameDataRepository) {
 
         d.player?.let {
             val canonical = repo.canonicalPokemonName(it.name) ?: it.name
-            rememberOwnPokemon(canonical, it.cp)
-            if (!canonical.equals(playerName, ignoreCase = true)) onPlayerChanged(canonical, it.cp)
-            else if (it.cp != null) playerCp = it.cp
+            val stableCp = playerCpTracker.observe(normalize(canonical), it.cp)
+            rememberOwnPokemon(canonical, stableCp)
+            if (!canonical.equals(playerName, ignoreCase = true)) onPlayerChanged(canonical, stableCp)
+            else if (stableCp != null) playerCp = stableCp
         }
         d.opponent?.let {
             val canonical = repo.canonicalPokemonName(it.name) ?: it.name
-            enemyCp = it.cp ?: enemyCp
-            if (!canonical.equals(enemyName, ignoreCase = true)) onEnemyChanged(canonical)
+            val stableCp = enemyCpTracker.observe(normalize(canonical), it.cp)
+            if (!canonical.equals(enemyName, ignoreCase = true)) {
+                onEnemyChanged(canonical)
+                enemyCp = stableCp
+            } else if (stableCp != null) {
+                enemyCp = stableCp
+            }
         }
 
         val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
@@ -342,7 +352,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveOwnActiveState()
         ownChargedCycle.reset()
         playerName = name
-        playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value ?: playerCp
+        playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value
         val key = ownIdentityKey(name, playerCp)
         ownActiveState = ownStates.getOrCreate(key, name)
         val saved = ownActiveState!!
