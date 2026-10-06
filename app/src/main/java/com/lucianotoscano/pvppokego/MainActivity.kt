@@ -210,6 +210,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         overlayGranted = Settings.canDrawOverlays(this)
         recorderCompatibilityEnabled = AccessibilityScreenCapture.isConnected
+        window.decorView.postDelayed({
+            recorderCompatibilityEnabled = AccessibilityScreenCapture.isConnected
+        }, 700L)
         historyRevision++
         if (::settingsRepo.isInitialized && settingsRepo.overlayServiceRunning) {
             overlayStarting = false
