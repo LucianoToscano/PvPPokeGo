@@ -1239,6 +1239,28 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 now
                             )
                             if (event != null) {
+                                val damageObservation = e.onHpObservation(
+                                    event.hpRatio,
+                                    event.opponentHpRatio,
+                                    now
+                                )
+                                if (damageObservation != null) {
+                                    val snapshot = e.uiState()
+                                    val localizedMove = gameRepo.move(damageObservation.moveId)
+                                        ?.let(gameRepo::localizedMoveName)
+                                        ?: damageObservation.moveName
+                                    historyRecorder.recordDamageObservation(
+                                        actor = "INIMIGO",
+                                        moveName = localizedMove,
+                                        damagePercent = damageObservation.damagePercent,
+                                        damagePoints = damageObservation.damagePoints,
+                                        learnedSamples = damageObservation.learnedSamples,
+                                        nowMs = now,
+                                        attackerPokemon = snapshot.opponentName,
+                                        targetPokemon = snapshot.playerName,
+                                        source = "barra de HP"
+                                    )
+                                }
                                 lastNativeTopCardY = event.nativeTopCardY ?: lastNativeTopCardY
                                 battleActive = presenceTracker.update(
                                     visualConfidence = event.battleConfidence,
@@ -1251,7 +1273,14 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     e.onReserveSlotsDetected(event.reserve1Visible, event.reserve2Visible)
                                 }
                                 if (event.fastMoveCount > 0 && (battleActive || event.battleUiVisible)) {
-                                    e.onFastDetected(event.fastMoveCount, event.confidence, event.source, event.hpRatio, event.motion)
+                                    e.onFastDetected(
+                                        event.fastMoveCount,
+                                        event.confidence,
+                                        event.source,
+                                        event.hpRatio,
+                                        event.motion,
+                                        damageFraction = event.playerDamageFraction
+                                    )
                                     val snapshot = e.uiState()
                                     snapshot.fastMove?.let { move ->
                                         historyRecorder.recordFast(
@@ -1261,7 +1290,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                             now,
                                             pokemon = snapshot.opponentName,
                                             confidence = knowledgeLabel(snapshot.fastMoveKnowledge),
-                                            source = event.source
+                                            source = event.source,
+                                            damageFraction = event.playerDamageFraction
                                         )
                                     }
                                 }
