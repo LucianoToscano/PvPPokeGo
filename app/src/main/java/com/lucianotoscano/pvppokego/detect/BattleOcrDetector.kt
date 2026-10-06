@@ -10,6 +10,8 @@ import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.BattleLeagueTextDetector
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.GameDataRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -22,16 +24,16 @@ import kotlin.math.abs
 class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    suspend fun detect(frame: Bitmap): BattleDetection {
-        if (frame.isRecycled) return BattleDetection(null, null)
+    suspend fun detect(frame: Bitmap): BattleDetection = coroutineScope {
+        if (frame.isRecycled) return@coroutineScope BattleDetection(null, null)
         val playerRoi = crop(frame, 0f, TOP_FRAC, PLAYER_RIGHT_FRAC, BOTTOM_FRAC)
         val opponentRoi = crop(frame, OPPONENT_LEFT_FRAC, TOP_FRAC, 1f, BOTTOM_FRAC)
         val battleRoi = crop(frame, BATTLE_LEFT_FRAC, BATTLE_TOP_FRAC, BATTLE_RIGHT_FRAC, BATTLE_BOTTOM_FRAC)
-        return try {
-            val player = recognizeCard(playerRoi)
-            val opponent = recognizeCard(opponentRoi)
-            val battleText = recognize(battleRoi)
-            BattleDetection(player, opponent, battleText)
+        try {
+            val playerJob = async { recognizeCard(playerRoi) }
+            val opponentJob = async { recognizeCard(opponentRoi) }
+            val battleJob = async { recognize(battleRoi) }
+            BattleDetection(playerJob.await(), opponentJob.await(), battleJob.await())
         } finally {
             playerRoi.recycle(); opponentRoi.recycle(); battleRoi.recycle()
         }
@@ -56,19 +58,22 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
      * in top-to-bottom order. CP is used to bind the HUD types/matchup to the correct
      * reserve after switches, avoiding slot-order guesses.
      */
-    suspend fun detectReserveCps(frame: Bitmap): Pair<Int?, Int?> {
-        if (frame.isRecycled) return null to null
-        val roi = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_FRAC, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_FRAC)
-        return try {
-            val raw = recognize(roi)
-            val cps = CP_REGEX.findAll(raw)
-                .mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }
-                .filter { it in 10..10000 }
-                .take(2)
-                .toList()
-            cps.getOrNull(0) to cps.getOrNull(1)
+    suspend fun detectReserveCps(frame: Bitmap): Pair<Int?, Int?> = coroutineScope {
+        if (frame.isRecycled) return@coroutineScope null to null
+        val top = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_1, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_1)
+        val bottom = crop(frame, RESERVE_LEFT_FRAC, RESERVE_TOP_2, RESERVE_RIGHT_FRAC, RESERVE_BOTTOM_2)
+        try {
+            fun parseCp(raw: String): Int? = CP_REGEX.find(raw)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toIntOrNull()
+                ?.takeIf { it in 10..10000 }
+
+            val topJob = async { parseCp(recognize(top)) }
+            val bottomJob = async { parseCp(recognize(bottom)) }
+            topJob.await() to bottomJob.await()
         } finally {
-            roi.recycle()
+            top.recycle(); bottom.recycle()
         }
     }
 
@@ -76,55 +81,58 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
      * Scans the team/party area. This is intentionally throttled by the service because
      * it is a larger OCR region than the two battle cards.
      */
-    suspend fun detectOwnTeam(frame: Bitmap): List<DetectedPokemon> {
-        if (frame.isRecycled) return emptyList()
-        val roi = crop(frame, TEAM_LEFT_FRAC, TEAM_TOP_FRAC, TEAM_RIGHT_FRAC, TEAM_BOTTOM_FRAC)
-        return try {
-            val raw = recognize(roi)
-            val lines = raw.lines().map(String::trim).filter(String::isNotBlank)
-            val paired = linkedMapOf<String, DetectedPokemon>()
+    suspend fun detectOwnTeam(frame: Bitmap): List<DetectedPokemon> = coroutineScope {
+        if (frame.isRecycled) return@coroutineScope emptyList()
 
-            // Prefer a name+CP found on the same OCR line or adjacent line. This avoids
-            // zipping an unrelated CP list onto the Pokemon list when OCR reorders text.
-            lines.forEachIndexed { index, line ->
-                val nearby = buildString {
-                    append(line)
-                    lines.getOrNull(index + 1)?.let { append(' ').append(it) }
-                }
-                val cp = CP_REGEX.find(nearby)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                val cleaned = nearby
-                    .replace(CP_REGEX, " ")
-                    .replace(Regex("[^\\p{L}♀♂' .-]+"), " ")
-                    .replace(Regex("\\s+"), " ")
-                    .trim()
-                val name = repo.canonicalPokemonName(cleaned)
-                if (name != null && cp != null && name !in paired) {
-                    paired[name] = DetectedPokemon(name, cp, 0.91f, raw)
-                }
-            }
-
-            if (paired.size >= 3) {
-                paired.values.take(3)
-            } else {
-                // Fallback for layouts where the names and CPs are rendered in separate columns.
-                val names = repo.findPokemonMentions(raw, 3)
-                val cpValues = CP_REGEX.findAll(raw)
-                    .mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }
-                    .toList()
-                names.forEachIndexed { index, name ->
-                    if (name !in paired) {
-                        paired[name] = DetectedPokemon(
-                            name = name,
-                            cp = cpValues.getOrNull(index),
-                            confidence = 0.78f,
-                            rawText = raw
-                        )
-                    }
-                }
-                paired.values.take(3)
-            }
+        // Read each team card independently. This preserves the real pairing between
+        // name and CP and prevents a shifted list such as Houndoom=1485, Cramorant=1500.
+        val slot1 = crop(frame, TEAM_SLOT_1_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_1_RIGHT, TEAM_SLOT_BOTTOM)
+        val slot2 = crop(frame, TEAM_SLOT_2_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_2_RIGHT, TEAM_SLOT_BOTTOM)
+        val slot3 = crop(frame, TEAM_SLOT_3_LEFT, TEAM_SLOT_TOP, TEAM_SLOT_3_RIGHT, TEAM_SLOT_BOTTOM)
+        try {
+            val jobs = listOf(
+                async { recognizeTeamSlot(slot1) },
+                async { recognizeTeamSlot(slot2) },
+                async { recognizeTeamSlot(slot3) }
+            )
+            jobs.mapNotNull { it.await() }
         } finally {
-            roi.recycle()
+            slot1.recycle(); slot2.recycle(); slot3.recycle()
+        }
+    }
+
+    private suspend fun recognizeTeamSlot(roi: Bitmap): DetectedPokemon? {
+        suspend fun parse(raw: String, confidence: Float): DetectedPokemon? {
+            if (raw.isBlank()) return null
+            val cp = CP_REGEX.find(raw)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toIntOrNull()
+                ?.takeIf { it in 10..10000 }
+            val name = repo.findPokemonMentions(raw, 1).firstOrNull()
+                ?: raw.lines()
+                    .asSequence()
+                    .map { line ->
+                        line.replace(CP_REGEX, " ")
+                            .replace(Regex("[^\\p{L}♀♂' .-]+"), " ")
+                            .replace(Regex("\\s+"), " ")
+                            .trim()
+                    }
+                    .mapNotNull(repo::canonicalPokemonName)
+                    .firstOrNull()
+            if (name == null) return null
+            return DetectedPokemon(name, cp, confidence, raw)
+        }
+
+        val raw = recognize(roi)
+        parse(raw, if (CP_REGEX.containsMatchIn(raw)) 0.98f else 0.90f)?.let { return it }
+
+        // Color isolation is now a fallback only, so the common path costs one OCR pass/card.
+        val filtered = filterByColor(roi, TARGET_TEXT_COLOR, COLOR_TOLERANCE)
+        return try {
+            parse(recognize(filtered), 0.90f)
+        } finally {
+            filtered.recycle()
         }
     }
 
@@ -208,16 +216,24 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
         private const val BATTLE_BOTTOM_FRAC = 0.84f
 
         // Native reserve cards on the right side during battle.
-        private const val RESERVE_LEFT_FRAC = 0.76f
-        private const val RESERVE_TOP_FRAC = 0.50f
+        // Keep the OCR boxes tight around each card so confirmation is faster and
+        // CP values cannot swap order.
+        private const val RESERVE_LEFT_FRAC = 0.80f
         private const val RESERVE_RIGHT_FRAC = 0.995f
-        private const val RESERVE_BOTTOM_FRAC = 0.77f
+        private const val RESERVE_TOP_1 = 0.545f
+        private const val RESERVE_BOTTOM_1 = 0.645f
+        private const val RESERVE_TOP_2 = 0.640f
+        private const val RESERVE_BOTTOM_2 = 0.750f
 
-        // Team-selection/party area. Scanned slowly and stopped once 3 Pokémon are known.
-        private const val TEAM_LEFT_FRAC = 0.04f
-        private const val TEAM_TOP_FRAC = 0.10f
-        private const val TEAM_RIGHT_FRAC = 0.96f
-        private const val TEAM_BOTTOM_FRAC = 0.93f
+        // Team selection card, read as three independent columns.
+        private const val TEAM_SLOT_TOP = 0.615f
+        private const val TEAM_SLOT_BOTTOM = 0.835f
+        private const val TEAM_SLOT_1_LEFT = 0.065f
+        private const val TEAM_SLOT_1_RIGHT = 0.355f
+        private const val TEAM_SLOT_2_LEFT = 0.345f
+        private const val TEAM_SLOT_2_RIGHT = 0.655f
+        private const val TEAM_SLOT_3_LEFT = 0.645f
+        private const val TEAM_SLOT_3_RIGHT = 0.945f
 
         // Lobby/rules text can appear across a large central portion of the screen.
         private const val LEAGUE_LEFT_FRAC = 0.04f
