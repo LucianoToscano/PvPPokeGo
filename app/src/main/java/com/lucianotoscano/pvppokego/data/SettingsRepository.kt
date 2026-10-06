@@ -310,7 +310,7 @@ class SettingsRepository(context: Context) {
         val root = JSONObject()
         root.put("format", "PvPPokeGo-settings")
         root.put("formatVersion", 1)
-        root.put("appVersion", "0.5.18")
+        root.put("appVersion", "0.5.19")
         val values = JSONObject()
         prefs.all.toSortedMap().forEach { (key, value) ->
             if (!isBackupKeyAllowed(key) || value == null) return@forEach

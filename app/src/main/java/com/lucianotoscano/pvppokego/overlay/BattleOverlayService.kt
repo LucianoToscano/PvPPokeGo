@@ -216,7 +216,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("0.5.18 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                startForeground(NOTIFICATION_ID, notification("0.5.19 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -1034,6 +1034,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         scanJob = scope.launch {
             var lastOcrAt = 0L
             var lastTeamOcrAt = 0L
+            var lastReserveOcrAt = 0L
             var lastLeagueOcrAt = 0L
             var consecutiveErrors = 0
 
@@ -1123,6 +1124,20 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             }
                         }
 
+                        e = engine
+                        if (
+                            settingsRepo.autoRecognition &&
+                            e != null &&
+                            e.needsReserveCardScan() &&
+                            (battleActive || now - lastBattleEvidenceAtMs <= BATTLE_VISIBILITY_GRACE_MS) &&
+                            now - lastReserveOcrAt >= RESERVE_OCR_INTERVAL_MS
+                        ) {
+                            detector?.detectReserveCps(frame)?.let { (topCp, bottomCp) ->
+                                e.onReserveCardCps(topCp, bottomCp)
+                            }
+                            lastReserveOcrAt = now
+                        }
+
                         if (settingsRepo.autoRecognition && now - lastOcrAt >= OCR_INTERVAL_MS) {
                             val d = detector?.detect(frame)
                             e = engine
@@ -1154,11 +1169,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
                                 val changes = e?.onDetection(d)
-                                if (battleActive || pairedCards) {
-                                    detector?.detectReserveCps(frame)?.let { (topCp, bottomCp) ->
-                                        e?.onReserveCardCps(topCp, bottomCp)
-                                    }
-                                }
+                                if (changes?.playerChanged == true) lastReserveOcrAt = 0L
                                 if (battleActive) historyRecorder.observeDetection(d, currentLeagueCp, now)
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
@@ -1197,7 +1208,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
                         e = engine
                         if (
-                            settingsRepo.autoRecognition && e != null && e.needsOwnTeamScan() &&
+                            settingsRepo.autoRecognition &&
+                            e != null &&
+                            e.needsOwnTeamScan() &&
+                            !battleActive &&
+                            e.activeEnemyName() == null &&
                             now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS
                         ) {
                             detector?.detectOwnTeam(frame)?.let(e::onOwnTeamDetected)
@@ -1312,7 +1327,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("0.5.18 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            startForeground(NOTIFICATION_ID, notification("0.5.19 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -1538,7 +1553,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         private const val NOTIFICATION_ID = 1107
         private const val FRAME_INTERVAL_MS = 105L
         private const val OCR_INTERVAL_MS = 520L
-        private const val TEAM_OCR_INTERVAL_MS = 1_650L
+        private const val RESERVE_OCR_INTERVAL_MS = 280L
+        private const val TEAM_OCR_INTERVAL_MS = 700L
         private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
         private const val BATTLE_VISIBILITY_GRACE_MS = 3_800L
         private const val SWITCH_CHOICE_PROMPT_GRACE_MS = 2_400L

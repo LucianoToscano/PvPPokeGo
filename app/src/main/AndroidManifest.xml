@@ -10,8 +10,8 @@
     <application
         android:name=".PvPPokeGoApp"
         android:allowBackup="false"
-        android:icon="@drawable/pvppokego_launcher"
-        android:roundIcon="@drawable/pvppokego_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="PvPPokeGo"
         android:supportsRtl="true"
         android:theme="@style/Theme.PVPPokeGo">

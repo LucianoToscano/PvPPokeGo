@@ -13,15 +13,17 @@ android {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
         targetSdk = 36
-        versionCode = 23
-        versionName = "0.5.18"
+        versionCode = 24
+        versionName = "0.5.19"
     }
 
     buildFeatures { compose = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 
     buildTypes {
-        debug { applicationIdSuffix = ".debug" }
+        // Keep the installable QA APK on the real applicationId so there is only one
+        // PvPPokeGo on the device and launcher/icon/cache cannot point to an older app.
+        debug { }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
