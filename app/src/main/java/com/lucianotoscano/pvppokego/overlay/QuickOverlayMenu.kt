@@ -249,9 +249,9 @@ class QuickOverlayMenu(
                 IconItem("⚡","Energia",settings.showEnergyProgress){settings.showEnergyProgress=!settings.showEnergyProgress;changed()}
             )
             row(
+                IconItem("HP","HP / dano",settings.showHpAssist){settings.showHpAssist=!settings.showHpAssist;changed()},
                 IconItem("↻","Timer",settings.showSwitchTimer){settings.showSwitchTimer=!settings.showSwitchTimer;changed()},
                 IconItem("H","Histórico",settings.showEnemyHistory){settings.showEnemyHistory=!settings.showEnemyHistory;changed()},
-                IconItem("◐","Opacidade",null){settings.opacity=if(settings.opacity>=.99f).3f else settings.opacity+.1f;callbacks.onSettingsChanged(false);refreshPanel()},
                 IconItem("D","Debug",settings.debugMode){settings.debugMode=!settings.debugMode;changed()}
             )
             row(
@@ -339,6 +339,10 @@ class QuickOverlayMenu(
             }
             addRow(parent, "⚡", "Progresso de energia", settings.showEnergyProgress) {
                 settings.showEnergyProgress = !settings.showEnergyProgress
+                changed()
+            }
+            addRow(parent, "HP", "HP e previsão de dano", settings.showHpAssist) {
+                settings.showHpAssist = !settings.showHpAssist
                 changed()
             }
             addRow(parent, "↻", "Timer de troca", settings.showSwitchTimer) {
