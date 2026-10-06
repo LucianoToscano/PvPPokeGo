@@ -1,5 +1,7 @@
 package com.lucianotoscano.pvppokego.data
 
+import com.lucianotoscano.pvppokego.BuildConfig
+
 import android.content.Context
 import org.json.JSONObject
 
@@ -61,6 +63,10 @@ class SettingsRepository(context: Context) {
     var showHudText: Boolean
         get() = prefs.getBoolean("show_hud_text", true)
         set(v) = prefs.edit().putBoolean("show_hud_text", v).apply()
+
+    var showHpAssist: Boolean
+        get() = prefs.getBoolean("show_hp_assist", true)
+        set(v) = prefs.edit().putBoolean("show_hp_assist", v).apply()
 
     var showEnemyHistory: Boolean
         get() = prefs.getBoolean("show_enemy_history", false)
@@ -310,7 +316,7 @@ class SettingsRepository(context: Context) {
         val root = JSONObject()
         root.put("format", "PvPPokeGo-settings")
         root.put("formatVersion", 1)
-        root.put("appVersion", "0.5.21")
+        root.put("appVersion", BuildConfig.VERSION_NAME)
         val values = JSONObject()
         prefs.all.toSortedMap().forEach { (key, value) ->
             if (!isBackupKeyAllowed(key) || value == null) return@forEach
@@ -377,7 +383,7 @@ class SettingsRepository(context: Context) {
             "league_mode", "last_detected_league_cp", "show_strong_types",
             "show_current_indicator", "analyze_reserves", "show_reserve_types",
             "show_enemy_moves", "show_charged_counter", "show_energy_progress",
-            "show_hud_text", "show_enemy_history", "show_switch_timer", "debug_mode",
+            "show_hud_text", "show_hp_assist", "show_enemy_history", "show_switch_timer", "debug_mode",
             "layout_locked", "overlay_scale", "overlay_opacity", "top_hud_position_version", "layout_preset_version"
         )
         val HUD_BLOCKS = listOf(
