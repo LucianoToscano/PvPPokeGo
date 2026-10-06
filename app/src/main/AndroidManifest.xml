@@ -11,8 +11,8 @@
     <application
         android:name=".PvPPokeGoApp"
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/pvppokego_launcher"
+        android:roundIcon="@drawable/pvppokego_launcher"
         android:label="PvPPokeGo"
         android:supportsRtl="true"
         android:theme="@style/Theme.PVPPokeGo">
@@ -32,19 +32,8 @@
             android:foregroundServiceType="mediaProjection|specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="PvP visual overlay analysis with user-enabled screenshot compatibility" />
+                android:value="PvP visual overlay service while screen capture is temporarily unavailable" />
         </service>
 
-        <service
-            android:name=".capture.PvPPokeGoAccessibilityCaptureService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_capture_service" />
-        </service>
     </application>
 </manifest>

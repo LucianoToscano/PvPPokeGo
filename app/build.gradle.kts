@@ -13,13 +13,26 @@ android {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
         targetSdk = 36
-        versionCode = 25
-        versionName = "0.5.20"
+        versionCode = 26
+        versionName = "0.5.21"
     }
 
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    flavorDimensions += "captureMode"
+    productFlavors {
+        create("standard") {
+            dimension = "captureMode"
+            buildConfigField("boolean", "RECORDER_COMPAT", "false")
+        }
+        create("recorderCompat") {
+            dimension = "captureMode"
+            buildConfigField("boolean", "RECORDER_COMPAT", "true")
+            versionNameSuffix = "-recorder"
+        }
     }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 

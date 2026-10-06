@@ -136,7 +136,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         when (intent?.action) {
             ACTION_STOP -> { historyRecorder.finish(); stopSelf(); return START_NOT_STICKY }
             ACTION_START_ACCESSIBILITY_CAPTURE -> {
-                startAccessibilityCaptureMode()
+                if (BuildConfig.RECORDER_COMPAT) {
+                    startAccessibilityCaptureMode()
+                } else {
+                    setForegroundNotification(
+                        notification("APK padrão: modo gravador externo por Acessibilidade não incluído")
+                    )
+                }
                 return START_STICKY
             }
             ACTION_TOGGLE_VISION -> {
@@ -242,7 +248,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 withContext(Dispatchers.Main) {
                     attachOverlay()
                     setForegroundNotification(
-                        notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • modo gravador externo")
+                        notification("${BuildConfig.VERSION_NAME} • ${leagueLabel(currentLeagueCp)} • modo gravador externo")
                     )
                     redraw()
                 }
@@ -291,7 +297,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                setForegroundNotification(notification("0.5.20 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                setForegroundNotification(notification("${BuildConfig.VERSION_NAME} • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 setForegroundNotification(notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -1620,7 +1626,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            setForegroundNotification(notification("0.5.20 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            setForegroundNotification(notification("${BuildConfig.VERSION_NAME} • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -1752,7 +1758,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             runCatching { screenRecorder?.stop() }
         }
 
-        usingAccessibilityFallback = AccessibilityScreenCapture.isConnected
+        usingAccessibilityFallback =
+            BuildConfig.RECORDER_COMPAT && AccessibilityScreenCapture.isConnected
         if (usingAccessibilityFallback) {
             AccessibilityScreenCapture.clearLatest()
             lastAccessibilityFrameAtMs = 0L
