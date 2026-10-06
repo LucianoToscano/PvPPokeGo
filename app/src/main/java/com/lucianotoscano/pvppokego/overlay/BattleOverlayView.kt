@@ -214,7 +214,7 @@ class BattleOverlayView(
             val sy = ry(y)
             val bs = settings.blockScale(BLOCK_PLAYER_MATCHUP)
             drawMatchupIndicator(canvas, sx, sy, state.playerMatchup, 14f*u()*bs)
-            if (settings.showHudText) {
+            if (settings.showHudText && settings.showHpAssist) {
                 state.playerHpRatio?.let { hp ->
                     paint.color = hudColor(Color.WHITE, .92f)
                     paint.textAlign = Paint.Align.CENTER
@@ -316,6 +316,7 @@ class BattleOverlayView(
     }
 
     private fun drawIncomingDamagePreview(canvas: Canvas) {
+        if (!settings.showHpAssist) return
         val forecast = state.incomingDamagePreview ?: return
         val hp = state.playerHpRatio?.coerceIn(0f, 1f) ?: return
         val yFraction = state.playerHpBarYFraction?.takeIf { it in 0f..1f } ?: return
@@ -623,7 +624,9 @@ class BattleOverlayView(
                 }
                 val recommendation = reserve.recommendation
                     ?.takeIf { it == "MELHOR" || it == "EVITAR" }
-                val hpLabel = reserve.hpRatio?.let { "HP " + (it.coerceIn(0f, 1f) * 100f).toInt() + "%" }
+                val hpLabel = if (settings.showHpAssist) {
+                    reserve.hpRatio?.let { "HP " + (it.coerceIn(0f, 1f) * 100f).toInt() + "%" }
+                } else null
                 val lifeLabel = if (
                     reserve.status == com.lucianotoscano.pvppokego.data.TeamPokemonStatus.FAINTED
                 ) "DESMAIADO" else null
