@@ -113,9 +113,6 @@ class BattleEngine(private val repo: GameDataRepository) {
         reserveCardSpeciesIds.fill(null)
         reserveSpeciesCandidate.fill(null)
         reserveSpeciesStreak.fill(0)
-        reserveCardSpeciesIds.fill(null)
-        reserveSpeciesCandidate.fill(null)
-        reserveSpeciesStreak.fill(0)
         ownSwitchReadyAtMs = 0L
         opponentSwitchReadyAtMs = 0L
         chargedPendingSinceMs = null
@@ -328,6 +325,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         reserveCardDexes.fill(null)
         reserveDexCandidate.fill(null)
         reserveDexStreak.fill(0)
+        reserveCardSpeciesIds.fill(null)
+        reserveSpeciesCandidate.fill(null)
+        reserveSpeciesStreak.fill(0)
     }
 
     fun needsOwnTeamScan(): Boolean =
