@@ -1951,7 +1951,10 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             usingAccessibilityFallback -> "Gravador externo • captura compatível (análise reduzida)"
             projectionRevokedBySystem && !AccessibilityScreenCapture.isConnected ->
                 "Captura pausada pelo gravador externo • ative compatibilidade"
-            screenRecorder?.isRecording == true -> "● GRAVANDO • ${leagueLabel(currentLeagueCp)} • HUD ativo"
+            screenRecorder?.isRecording == true && screenRecorder?.hasEncodedSample == true ->
+                "● GRAVANDO • ${leagueLabel(currentLeagueCp)} • HUD ativo"
+            screenRecorder?.isRecording == true ->
+                "Preparando gravação • ${screenRecorder?.activeProfileLabel ?: "encoder"}"
             overlaySuppressed -> "Sobreposição oculta"
             visionPaused -> "Visão pausada"
             else -> baseText ?: "${leagueLabel(currentLeagueCp)} • HUD PvP ativo"
