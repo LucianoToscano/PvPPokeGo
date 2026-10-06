@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,7 +14,7 @@ val launcherIconB64 = rootProject.file(".icon/pvppokego_launcher.webp.b64")
 val launcherIconOut = project.file("src/main/res/drawable-nodpi/ic_launcher_pvppokego.webp")
 if (launcherIconB64.exists()) {
     launcherIconOut.parentFile.mkdirs()
-    val decoded = java.util.Base64.getMimeDecoder().decode(launcherIconB64.readText().trim())
+    val decoded = Base64.getMimeDecoder().decode(launcherIconB64.readText().trim())
     if (!launcherIconOut.exists() || !launcherIconOut.readBytes().contentEquals(decoded)) {
         launcherIconOut.writeBytes(decoded)
     }
