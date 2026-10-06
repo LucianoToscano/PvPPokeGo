@@ -43,6 +43,8 @@ class BattleHistoryRepository(context: Context) {
 
     fun exportJson(): String = json.encodeToString(loadHistory())
 
+    fun exportJson(): String = json.encodeToString(loadHistory())
+
     fun append(entry: BattleHistoryEntry) {
         val next = (listOf(entry) + loadHistory()).take(MAX_BATTLES)
         prefs.edit().putString(KEY_HISTORY, json.encodeToString(next)).apply()
