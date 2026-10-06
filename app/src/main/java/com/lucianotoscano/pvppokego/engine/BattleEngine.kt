@@ -1141,7 +1141,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     speciesId = stableSpeciesId,
                     cp = cp,
                     types = types,
-                    matchup = if (identityReady) classifyReserveScore(score) else MatchupState.UNKNOWN,
+                    matchup = if (identityReady) ReserveMatchupPolicy.classifyScore(score) else MatchupState.UNKNOWN,
                     // Visibility belongs to a physical native card. Until that card is
                     // mapped, do not mark a known team member dead just because the
                     // opposite card temporarily disappeared.
@@ -1249,12 +1249,6 @@ class BattleEngine(private val repo: GameDataRepository) {
             ?.let(repo::possibleFastMoves)
             ?.size ?: 0) <= 1 -> EnergyConfidence.CONFIRMED
         else -> EnergyConfidence.ESTIMATED
-    }
-
-    private fun classifyReserveScore(score: Double): MatchupState = when {
-        score >= 0.16 -> MatchupState.FAVORABLE
-        score <= -0.16 -> MatchupState.UNFAVORABLE
-        else -> MatchupState.NEUTRAL
     }
 
     private fun reserveScore(
