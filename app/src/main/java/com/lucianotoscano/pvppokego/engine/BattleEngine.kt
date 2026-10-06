@@ -52,7 +52,18 @@ class BattleEngine(private val repo: GameDataRepository) {
     private data class OwnTeamSlot(
         val slot: Int,
         var name: String,
-        var cp: Int?
+        var cp: Int?,
+        var speciesId: String? = null,
+        var dex: Int? = null,
+        var identityConfidence: Float = 0f
+    )
+
+    private data class TeamIdentityCandidate(
+        val name: String,
+        val cp: Int?,
+        val confidence: Float,
+        val speciesId: String?,
+        val dex: Int?
     )
 
     private val ownTeam = linkedMapOf<String, Int?>()
@@ -139,22 +150,52 @@ class BattleEngine(private val repo: GameDataRepository) {
         val oldPlayer = playerName
         val oldEnemy = enemyName
 
-        d.player?.let {
-            val visualName = it.visualSpeciesId?.let(repo::pokemon)?.speciesName
-            val ocrCanonical = repo.canonicalPokemonName(it.name) ?: it.name
-            val cpPinnedSlot = it.cp?.let { rawCp ->
+        d.player?.let { detected ->
+            val cpPinnedSlot = detected.cp?.let { rawCp ->
                 ownTeamSlots.filter { slot -> slot.cp == rawCp }.singleOrNull()
             }
-            val canonical = visualName ?: cpPinnedSlot?.name ?: ocrCanonical
-            val stableCp = playerCpTracker.observe(normalize(canonical), it.cp)
-            rememberOwnPokemon(canonical, stableCp)
-            if (!canonical.equals(playerName, ignoreCase = true)) onPlayerChanged(canonical, stableCp)
-            else if (stableCp != null) playerCp = stableCp
+            val visualDef = detected.visualSpeciesId
+                ?.let(repo::pokemon)
+                ?.takeIf {
+                    detected.visualConfidence == null ||
+                        detected.visualConfidence >= IdentityThresholds.ACTIVE_VISUAL_MIN_CONFIDENCE
+                }
+            val ocrCanonical = repo.canonicalPokemonName(detected.name) ?: detected.name
+            val ocrDef = repo.pokemon(ocrCanonical)
+
+            // A unique known team CP wins on our side because it preserves the exact
+            // form previously captured on the team screen. Visual evidence is next.
+            val chosenDef = cpPinnedSlot?.let(::slotDefinition) ?: visualDef ?: ocrDef
+            val canonical = chosenDef?.speciesName ?: cpPinnedSlot?.name ?: ocrCanonical
+            val speciesId = chosenDef?.speciesId ?: cpPinnedSlot?.speciesId ?: detected.visualSpeciesId
+
+            val stableCp = playerCpTracker.observe(normalize(speciesId ?: canonical), detected.cp)
+            rememberOwnPokemon(
+                name = canonical,
+                cp = stableCp,
+                speciesId = speciesId,
+                dex = chosenDef?.dex?.takeIf { it > 0 } ?: detected.visualDex,
+                confidence = maxOf(detected.confidence, detected.visualConfidence ?: 0f)
+            )
+            if (!sameActiveIdentity(playerName, canonical)) {
+                onPlayerChanged(canonical, stableCp)
+            } else if (stableCp != null) {
+                playerCp = stableCp
+            }
         }
-        d.opponent?.let {
-            val canonical = repo.canonicalPokemonName(it.name) ?: it.name
-            val stableCp = enemyCpTracker.observe(normalize(canonical), it.cp)
-            if (!canonical.equals(enemyName, ignoreCase = true)) {
+
+        d.opponent?.let { detected ->
+            val visualDef = detected.visualSpeciesId
+                ?.let(repo::pokemon)
+                ?.takeIf {
+                    detected.visualConfidence == null ||
+                        detected.visualConfidence >= IdentityThresholds.ACTIVE_VISUAL_MIN_CONFIDENCE
+                }
+            val ocrCanonical = repo.canonicalPokemonName(detected.name) ?: detected.name
+            val chosenDef = visualDef ?: repo.pokemon(ocrCanonical)
+            val canonical = chosenDef?.speciesName ?: ocrCanonical
+            val stableCp = enemyCpTracker.observe(normalize(chosenDef?.speciesId ?: canonical), detected.cp)
+            if (!sameActiveIdentity(enemyName, canonical)) {
                 onEnemyChanged(canonical)
                 enemyCp = stableCp
             } else if (stableCp != null) {
@@ -162,8 +203,8 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
         }
 
-        val playerChanged = oldPlayer != null && !oldPlayer.equals(playerName, ignoreCase = true)
-        val enemyChanged = oldEnemy != null && !oldEnemy.equals(enemyName, ignoreCase = true)
+        val playerChanged = oldPlayer != null && !sameActiveIdentity(oldPlayer, playerName)
+        val enemyChanged = oldEnemy != null && !sameActiveIdentity(oldEnemy, enemyName)
         val now = System.currentTimeMillis()
         if (playerChanged) {
             reserveSlotVisible.fill(null)
@@ -176,38 +217,83 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     fun onOwnTeamDetected(team: List<DetectedPokemon>) {
-        val canonical = team
-            .map { p -> Triple(repo.canonicalPokemonName(p.name) ?: p.name, p.cp, p.confidence) }
-            // Same species can exist on both sides (e.g. enemy Cramorant PC1483 and
-            // own reserve Cramorant PC1485). Never discard an own Pokemon by name alone.
-            .filterNot { (name, cp, _) ->
-                val sameSpecies = name.equals(enemyName, ignoreCase = true)
-                val sameExactCard = enemyCp != null && cp != null && enemyCp == cp
-                sameSpecies && sameExactCard
+        val candidates = team.mapNotNull { detected ->
+            val visualDef = detected.visualSpeciesId
+                ?.let(repo::pokemon)
+                ?.takeIf {
+                    detected.visualConfidence == null ||
+                        detected.visualConfidence >= IdentityThresholds.TEAM_VISUAL_MIN_CONFIDENCE
+                }
+            val ocrCanonical = repo.canonicalPokemonName(detected.name) ?: detected.name
+            val ocrDef = repo.pokemon(ocrCanonical)
+            val chosenDef = visualDef ?: ocrDef
+            val canonical = chosenDef?.speciesName ?: ocrCanonical
+            val speciesId = chosenDef?.speciesId ?: detected.visualSpeciesId
+            val dex = chosenDef?.dex?.takeIf { it > 0 } ?: detected.visualDex
+
+            val sameOpponentCard =
+                canonical.equals(enemyName, ignoreCase = true) &&
+                    enemyCp != null && detected.cp != null && enemyCp == detected.cp
+            if (sameOpponentCard) {
+                null
+            } else {
+                TeamIdentityCandidate(
+                    name = canonical,
+                    cp = detected.cp,
+                    confidence = maxOf(detected.confidence, detected.visualConfidence ?: 0f),
+                    speciesId = speciesId,
+                    dex = dex
+                )
             }
-            .distinctBy { (name, cp, _) -> "${normalize(name)}:${cp ?: 0}" }
+        }
+            .distinctBy { candidate ->
+                (candidate.speciesId?.let(::normalize) ?: normalize(candidate.name)) +
+                    ":" + (candidate.cp ?: 0)
+            }
             .take(3)
 
-        // A complete team scan defines stable slot identities for the whole battle.
-        // Require name+CP for all three cards before replacing the stable mapping;
-        // a partial/uncertain OCR result may enrich existing slots but may not reorder them.
-        val completeTeam = canonical.size >= 3 && canonical.take(3).all { (_, cp, confidence) ->
-            cp != null && confidence >= 0.90f
+        val completeTeam = candidates.size >= 3 && candidates.take(3).all { c ->
+            c.cp != null &&
+                c.confidence >= IdentityThresholds.MIN_STABLE_TEAM_CONFIDENCE &&
+                (!c.speciesId.isNullOrBlank() || c.name.isNotBlank())
         }
+
         if (completeTeam) {
             ownTeamSlots.clear()
-            canonical.forEachIndexed { index, (name, cp, _) ->
-                ownTeamSlots += OwnTeamSlot(index, name, cp)
-                rememberOwnPokemon(name, cp)
+            candidates.forEachIndexed { index, c ->
+                ownTeamSlots += OwnTeamSlot(
+                    slot = index,
+                    name = c.name,
+                    cp = c.cp,
+                    speciesId = c.speciesId,
+                    dex = c.dex,
+                    identityConfidence = c.confidence
+                )
+                rememberOwnPokemon(c.name, c.cp, c.speciesId, c.dex, c.confidence)
             }
         } else {
-            canonical.forEach { (name, cp, _) ->
-                rememberOwnPokemon(name, cp)
-                val existing = ownTeamSlots.firstOrNull { it.name.equals(name, true) && (cp == null || it.cp == null || it.cp == cp) }
+            candidates.forEach { c ->
+                rememberOwnPokemon(c.name, c.cp, c.speciesId, c.dex, c.confidence)
+                val existing = findOwnSlot(c.name, c.cp, c.speciesId)
                 if (existing != null) {
-                    if (cp != null) existing.cp = cp
+                    if (c.cp != null) existing.cp = c.cp
+                    if (!c.speciesId.isNullOrBlank()) existing.speciesId = c.speciesId
+                    if (c.dex != null && c.dex > 0) existing.dex = c.dex
+                    existing.identityConfidence = maxOf(existing.identityConfidence, c.confidence)
+                    slotDefinition(existing)?.let { def ->
+                        existing.name = def.speciesName
+                        existing.speciesId = def.speciesId
+                        existing.dex = def.dex.takeIf { it > 0 } ?: existing.dex
+                    }
                 } else if (ownTeamSlots.size < 3) {
-                    ownTeamSlots += OwnTeamSlot(ownTeamSlots.size, name, cp)
+                    ownTeamSlots += OwnTeamSlot(
+                        slot = ownTeamSlots.size,
+                        name = c.name,
+                        cp = c.cp,
+                        speciesId = c.speciesId,
+                        dex = c.dex,
+                        identityConfidence = c.confidence
+                    )
                 }
             }
         }
@@ -261,7 +347,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
 
             val matchingMembers = ownTeamSlots.filter { slot ->
-                repo.pokemon(slot.name)?.speciesId.equals(speciesId, ignoreCase = true)
+                slot.speciesId.equals(speciesId, ignoreCase = true)
             }
             if (matchingMembers.size != 1) return
 
@@ -286,7 +372,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
 
             val matchingMembers = ownTeamSlots.filter { slot ->
-                repo.pokemon(slot.name)?.dex?.takeIf { it > 0 } == dex
+                (slot.dex ?: slotDefinition(slot)?.dex?.takeIf { it > 0 }) == dex
             }
             if (matchingMembers.size != 1) return
 
@@ -353,7 +439,15 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
 
         val team = if (ownTeamSlots.isNotEmpty()) {
-            ownTeamSlots.mapNotNull { identity(it.name, it.cp) }
+            ownTeamSlots.map { slot ->
+                BattleCorrespondenceTracker.Identity(
+                    name = slot.name,
+                    speciesId = slot.speciesId ?: slotDefinition(slot)?.speciesId,
+                    cp = slot.cp,
+                    confidence = slot.identityConfidence
+                        .coerceAtLeast(IdentityThresholds.MIN_STABLE_TEAM_CONFIDENCE)
+                )
+            }
         } else {
             ownTeam.mapNotNull { (name, cp) -> identity(name, cp) }
         }
@@ -390,7 +484,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             } else {
                 null
             }
-            val def = pinnedOwn?.name?.let(repo::pokemon)
+            val def = pinnedOwn?.let(::slotDefinition)
                 ?: pokemon.visualSpeciesId?.let(repo::pokemon)
                 ?: repo.pokemon(pokemon.name)
             val confidence = maxOf(
@@ -399,7 +493,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             ).coerceIn(0f, 1f)
             return BattleCorrespondenceTracker.Identity(
                 name = def?.speciesName ?: pinnedOwn?.name ?: pokemon.name,
-                speciesId = def?.speciesId ?: pokemon.visualSpeciesId,
+                speciesId = pinnedOwn?.speciesId ?: def?.speciesId ?: pokemon.visualSpeciesId,
                 cp = pokemon.cp,
                 confidence = confidence
             )
@@ -420,25 +514,67 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
     fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
-    private fun rememberOwnPokemon(name: String, cp: Int?) {
+    private fun sameActiveIdentity(a: String?, b: String?): Boolean {
+        if (a.isNullOrBlank() || b.isNullOrBlank()) return a == b
+        val ad = repo.pokemon(a)
+        val bd = repo.pokemon(b)
+        if (ad != null && bd != null) {
+            return normalize(ad.speciesId) == normalize(bd.speciesId)
+        }
+        return a.equals(b, ignoreCase = true)
+    }
+
+    private fun slotDefinition(slot: OwnTeamSlot) =
+        slot.speciesId?.let(repo::pokemon) ?: repo.pokemon(slot.name)
+
+    private fun findOwnSlot(name: String, cp: Int?, speciesId: String?): OwnTeamSlot? {
+        speciesId?.takeIf { it.isNotBlank() }?.let { exact ->
+            ownTeamSlots.firstOrNull {
+                !it.speciesId.isNullOrBlank() && normalize(it.speciesId!!) == normalize(exact)
+            }?.let { return it }
+        }
+        cp?.let { value ->
+            ownTeamSlots.filter { it.cp == value }.singleOrNull()?.let { return it }
+        }
+        return ownTeamSlots.firstOrNull {
+            it.name.equals(name, ignoreCase = true) &&
+                (cp == null || it.cp == null || it.cp == cp)
+        }
+    }
+
+    private fun rememberOwnPokemon(
+        name: String,
+        cp: Int?,
+        speciesId: String? = null,
+        dex: Int? = null,
+        confidence: Float = 0f
+    ) {
         val existingKey = ownTeam.keys.firstOrNull { it.equals(name, ignoreCase = true) }
         if (existingKey == null && ownTeam.size < 3) ownTeam[name] = cp
         else if (existingKey != null && cp != null) ownTeam[existingKey] = cp
 
-        val slot = ownTeamSlots.firstOrNull {
-            it.name.equals(name, ignoreCase = true) && (cp == null || it.cp == null || it.cp == cp)
+        val slot = findOwnSlot(name, cp, speciesId)
+        if (slot != null) {
+            if (cp != null) slot.cp = cp
+            if (!speciesId.isNullOrBlank()) slot.speciesId = speciesId
+            if (dex != null && dex > 0) slot.dex = dex
+            slot.identityConfidence = maxOf(slot.identityConfidence, confidence)
+            slotDefinition(slot)?.let { def ->
+                slot.name = def.speciesName
+                slot.speciesId = def.speciesId
+                if (def.dex > 0) slot.dex = def.dex
+            }
         }
-        if (slot != null && cp != null) slot.cp = cp
     }
 
     private fun ownIdentityKey(name: String, cp: Int?): String {
-        val exact = ownTeamSlots.firstOrNull {
-            it.name.equals(name, ignoreCase = true) && (cp == null || it.cp == null || it.cp == cp)
-        }
+        val exact = findOwnSlot(name, cp, repo.pokemon(name)?.speciesId)
         return if (exact != null) {
-            "slot${exact.slot}:${normalize(exact.name)}:${exact.cp ?: cp ?: 0}"
+            val identity = exact.speciesId ?: slotDefinition(exact)?.speciesId ?: exact.name
+            "slot${exact.slot}:${normalize(identity)}:${exact.cp ?: cp ?: 0}"
         } else {
-            "own:${normalize(name)}:${cp ?: 0}"
+            val identity = repo.pokemon(name)?.speciesId ?: name
+            "own:${normalize(identity)}:${cp ?: 0}"
         }
     }
 
@@ -952,12 +1088,13 @@ class BattleEngine(private val repo: GameDataRepository) {
         if (slots.isEmpty()) return emptyList()
 
         val members = slots.map { slot ->
+            val def = slotDefinition(slot)
             ReserveCardMatcher.Member(
                 slot = slot.slot,
-                name = slot.name,
+                name = def?.speciesName ?: slot.name,
                 cp = slot.cp,
-                dex = repo.pokemon(slot.name)?.dex?.takeIf { it > 0 },
-                speciesId = repo.pokemon(slot.name)?.speciesId
+                dex = slot.dex ?: def?.dex?.takeIf { it > 0 },
+                speciesId = slot.speciesId ?: def?.speciesId
             )
         }
         return ReserveCardMatcher.resolve(
@@ -1063,6 +1200,12 @@ class BattleEngine(private val repo: GameDataRepository) {
     private fun normalizeText(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "")
         .replace(Regex("[^a-z0-9]+"), "")
+
+    private object IdentityThresholds {
+        const val MIN_STABLE_TEAM_CONFIDENCE = 0.90f
+        const val TEAM_VISUAL_MIN_CONFIDENCE = 0.76f
+        const val ACTIVE_VISUAL_MIN_CONFIDENCE = 0.80f
+    }
 
     companion object {
         private const val RESERVE_VISUAL_MIN_CONFIDENCE = 0.76f
