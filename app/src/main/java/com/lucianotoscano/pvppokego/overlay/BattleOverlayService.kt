@@ -25,6 +25,7 @@ import androidx.core.app.NotificationCompat
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
+import com.lucianotoscano.pvppokego.security.TrialManager
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
 import com.lucianotoscano.pvppokego.data.BattleHistoryRecorder
 import com.lucianotoscano.pvppokego.data.BattleUiState
@@ -95,6 +96,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     override fun onCreate() {
         super.onCreate()
+
+        // === TRIAL 15 DIAS ===
+        if (!TrialManager.isTrialValid(this)) {
+            stopSelf()
+            return
+        }
         settingsRepo = SettingsRepository(this)
         settingsRepo.ensureTopHudSafeV4()
         settingsRepo.ensureApprovedLayoutV13()
