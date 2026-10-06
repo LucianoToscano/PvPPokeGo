@@ -103,22 +103,26 @@ class BattleOcrDetector(private val repo: GameDataRepository) : AutoCloseable {
                 }
             }
 
-            if (paired.size >= 3) return@try paired.values.take(3)
-
-            // Fallback for layouts where the names and CPs are rendered in separate columns.
-            val names = repo.findPokemonMentions(raw, 3)
-            val cpValues = CP_REGEX.findAll(raw).mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }.toList()
-            names.forEachIndexed { index, name ->
-                if (name !in paired) {
-                    paired[name] = DetectedPokemon(
-                        name = name,
-                        cp = cpValues.getOrNull(index),
-                        confidence = 0.78f,
-                        rawText = raw
-                    )
+            if (paired.size >= 3) {
+                paired.values.take(3)
+            } else {
+                // Fallback for layouts where the names and CPs are rendered in separate columns.
+                val names = repo.findPokemonMentions(raw, 3)
+                val cpValues = CP_REGEX.findAll(raw)
+                    .mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }
+                    .toList()
+                names.forEachIndexed { index, name ->
+                    if (name !in paired) {
+                        paired[name] = DetectedPokemon(
+                            name = name,
+                            cp = cpValues.getOrNull(index),
+                            confidence = 0.78f,
+                            rawText = raw
+                        )
+                    }
                 }
+                paired.values.take(3)
             }
-            paired.values.take(3)
         } finally {
             roi.recycle()
         }
