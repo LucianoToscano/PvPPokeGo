@@ -4,6 +4,9 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -161,6 +164,18 @@ class GameDataRepository(private val context: Context) {
     fun offlineSnapshotMetadata(): String? = runCatching {
         context.assets.open("pvpoke_snapshot.json").bufferedReader().use { it.readText() }
     }.getOrNull()
+
+    fun offlineSnapshotVersion(): String? = offlineSnapshotMetadata()?.let { raw ->
+        runCatching {
+            val obj = json.parseToJsonElement(raw).jsonObject
+            val generated = obj["generatedAtUtc"]?.jsonPrimitive?.contentOrNull
+            val ref = obj["pvpokeRef"]?.jsonPrimitive?.contentOrNull
+            listOfNotNull(
+                ref?.takeIf { it.isNotBlank() }?.let { "PvPoke:$it" },
+                generated?.takeIf { it.isNotBlank() }?.let { "snapshot:$it" }
+            ).joinToString(" • ").takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
 
     fun localizedMoveName(move: MoveDef): String = moveNamesPtBr[normalizeId(move.moveId)] ?: move.name
 
