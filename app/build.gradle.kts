@@ -5,6 +5,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// Launcher icon supplied for the trial build.
+// Stored as base64 text so the repository remains text-only; Gradle restores
+// the WebP resource during configuration before Android resource processing.
+val launcherIconB64 = rootProject.file(".icon/pvppokego_launcher.webp.b64")
+val launcherIconOut = project.file("src/main/res/drawable-nodpi/ic_launcher_pvppokego.webp")
+if (launcherIconB64.exists()) {
+    launcherIconOut.parentFile.mkdirs()
+    val decoded = java.util.Base64.getMimeDecoder().decode(launcherIconB64.readText().trim())
+    if (!launcherIconOut.exists() || !launcherIconOut.readBytes().contentEquals(decoded)) {
+        launcherIconOut.writeBytes(decoded)
+    }
+}
+
 android {
     namespace = "com.lucianotoscano.pvppokego"
     compileSdk = 36
@@ -13,8 +26,8 @@ android {
         applicationId = "com.lucianotoscano.pvppokego"
         minSdk = 29
         targetSdk = 36
-        versionCode = 20
-        versionName = "0.5.15"
+        versionCode = 21
+        versionName = "0.5.15-trial15"
     }
 
     buildFeatures { compose = true }
@@ -23,7 +36,8 @@ android {
     buildTypes {
         debug { applicationIdSuffix = ".debug" }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
