@@ -230,7 +230,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun onOwnTeamDetected(team: List<DetectedPokemon>) {
         val candidates = team
-            .mapNotNull(::resolveOwnTeamCandidate)
+            .mapNotNull(::resolveTeamIdentityCandidate)
             // Same species can exist on both sides. Only discard an exact opponent card,
             // never a same-name reserve with a different CP or form.
             .filterNot { candidate ->
@@ -253,7 +253,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         // Only a complete, high-confidence scan may replace all slot identities.
         val completeTeam = candidates.size >= 3 && candidates.take(3).all { candidate ->
             candidate.cp != null &&
-                candidate.confidence >= TEAM_SLOT_MIN_CONFIDENCE &&
+                candidate.confidence >= IdentityThresholds.MIN_STABLE_TEAM_CONFIDENCE &&
                 !candidate.speciesId.isNullOrBlank()
         }
 
@@ -265,7 +265,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                     name = candidate.name,
                     cp = candidate.cp,
                     speciesId = candidate.speciesId,
-                    dex = candidate.dex
+                    dex = candidate.dex,
+                    identityConfidence = candidate.confidence
                 )
                 rememberOwnPokemon(
                     candidate.name,
@@ -282,7 +283,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     candidate.speciesId,
                     candidate.dex
                 )
-                val existing = findOwnTeamSlot(
+                val existing = findOwnSlot(
                     name = candidate.name,
                     cp = candidate.cp,
                     speciesId = candidate.speciesId
@@ -291,6 +292,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     if (candidate.cp != null) existing.cp = candidate.cp
                     if (!candidate.speciesId.isNullOrBlank()) existing.speciesId = candidate.speciesId
                     if (candidate.dex != null && candidate.dex > 0) existing.dex = candidate.dex
+                    existing.identityConfidence = maxOf(existing.identityConfidence, candidate.confidence)
                     existing.name = candidate.name
                 } else if (ownTeamSlots.size < 3) {
                     ownTeamSlots += OwnTeamSlot(
@@ -298,7 +300,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                         name = candidate.name,
                         cp = candidate.cp,
                         speciesId = candidate.speciesId,
-                        dex = candidate.dex
+                        dex = candidate.dex,
+                        identityConfidence = candidate.confidence
                     )
                 }
             }
@@ -306,11 +309,11 @@ class BattleEngine(private val repo: GameDataRepository) {
         rebindOwnActiveStateToStableSlot()
     }
 
-    private fun resolveOwnTeamCandidate(pokemon: DetectedPokemon): OwnTeamCandidate? {
+    private fun resolveTeamIdentityCandidate(pokemon: DetectedPokemon): TeamIdentityCandidate? {
         val ocrCanonical = repo.canonicalPokemonName(pokemon.name) ?: pokemon.name
         val ocrDef = repo.pokemon(ocrCanonical)
         val visualDef = if (
-            (pokemon.visualConfidence ?: 0f) >= TEAM_VISUAL_ID_MIN_CONFIDENCE
+            (pokemon.visualConfidence ?: 0f) >= IdentityThresholds.TEAM_VISUAL_MIN_CONFIDENCE
         ) {
             repo.pokemonForVisualIdentity(
                 pokemon.visualSpeciesId,
@@ -330,7 +333,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
         val name = resolved?.speciesName ?: ocrCanonical
         if (name.isBlank()) return null
-        return OwnTeamCandidate(
+        return TeamIdentityCandidate(
             name = name,
             cp = pokemon.cp,
             confidence = pokemon.confidence,
@@ -553,14 +556,22 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
     fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
-    private fun sameActiveIdentity(a: String?, b: String?): Boolean {
-        if (a.isNullOrBlank() || b.isNullOrBlank()) return a == b
-        val ad = repo.pokemon(a)
-        val bd = repo.pokemon(b)
+    private fun samePokemonIdentity(
+        aName: String?,
+        aSpeciesId: String?,
+        bName: String?,
+        bSpeciesId: String?
+    ): Boolean {
+        if (!aSpeciesId.isNullOrBlank() && !bSpeciesId.isNullOrBlank()) {
+            return normalize(aSpeciesId) == normalize(bSpeciesId)
+        }
+        if (aName.isNullOrBlank() || bName.isNullOrBlank()) return aName == bName
+        val ad = aSpeciesId?.let(repo::pokemon) ?: repo.pokemon(aName)
+        val bd = bSpeciesId?.let(repo::pokemon) ?: repo.pokemon(bName)
         if (ad != null && bd != null) {
             return normalize(ad.speciesId) == normalize(bd.speciesId)
         }
-        return a.equals(b, ignoreCase = true)
+        return aName.equals(bName, ignoreCase = true)
     }
 
     private fun slotDefinition(slot: OwnTeamSlot) =
