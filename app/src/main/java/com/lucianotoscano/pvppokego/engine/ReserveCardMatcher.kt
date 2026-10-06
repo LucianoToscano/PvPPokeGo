@@ -24,6 +24,7 @@ internal object ReserveCardMatcher {
         val member: Member,
         val cardCp: Int?,
         val confirmed: Boolean,
+        val cardIndex: Int = -1,
         val cardDex: Int? = null,
         val cardSpeciesId: String? = null,
         val source: String = "fallback"
@@ -47,7 +48,9 @@ internal object ReserveCardMatcher {
         val reserves = team.filter { it.slot != active?.slot }
         if (reserves.isEmpty()) return emptyList()
 
-        val result = arrayOfNulls<Match>(minOf(2, reserves.size))
+        // Always keep both native card positions addressable. With only one known
+        // reserve identity we still need to match it to card #2 if its CP/image says so.
+        val result = arrayOfNulls<Match>(2)
         val used = mutableSetOf<Int>()
 
         // CP is the strongest identity signal because it comes from the same native card.
@@ -62,6 +65,7 @@ internal object ReserveCardMatcher {
                     cardDex = cardDexes.getOrNull(cardIndex),
                     cardSpeciesId = cardSpeciesIds.getOrNull(cardIndex),
                     confirmed = true,
+                    cardIndex = cardIndex,
                     source = "cp"
                 )
                 used += member.slot
@@ -87,6 +91,7 @@ internal object ReserveCardMatcher {
                     cardDex = cardDexes.getOrNull(cardIndex),
                     cardSpeciesId = speciesId,
                     confirmed = true,
+                    cardIndex = cardIndex,
                     source = "image-form"
                 )
                 used += member.slot
@@ -109,6 +114,7 @@ internal object ReserveCardMatcher {
                     cardDex = dex,
                     cardSpeciesId = cardSpeciesIds.getOrNull(cardIndex),
                     confirmed = true,
+                    cardIndex = cardIndex,
                     source = "image"
                 )
                 used += member.slot
@@ -126,6 +132,7 @@ internal object ReserveCardMatcher {
                     cardDex = cardDexes.getOrNull(emptyIndex),
                     cardSpeciesId = cardSpeciesIds.getOrNull(emptyIndex),
                     confirmed = true,
+                    cardIndex = emptyIndex,
                     source = "elimination"
                 )
                 used += remainingMember.slot
@@ -143,6 +150,7 @@ internal object ReserveCardMatcher {
                     cardDex = cardDexes.getOrNull(index),
                     cardSpeciesId = cardSpeciesIds.getOrNull(index),
                     confirmed = false,
+                    cardIndex = index,
                     source = "fallback"
                 )
                 used += remaining.slot
