@@ -48,6 +48,7 @@ fun SettingsScreen(
     historyRevision: Int,
     overlayPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
+    recorderCompatibilityAvailable: Boolean,
     recorderCompatibilityEnabled: Boolean,
     onOpenRecorderCompatibility: () -> Unit,
     onStartExternalRecorderMode: () -> Unit,
@@ -140,43 +141,46 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
 
-                OutlinedButton(
-                    onClick = onOpenRecorderCompatibility,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                if (recorderCompatibilityAvailable) {
+                    OutlinedButton(
+                        onClick = onOpenRecorderCompatibility,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (recorderCompatibilityEnabled) {
+                                "Compatibilidade com gravador externo: ATIVA"
+                            } else {
+                                "Ativar compatibilidade com gravador externo"
+                            }
+                        )
+                    }
                     Text(
                         if (recorderCompatibilityEnabled) {
-                            "Compatibilidade com gravador externo: ATIVA"
+                            "Pronto para Samsung Screen Recorder e outros gravadores. Se o Android retirar a MediaProjection do PvPPokeGo, " +
+                                "o HUD continua ativo e o app muda para capturas de tela de compatibilidade. OCR, tipos e matchup continuam; " +
+                                "a contagem automática de ataques rápidos fica reduzida nesse modo."
                         } else {
-                            "Ativar compatibilidade com gravador externo"
-                        }
+                            "Este APK Recorder Compat inclui o serviço opcional de Acessibilidade para capturas de compatibilidade. " +
+                                "Ative somente se você realmente precisar gravar com outro aplicativo."
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    Button(
+                        onClick = onStartExternalRecorderMode,
+                        enabled = recorderCompatibilityEnabled,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Iniciar overlay para gravador Samsung / externo")
+                    }
+                } else {
+                    Text(
+                        "APK padrão: não solicita Acessibilidade. Isso reduz avisos do Play Protect. " +
+                            "Para gravar, prefira o gravador interno do PvPPokeGo. A versão Recorder Compat é separada porque o Android " +
+                            "classifica captura por Acessibilidade como acesso sensível.",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
-                Text(
-                    if (recorderCompatibilityEnabled) {
-                        "Pronto para Samsung Screen Recorder e outros gravadores. Se o Android retirar a MediaProjection do PvPPokeGo, " +
-                            "o HUD continua ativo e o app muda para capturas de tela de compatibilidade. OCR, tipos e matchup continuam; " +
-                            "a contagem automática de ataques rápidos fica reduzida nesse modo."
-                    } else {
-                        "Android normalmente permite apenas uma sessão principal de captura. Um gravador externo pode retirar a MediaProjection do PvPPokeGo. " +
-                            "Ative esta opção antes de gravar para o app continuar com OCR, tipos e matchup por capturas de compatibilidade."
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                Button(
-                    onClick = onStartExternalRecorderMode,
-                    enabled = recorderCompatibilityEnabled,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Iniciar overlay para gravador Samsung / externo")
-                }
-                Text(
-                    "Use este botão quando quiser gravar com outro aplicativo. Nesse modo o PvPPokeGo não abre MediaProjection própria, " +
-                        "então não disputa a captura com o gravador. A análise de identidade, tipos e matchup continua; o detector de FAST " +
-                        "de alta frequência fica limitado pela taxa de screenshots do Android.",
-                    style = MaterialTheme.typography.bodySmall
-                )
 
                 Text(
                     "Controles do overlay:\n" +
@@ -185,7 +189,7 @@ fun SettingsScreen(
                         "• ◉ → mostrar / ocultar HUD\n" +
                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
-                        "Versão 0.5.20",
+                        "Versão 0.5.21" + if (recorderCompatibilityAvailable) " Recorder Compat" else "",
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -401,7 +405,7 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Sobre", style = MaterialTheme.typography.titleMedium)
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
-                Text("Versão 0.5.19")
+                Text("Versão 0.5.21")
                 Text(
                     "Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, " +
                         "permite reposicionar blocos no modo edição e mantém o botão de olho no topo."
