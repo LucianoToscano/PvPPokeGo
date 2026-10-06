@@ -1230,7 +1230,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     visualConfidence = event.battleConfidence,
                                     nowMs = now
                                 )
-                                historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
+                                updateHistorySession(battleActive, now)
                                 e.onBattleConfidence(presenceTracker.confidence)
                                 if (event.battleUiVisible) markBattleEvidence(now)
                                 if (battleActive || event.battleUiVisible) {
@@ -1306,20 +1306,67 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                         switchPrompt = switchPrompt,
                                         nowMs = now
                                     )
-                                    historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
+                                    updateHistorySession(battleActive, now)
                                     e?.onBattleConfidence(presenceTracker.confidence)
                                     markBattleEvidence(now)
                                 }
                                 if (switchPrompt) {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
+
+                                val before = e?.uiState()
                                 val changes = e?.onDetection(d)
+                                val after = e?.uiState()
                                 if (changes?.playerChanged == true) lastReserveOcrAt = 0L
-                                if (battleActive) historyRecorder.observeDetection(d, currentLeagueCp, now)
+
+                                if (battleActive && after != null) {
+                                    historyRecorder.observeStableState(
+                                        playerName = after.playerName,
+                                        playerCp = after.playerCp,
+                                        opponentName = after.opponentName,
+                                        opponentCp = after.opponentCp,
+                                        leagueCp = currentLeagueCp,
+                                        nowMs = now
+                                    )
+                                }
+
+                                if (changes?.playerChanged == true && after != null) {
+                                    historyRecorder.recordSwitch(
+                                        actor = "VOCÊ",
+                                        fromPokemon = before?.playerName,
+                                        toPokemon = after.playerName,
+                                        cp = after.playerCp,
+                                        nowMs = now,
+                                        confidence = "CONFIRMADO"
+                                    )
+                                    recordHistoryState(after, now, force = true)
+                                }
+                                if (changes?.enemyChanged == true && after != null) {
+                                    historyRecorder.recordSwitch(
+                                        actor = "INIMIGO",
+                                        fromPokemon = before?.opponentName,
+                                        toPokemon = after.opponentName,
+                                        cp = after.opponentCp,
+                                        nowMs = now,
+                                        confidence = "CONFIRMADO"
+                                    )
+                                    recordHistoryState(after, now, force = true)
+                                }
+
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
+
                                 val textEvent = e?.onBattleText(d.battleText, now)
                                 if (textEvent != null) {
+                                    val chargedAtSessionStart =
+                                        historyRecorder.activeElapsedMs(now)?.let { it <= 3_500L } == true &&
+                                            (
+                                                textEvent.newChargedPrompt ||
+                                                    textEvent.chargedMoveConfirmed ||
+                                                    textEvent.ownChargedMoveConfirmed
+                                                )
+                                    if (chargedAtSessionStart) historyRecorder.markStartedMidBattle()
+
                                     textEvent.enemyChargedMove?.let { move ->
                                         val snapshot = e.uiState()
                                         historyRecorder.recordCharged(
@@ -1330,6 +1377,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                             confidence = chargedKnowledgeLabel(snapshot, move.moveId, own = false),
                                             source = "OCR"
                                         )
+                                        recordHistoryState(snapshot, now, force = true)
                                     }
                                     textEvent.ownChargedMove?.let { move ->
                                         val snapshot = e.uiState()
@@ -1341,10 +1389,23 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                             confidence = chargedKnowledgeLabel(snapshot, move.moveId, own = true),
                                             source = "OCR"
                                         )
+                                        recordHistoryState(snapshot, now, force = true)
                                     }
                                     when {
                                         textEvent.newChargedPrompt -> frameDetector?.freezeForCharged(now)
-                                        textEvent.chargedMoveConfirmed -> frameDetector?.freezeForCharged(now, 2_200L)
+                                        textEvent.chargedMoveConfirmed || textEvent.ownChargedMoveConfirmed ->
+                                            frameDetector?.freezeForCharged(now, 2_200L)
+                                    }
+                                }
+
+                                battleResultFromText(d.battleText)?.let { result ->
+                                    if (historyRecorder.hasActiveSession()) {
+                                        historyRecorder.finish(
+                                            nowMs = now,
+                                            reason = "Resultado identificado na tela",
+                                            result = result
+                                        )
+                                        clearBattleContextAfterConfirmedEnd()
                                     }
                                 }
                             }
@@ -1378,8 +1439,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         battleActive = presenceTracker.tick(now)
-                        historyRecorder.setBattleActive(battleActive, currentLeagueCp, now)
+                        updateHistorySession(battleActive, now)
                         engine?.onBattleConfidence(presenceTracker.confidence)
+                        engine?.uiState()?.let { recordHistoryState(it, now) }
                         if (!battleActive) switchChoicePromptUntilMs = 0L
 
                         consecutiveErrors = 0
