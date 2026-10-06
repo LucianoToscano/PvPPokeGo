@@ -56,6 +56,11 @@ class ScreenFrameRecorder(private val context: Context) {
     private var outputHeight = 0
     private var encodedSampleCount = 0
     private var firstFrameSubmitted = false
+    private var submittedFrameCount = 0
+    private var inputWidth = 0
+    private var inputHeight = 0
+    private var conservativeProfile = false
+    private var currentFrameIntervalNs = FRAME_INTERVAL_NS
 
     var isRecording: Boolean = false
         private set
@@ -65,6 +70,15 @@ class ScreenFrameRecorder(private val context: Context) {
 
     var lastErrorMessage: String? = null
         private set
+
+    val hasEncodedSample: Boolean
+        get() = encodedSampleCount > 0
+
+    val submittedFrames: Int
+        get() = submittedFrameCount
+
+    val activeProfileLabel: String
+        get() = if (conservativeProfile) "compatível" else "padrão"
 
     fun start(width: Int, height: Int): Boolean {
         if (isRecording) return true
