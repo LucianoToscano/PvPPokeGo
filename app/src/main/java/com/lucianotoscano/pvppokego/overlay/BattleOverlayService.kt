@@ -1758,8 +1758,16 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             runCatching { screenRecorder?.stop() }
         }
 
+        // Standard builds have no screenshot fallback. Match the stable 0.5.19
+        // behavior and finish cleanly if Android revokes MediaProjection instead
+        // of keeping a no-capture SPECIAL_USE service alive.
+        if (!BuildConfig.RECORDER_COMPAT) {
+            withContext(Dispatchers.Main) { stopSelf() }
+            return
+        }
+
         usingAccessibilityFallback =
-            BuildConfig.RECORDER_COMPAT && AccessibilityScreenCapture.isConnected
+            AccessibilityScreenCapture.isConnected
         if (usingAccessibilityFallback) {
             AccessibilityScreenCapture.clearLatest()
             lastAccessibilityFrameAtMs = 0L
@@ -1814,10 +1822,19 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     }
 
     private fun setForegroundNotification(value: Notification) {
-        val type = when {
-            Build.VERSION.SDK_INT >= 34 && projection == null -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            Build.VERSION.SDK_INT >= 29 && projection != null -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            else -> 0
+        // The standard APK intentionally follows the proven 0.5.19 foreground-service
+        // path: MediaProjection only, with no SPECIAL_USE startup type. Some Samsung/
+        // Play Protect combinations rejected or killed the 0.5.21 standard overlay
+        // because SPECIAL_USE was requested before the capture projection existed.
+        if (!BuildConfig.RECORDER_COMPAT || Build.VERSION.SDK_INT < 34) {
+            startForeground(NOTIFICATION_ID, value)
+            return
+        }
+
+        val type = if (projection != null) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+        } else {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         }
         ServiceCompat.startForeground(this, NOTIFICATION_ID, value, type)
     }
