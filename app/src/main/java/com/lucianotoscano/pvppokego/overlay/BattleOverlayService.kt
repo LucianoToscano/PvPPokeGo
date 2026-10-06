@@ -1829,6 +1829,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         private const val LEAGUE_OCR_INTERVAL_MS = 1_900L
         private const val BATTLE_VISIBILITY_GRACE_MS = 3_800L
         private const val SWITCH_CHOICE_PROMPT_GRACE_MS = 2_400L
+        private const val HISTORY_STATE_INTERVAL_MS = 5_000L
         private const val EDIT_LONG_PRESS_MS = 180L
         private val SUPPORTED_LEAGUE_CPS = setOf(1500, 2500, 10000)
         private val BATTLE_TEXT_MARKERS = listOf(
