@@ -313,6 +313,29 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         addEvent(actor, "RÁPIDO", moveName, count, nowMs, pokemon, confidence, source, null, details)
     }
 
+    fun recordShield(
+        actor: String,
+        againstMove: String,
+        remaining: Int,
+        nowMs: Long = System.currentTimeMillis(),
+        pokemon: String? = null,
+        confidence: String = "CONFIRMADO",
+        source: String = "barra de HP"
+    ) {
+        addEvent(
+            actor = actor,
+            category = "ESCUDO",
+            moveName = "Escudo contra $againstMove",
+            count = 1,
+            nowMs = nowMs,
+            pokemon = pokemon,
+            confidence = confidence,
+            source = source,
+            reason = null,
+            details = mapOf("shields" to remaining.coerceIn(0, 2).toString())
+        )
+    }
+
     fun recordDamageObservation(
         actor: String,
         moveName: String,
