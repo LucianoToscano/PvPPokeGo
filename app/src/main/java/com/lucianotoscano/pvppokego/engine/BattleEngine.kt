@@ -67,6 +67,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var opponentSwitchReadyAtMs: Long = 0L
     private var chargedPendingSinceMs: Long? = null
     private var lastChargedConfirmedAtMs: Long = 0L
+    private val enemyChargedCycle = ChargedAnimationCycleGate()
+    private val ownChargedCycle = ChargedAnimationCycleGate()
     private var ignoreFastUntilMs: Long = 0L
     private var lastAutoSource: String = "-"
     private var lastOwnAutoSource: String = "-"
@@ -105,6 +107,8 @@ class BattleEngine(private val repo: GameDataRepository) {
         opponentSwitchReadyAtMs = 0L
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = 0L
+        enemyChargedCycle.reset()
+        ownChargedCycle.reset()
         ignoreFastUntilMs = 0L
         lastAutoSource = "-"
         lastOwnAutoSource = "-"
@@ -336,6 +340,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun onPlayerChanged(name: String, cp: Int?) {
         saveOwnActiveState()
+        ownChargedCycle.reset()
         playerName = name
         playerCp = cp ?: ownTeam.entries.firstOrNull { it.key.equals(name, true) }?.value ?: playerCp
         val key = ownIdentityKey(name, playerCp)
@@ -357,6 +362,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveActiveState()
         enemyName = name
         chargedPendingSinceMs = null
+        enemyChargedCycle.reset()
         ignoreFastUntilMs = 0L
         val key = normalize(name)
         activeState = enemyStates.getOrCreate(key, name)
@@ -529,19 +535,28 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     fun onBattleText(raw: String, nowMs: Long = System.currentTimeMillis()): BattleTextResult {
-        if (raw.isBlank()) return BattleTextResult()
+        if (raw.isBlank()) {
+            ownChargedCycle.observe(null, nowMs)
+            enemyChargedCycle.observe(null, nowMs)
+            return BattleTextResult()
+        }
+
         val text = normalizeText(raw)
         var newPrompt = false
 
         if (CHARGED_PROMPTS.any { text.contains(it) }) {
-            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
         }
 
         val actionVerbPresent = ACTION_VERBS.any { text.contains(it) }
-        if (!actionVerbPresent) return BattleTextResult(newPrompt, false, false)
+        if (!actionVerbPresent) {
+            ownChargedCycle.observe(null, nowMs)
+            enemyChargedCycle.observe(null, nowMs)
+            return BattleTextResult(newPrompt, false, false)
+        }
 
         val normalizedPlayer = playerName?.let(::normalizeText).orEmpty()
         val normalizedEnemy = enemyName?.let(::normalizeText).orEmpty()
@@ -549,25 +564,43 @@ class BattleEngine(private val repo: GameDataRepository) {
         val enemyActor = normalizedEnemy.isNotBlank() && text.contains(normalizedEnemy)
 
         if (playerActor) {
-            val ownCandidates = playerName?.let(repo::possibleChargedMoves).orEmpty().ifEmpty { listOfNotNull(ownCharge1, ownCharge2) }
+            enemyChargedCycle.observe(null, nowMs)
+            val ownCandidates = playerName
+                ?.let(repo::possibleChargedMoves)
+                .orEmpty()
+                .ifEmpty { listOfNotNull(ownCharge1, ownCharge2) }
             val ownMatched = findMoveMention(text, ownCandidates)
             if (ownMatched != null) {
-                observedOwnChargedUsed(ownMatched)
-                return BattleTextResult(newPrompt, false, true, ownChargedMove = ownMatched)
+                val signature = ChargedAnimationCycleGate.Signature(
+                    actorKey = normalizeText(playerName ?: "voce"),
+                    moveId = ownMatched.moveId
+                )
+                if (ownChargedCycle.observe(signature, nowMs)) {
+                    observedOwnChargedUsed(ownMatched)
+                    return BattleTextResult(newPrompt, false, true, ownChargedMove = ownMatched)
+                }
+                return BattleTextResult(newPrompt, false, false)
             }
+            ownChargedCycle.observe(null, nowMs)
         }
 
         if (enemyActor || !playerActor) {
+            ownChargedCycle.observe(null, nowMs)
             val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
             val matched = findMoveMention(text, candidates)
             if (matched != null) {
-                if (nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+                val signature = ChargedAnimationCycleGate.Signature(
+                    actorKey = normalizeText(enemyName ?: "inimigo"),
+                    moveId = matched.moveId
+                )
+                if (enemyChargedCycle.observe(signature, nowMs)) {
                     observedChargedUsed(matched, nowMs)
                     return BattleTextResult(newPrompt, true, false, enemyChargedMove = matched)
                 }
                 return BattleTextResult(newPrompt, false, false)
             }
-            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > CHARGED_DEBOUNCE_MS) {
+            enemyChargedCycle.observe(null, nowMs)
+            if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
                 newPrompt = true
             }
@@ -584,7 +617,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun maybeConfirmPendingCharged(nowMs: Long = System.currentTimeMillis()): Boolean {
         val since = chargedPendingSinceMs ?: return false
         if (nowMs - since < PENDING_CONFIRM_DELAY_MS) return false
-        if (nowMs - lastChargedConfirmedAtMs <= CHARGED_DEBOUNCE_MS) {
+        if (nowMs - lastChargedConfirmedAtMs <= UNKNOWN_CHARGED_DEBOUNCE_MS) {
             chargedPendingSinceMs = null
             return false
         }
@@ -893,7 +926,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         private const val RESERVE_VISUAL_MIN_CONFIDENCE = 0.76f
         private const val RESERVE_VISUAL_IMMEDIATE_CONFIDENCE = 0.88f
         private const val RESERVE_VISUAL_CONFIRM_FRAMES = 2
-        private const val CHARGED_DEBOUNCE_MS = 4_200L
+        private const val UNKNOWN_CHARGED_DEBOUNCE_MS = 4_200L
         private const val SWITCH_COOLDOWN_MS = 50_000L
         private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
         private const val CHARGED_FAST_GUARD_MS = 2_200L
