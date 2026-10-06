@@ -221,6 +221,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     ?: 1500
 
                 withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
+                historyRecorder.setMetadata(BuildConfig.VERSION_NAME, gameRepo.offlineSnapshotVersion())
                 if (engine == null) engine = BattleEngine(gameRepo)
                 detector?.close()
                 detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
@@ -258,6 +259,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     ?: 1500
 
                 withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
+                historyRecorder.setMetadata(BuildConfig.VERSION_NAME, gameRepo.offlineSnapshotVersion())
                 engine = BattleEngine(gameRepo)
                 detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
                 frameDetector = BattleFrameEventDetector()
@@ -1386,6 +1388,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private suspend fun reloadLeague(cp: Int) {
         if (cp == currentLeagueCp) return
         withContext(Dispatchers.IO) { gameRepo.load(cp) }
+        historyRecorder.setMetadata(BuildConfig.VERSION_NAME, gameRepo.offlineSnapshotVersion())
         currentLeagueCp = cp
         engine = BattleEngine(gameRepo)
         frameDetector?.reset()
