@@ -41,6 +41,17 @@ data class BattleHistoryEntry(
     val events: List<BattleHistoryEvent> = emptyList()
 )
 
+data class BattleStrategyProfile(
+    val opponentName: String,
+    val battles: Int,
+    val chargedSamples: Int,
+    val mostCommonChargedMove: String? = null,
+    val mostCommonChargedRate: Float = 0f,
+    val firstChargedMove: String? = null,
+    val firstChargedRate: Float = 0f,
+    val shieldEvents: Int = 0
+)
+
 class BattleHistoryRepository(context: Context) {
     private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -57,6 +68,67 @@ class BattleHistoryRepository(context: Context) {
             prefs.edit().putString(KEY_HISTORY, json.encodeToString(repaired)).apply()
         }
         return repaired
+    }
+
+    /**
+     * Local-only pattern profile derived from the user's own prior battles.
+     * It never uploads battle data and is intentionally advisory rather than authoritative.
+     */
+    fun strategyProfile(opponentName: String?): BattleStrategyProfile? {
+        val target = opponentName?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val matchingBattles = loadHistory().filter { battle ->
+            battle.opponentName.equals(target, ignoreCase = true) ||
+                battle.events.any {
+                    it.actor == "INIMIGO" &&
+                        it.pokemon.equals(target, ignoreCase = true)
+                }
+        }
+        if (matchingBattles.isEmpty()) return null
+
+        val charged = matchingBattles.flatMap { battle ->
+            battle.events.filter {
+                it.actor == "INIMIGO" &&
+                    it.category == "CARREGADO" &&
+                    (it.pokemon == null || it.pokemon.equals(target, ignoreCase = true))
+            }
+        }
+        val chargedCounts = charged.groupingBy { it.moveName }.eachCount()
+        val topCharged = chargedCounts.maxByOrNull { it.value }
+
+        val firstChargedPerBattle = matchingBattles.mapNotNull { battle ->
+            battle.events
+                .filter {
+                    it.actor == "INIMIGO" &&
+                        it.category == "CARREGADO" &&
+                        (it.pokemon == null || it.pokemon.equals(target, ignoreCase = true))
+                }
+                .minByOrNull { it.elapsedMs }
+                ?.moveName
+        }
+        val firstCounts = firstChargedPerBattle.groupingBy { it }.eachCount()
+        val topFirst = firstCounts.maxByOrNull { it.value }
+        val shields = matchingBattles.sumOf { battle ->
+            battle.events.count {
+                it.actor == "INIMIGO" &&
+                    it.category == "ESCUDO" &&
+                    (it.pokemon == null || it.pokemon.equals(target, ignoreCase = true))
+            }
+        }
+
+        return BattleStrategyProfile(
+            opponentName = target,
+            battles = matchingBattles.size,
+            chargedSamples = charged.size,
+            mostCommonChargedMove = topCharged?.key,
+            mostCommonChargedRate = if (charged.isNotEmpty()) {
+                topCharged?.value?.toFloat()?.div(charged.size.toFloat()) ?: 0f
+            } else 0f,
+            firstChargedMove = topFirst?.key,
+            firstChargedRate = if (firstChargedPerBattle.isNotEmpty()) {
+                topFirst?.value?.toFloat()?.div(firstChargedPerBattle.size.toFloat()) ?: 0f
+            } else 0f,
+            shieldEvents = shields
+        )
     }
 
     fun exportJson(): String = json.encodeToString(loadHistory())
