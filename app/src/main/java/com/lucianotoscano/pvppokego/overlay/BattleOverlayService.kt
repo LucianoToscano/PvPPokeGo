@@ -201,7 +201,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
                 withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
                 engine = BattleEngine(gameRepo)
-                detector = BattleOcrDetector(gameRepo)
+                detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
                 frameDetector = BattleFrameEventDetector()
                 presenceTracker.reset()
 
