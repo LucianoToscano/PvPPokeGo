@@ -26,6 +26,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.lucianotoscano.pvppokego.BuildConfig
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
 import com.lucianotoscano.pvppokego.R
@@ -39,6 +40,7 @@ import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.GameDataRepository
+import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.detect.BattleFrameEventDetector
@@ -104,6 +106,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var battleActive = false
     private var lastBattleEvidenceAtMs = 0L
     private var switchChoicePromptUntilMs = 0L
+    private var lastHistoryStateAtMs = 0L
 
     override fun onCreate() {
         super.onCreate()
