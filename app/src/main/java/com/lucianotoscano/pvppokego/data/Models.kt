@@ -85,6 +85,8 @@ enum class MoveKnowledgeConfidence { CONFIRMED, MANUAL, RANKED, UNKNOWN }
 
 data class ReserveState(
     val name: String?,
+    /** Exact PvPoke species/form id when known. */
+    val speciesId: String? = null,
     val cp: Int?,
     val types: List<String>,
     val matchup: MatchupState,
@@ -95,8 +97,10 @@ data class ReserveState(
     val identityKey: String? = null,
     /** CP read from Pokemon GO's native reserve card. */
     val cardCp: Int? = null,
-    /** True when this reserve card was pinned to a team member by CP (or elimination). */
+    /** True when this reserve card was pinned to a team member by CP/image/elimination. */
     val identityConfirmed: Boolean = false,
+    /** cp, image-form, image, elimination or fallback. */
+    val identitySource: String? = null,
     val fastMove: MoveDef? = null,
     val chargedMove1: MoveDef? = null,
     val chargedMove2: MoveDef? = null,
