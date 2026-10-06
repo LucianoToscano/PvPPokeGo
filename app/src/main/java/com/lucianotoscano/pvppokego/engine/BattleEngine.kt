@@ -984,60 +984,135 @@ class BattleEngine(private val repo: GameDataRepository) {
         playerHpRatio: Float?,
         opponentHpRatio: Float?,
         nowMs: Long = System.currentTimeMillis()
-    ): DamageObservation? {
-        playerHpRatio?.let { lastHpRatio = it.coerceIn(0f, 1f) }
+    ): List<DamageObservation> {
+        playerHpRatio?.let { value ->
+            lastHpRatio = value.coerceIn(0f, 1f)
+            ownActiveState?.let { state ->
+                state.lastHpRatio = lastHpRatio
+                if (value <= .01f) state.fainted = true
+            }
+        }
         opponentHpRatio?.let { lastOpponentHpRatio = it.coerceIn(0f, 1f) }
 
-        val pending = pendingIncomingChargedDamage ?: return null
-        if (nowMs - pending.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS) {
+        val outcomes = mutableListOf<DamageObservation>()
+        processChargedOutcome(
+            pending = pendingIncomingChargedDamage,
+            hpRatio = playerHpRatio,
+            nowMs = nowMs,
+            targetIsOwn = true
+        )?.let { outcome ->
+            outcomes += outcome
             pendingIncomingChargedDamage = null
-            return null
+        }
+        processChargedOutcome(
+            pending = pendingOutgoingChargedDamage,
+            hpRatio = opponentHpRatio,
+            nowMs = nowMs,
+            targetIsOwn = false
+        )?.let { outcome ->
+            outcomes += outcome
+            pendingOutgoingChargedDamage = null
         }
 
-        val hp = playerHpRatio ?: return null
-        if (hp < pending.minimumHpAfter) pending.minimumHpAfter = hp
+        if (pendingIncomingChargedDamage?.let { nowMs - it.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS } == true) {
+            pendingIncomingChargedDamage = null
+        }
+        if (pendingOutgoingChargedDamage?.let { nowMs - it.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS } == true) {
+            pendingOutgoingChargedDamage = null
+        }
+        return outcomes
+    }
 
-        val meaningfulDrop = pending.hpBefore - pending.minimumHpAfter
-        if (meaningfulDrop >= MIN_CHARGED_DAMAGE_SAMPLE_FRACTION && pending.firstDropAtMs == null) {
-            pending.firstDropAtMs = nowMs
+    private fun processChargedOutcome(
+        pending: PendingChargedDamage?,
+        hpRatio: Float?,
+        nowMs: Long,
+        targetIsOwn: Boolean
+    ): DamageObservation? {
+        val sample = pending ?: return null
+        if (nowMs - sample.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS) return null
+        val hp = hpRatio ?: return null
+        sample.observations++
+        if (hp < sample.minimumHpAfter) sample.minimumHpAfter = hp
+
+        val damage = (sample.hpBefore - sample.minimumHpAfter).coerceIn(0f, 1f)
+        if (damage >= MIN_CHARGED_DAMAGE_SAMPLE_FRACTION && sample.firstDropAtMs == null) {
+            sample.firstDropAtMs = nowMs
         }
 
-        val firstDropAt = pending.firstDropAtMs ?: return null
-        if (nowMs - firstDropAt < CHARGED_DAMAGE_SETTLE_MS) return null
+        val firstDropAt = sample.firstDropAtMs
+        if (firstDropAt != null && nowMs - firstDropAt >= CHARGED_DAMAGE_SETTLE_MS) {
+            val accepted = incomingDamageTracker.record(
+                attackerKey = sample.attackerKey,
+                defenderKey = sample.defenderKey,
+                moveKey = sample.moveId,
+                totalDamageFraction = damage,
+                hits = 1,
+                confidence = 1f,
+                charged = true
+            )
+            if (!accepted) return DamageObservation(
+                actor = sample.actor,
+                moveId = sample.moveId,
+                moveName = sample.moveName,
+                damagePercent = damage * 100f,
+                damagePoints = (damage * 1000f).toInt(),
+                learnedSamples = 0
+            )
+            val estimate = incomingDamageTracker.estimate(
+                sample.attackerKey,
+                sample.defenderKey,
+                sample.moveId,
+                if (targetIsOwn) lastHpRatio else lastOpponentHpRatio
+            )
+            return DamageObservation(
+                actor = sample.actor,
+                moveId = sample.moveId,
+                moveName = sample.moveName,
+                damagePercent = damage * 100f,
+                damagePoints = (damage * 1000f).toInt(),
+                learnedSamples = estimate?.samples ?: 1
+            )
+        }
 
-        val damage = (pending.hpBefore - pending.minimumHpAfter).coerceIn(0f, 1f)
-        val accepted = incomingDamageTracker.record(
-            attackerKey = pending.attackerKey,
-            defenderKey = pending.defenderKey,
-            moveKey = pending.moveId,
-            totalDamageFraction = damage,
-            hits = 1,
-            confidence = 1f,
-            charged = true
-        )
-        pendingIncomingChargedDamage = null
-        if (!accepted) return null
-
-        val estimate = incomingDamageTracker.estimate(
-            pending.attackerKey,
-            pending.defenderKey,
-            pending.moveId,
-            lastHpRatio
-        )
-        return DamageObservation(
-            moveId = pending.moveId,
-            moveName = pending.moveName,
-            damagePercent = damage * 100f,
-            damagePoints = (damage * 1000f).toInt(),
-            learnedSamples = estimate?.samples ?: 1
-        )
+        // A shielded Charged Move normally changes the visible HP bar by virtually
+        // nothing. Wait long enough for the impact animation and require several
+        // stable HP observations before consuming a shield, so a delayed frame cannot
+        // turn into a false shield event.
+        if (
+            sample.observations >= MIN_SHIELD_OBSERVATIONS &&
+            nowMs - sample.armedAtMs >= CHARGED_SHIELD_SETTLE_MS &&
+            damage < MIN_CHARGED_DAMAGE_SAMPLE_FRACTION
+        ) {
+            val remaining = if (targetIsOwn) {
+                if (ownShieldsRemaining <= 0) return null
+                ownShieldsRemaining = (ownShieldsRemaining - 1).coerceAtLeast(0)
+                ownShieldsRemaining
+            } else {
+                if (opponentShieldsRemaining <= 0) return null
+                opponentShieldsRemaining = (opponentShieldsRemaining - 1).coerceAtLeast(0)
+                opponentShieldsRemaining
+            }
+            return DamageObservation(
+                actor = sample.actor,
+                moveId = sample.moveId,
+                moveName = sample.moveName,
+                damagePercent = damage * 100f,
+                damagePoints = (damage * 1000f).toInt(),
+                learnedSamples = 0,
+                shielded = true,
+                shieldsRemaining = remaining
+            )
+        }
+        return null
     }
 
     private fun armIncomingChargedDamage(move: MoveDef, nowMs: Long) {
         val before = pendingIncomingChargedHpBefore ?: lastHpRatio ?: return
         val attacker = currentEnemyDamageKey() ?: return
         val defender = currentPlayerDamageKey() ?: return
-        pendingIncomingChargedDamage = PendingIncomingChargedDamage(
+        pendingIncomingChargedDamage = PendingChargedDamage(
+            actor = "INIMIGO",
             moveId = move.moveId,
             moveName = move.name,
             attackerKey = attacker,
@@ -1046,6 +1121,22 @@ class BattleEngine(private val repo: GameDataRepository) {
             armedAtMs = nowMs
         )
         pendingIncomingChargedHpBefore = null
+    }
+
+    private fun armOutgoingChargedDamage(move: MoveDef, nowMs: Long) {
+        val before = pendingOutgoingChargedHpBefore ?: lastOpponentHpRatio ?: return
+        val attacker = currentPlayerDamageKey() ?: return
+        val defender = currentEnemyDamageKey() ?: return
+        pendingOutgoingChargedDamage = PendingChargedDamage(
+            actor = "VOCÊ",
+            moveId = move.moveId,
+            moveName = move.name,
+            attackerKey = attacker,
+            defenderKey = defender,
+            hpBefore = before.coerceIn(0f, 1f),
+            armedAtMs = nowMs
+        )
+        pendingOutgoingChargedHpBefore = null
     }
 
     private fun currentEnemyDamageKey(): String? =
