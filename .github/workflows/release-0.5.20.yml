@@ -50,6 +50,11 @@ jobs:
           grep -q 'speciesId = winner.speciesId' app/src/main/java/com/lucianotoscano/pvppokego/detect/PokemonVisualRecognizer.kt
           grep -q 'cardSpeciesIds' app/src/main/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcher.kt
           grep -q 'formAwareVisualEvidenceDistinguishesSameDexForms' app/src/test/java/com/lucianotoscano/pvppokego/engine/ReserveCardMatcherTest.kt
+          grep -q 'var speciesId: String?' app/src/main/java/com/lucianotoscano/pvppokego/data/Models.kt
+          grep -q 'private fun rankingEntry' app/src/main/java/com/lucianotoscano/pvppokego/data/GameDataRepository.kt
+          grep -q 'identitySource = resolved.source' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'differentFormsCanKeepIndependentEnergyState' app/src/test/java/com/lucianotoscano/pvppokego/engine/BattleStateStoreTest.kt
+          grep -q 'knownRegionalFormSwitchStaysInsideSameBattle' app/src/test/java/com/lucianotoscano/pvppokego/engine/BattleCorrespondenceTrackerTest.kt
 
       - name: Package offline PvPoke snapshot
         run: |
