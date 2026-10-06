@@ -881,6 +881,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         pendingOutgoingChargedDamage = null
         pendingIncomingChargedHpBefore = null
         pendingOutgoingChargedHpBefore = null
+        localStrategyProfile = null
         enemyName = name
         enemySpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         chargedPendingSinceMs = null
