@@ -1196,8 +1196,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             (battleActive || now - lastBattleEvidenceAtMs <= BATTLE_VISIBILITY_GRACE_MS) &&
                             now - lastReserveOcrAt >= RESERVE_OCR_INTERVAL_MS
                         ) {
-                            detector?.detectReserveCps(frame)?.let { (topCp, bottomCp) ->
-                                e.onReserveCardCps(topCp, bottomCp)
+                            detector?.detectReserveEvidence(frame)?.let { (topCard, bottomCard) ->
+                                e.onReserveCardEvidence(topCard, bottomCard)
                             }
                             lastReserveOcrAt = now
                         }
