@@ -1369,8 +1369,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 // While a possible new-match pair is waiting for its second
                                 // confirming frame, preserve the old battle state untouched.
                                 val holdIdentityMutation =
-                                    correspondenceDecision == BattleCorrespondenceTracker.Decision.INSUFFICIENT &&
-                                        battleCorrespondence.hasPendingNewBattleCandidate
+                                    correspondenceDecision == BattleCorrespondenceTracker.Decision.HOLD_CURRENT ||
+                                        (
+                                            correspondenceDecision == BattleCorrespondenceTracker.Decision.INSUFFICIENT &&
+                                                battleCorrespondence.hasPendingNewBattleCandidate
+                                            )
 
                                 val before = e?.uiState()
                                 val changes = if (!holdIdentityMutation) e?.onDetection(d) else null
