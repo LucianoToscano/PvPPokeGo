@@ -11,7 +11,7 @@ internal object ShieldObservationPolicy {
         shieldsRemaining > 0 &&
             observations >= MIN_OBSERVATIONS &&
             elapsedMs >= SETTLE_MS &&
-            damageFraction in 0f until MAX_SHIELDED_DAMAGE_FRACTION
+            damageFraction >= 0f && damageFraction < MAX_SHIELDED_DAMAGE_FRACTION
 
     const val SETTLE_MS = 2_800L
     const val MIN_OBSERVATIONS = 4
