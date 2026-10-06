@@ -1097,6 +1097,82 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         return normalizedBattleText(raw).contains("quer trocar por um pokemon")
     }
 
+    private fun battleResultFromText(raw: String): String? {
+        if (raw.isBlank()) return null
+        val compact = normalizedBattleText(raw).replace(Regex("[^a-z0-9]+"), "")
+        return when {
+            listOf("vocevenceu", "youwin", "victory").any(compact::contains) -> "Vitória"
+            listOf("bomesforco", "voceperdeu", "youlost", "defeat").any(compact::contains) -> "Derrota"
+            else -> null
+        }
+    }
+
+    private fun updateHistorySession(
+        isActive: Boolean,
+        nowMs: Long,
+        startedMidBattleEvidence: Boolean = false
+    ) {
+        val hadSession = historyRecorder.hasActiveSession()
+        historyRecorder.setBattleActive(isActive, currentLeagueCp, nowMs)
+        val hasSession = historyRecorder.hasActiveSession()
+
+        if (!hadSession && hasSession && startedMidBattleEvidence) {
+            historyRecorder.markStartedMidBattle()
+        }
+
+        if (hadSession && !hasSession) {
+            clearBattleContextAfterConfirmedEnd()
+        }
+    }
+
+    private fun clearBattleContextAfterConfirmedEnd() {
+        lastRecordedAdviceKey = null
+        lastReserveDiagnosticKey = null
+        lastHistoryStateAtMs = 0L
+        engine?.resetBattle()
+        frameDetector?.reset()
+        presenceTracker.reset()
+        battleActive = false
+        lastNativeTopCardY = null
+        lastBattleEvidenceAtMs = 0L
+        switchChoicePromptUntilMs = 0L
+        dismissMoveMenu()
+    }
+
+    private fun recordHistoryState(ui: BattleUiState, nowMs: Long, force: Boolean = false) {
+        if (!historyRecorder.hasActiveSession()) return
+        if (!force && nowMs - lastHistoryStateAtMs < HISTORY_STATE_INTERVAL_MS) return
+        lastHistoryStateAtMs = nowMs
+
+        val ownEnergy = ui.ownCharged1 ?: ui.ownCharged2
+        val enemyEnergy = ui.charged1 ?: ui.charged2
+
+        historyRecorder.recordState(
+            actor = "VOCÊ",
+            pokemon = ui.playerName,
+            hpRatio = engine?.latestPlayerHpRatio(),
+            energyMin = ownEnergy?.minEnergy,
+            energyMax = ownEnergy?.maxEnergy,
+            confidence = ownEnergy?.confidence?.let(::energyConfidenceLabel),
+            nowMs = nowMs
+        )
+        historyRecorder.recordState(
+            actor = "INIMIGO",
+            pokemon = ui.opponentName,
+            hpRatio = engine?.latestOpponentHpRatio(),
+            energyMin = enemyEnergy?.minEnergy,
+            energyMax = enemyEnergy?.maxEnergy,
+            confidence = enemyEnergy?.confidence?.let(::energyConfidenceLabel),
+            nowMs = nowMs
+        )
+    }
+
+    private fun energyConfidenceLabel(value: EnergyConfidence): String = when (value) {
+        EnergyConfidence.CONFIRMED -> "CONFIRMADO"
+        EnergyConfidence.ESTIMATED -> "ESTIMADO"
+        EnergyConfidence.RANGE -> "FAIXA"
+    }
+
     private fun startScanLoop() {
         scanJob?.cancel()
         scanJob = scope.launch {
