@@ -16,7 +16,8 @@ internal object ReserveCardMatcher {
         val slot: Int,
         val name: String,
         val cp: Int?,
-        val dex: Int? = null
+        val dex: Int? = null,
+        val speciesId: String? = null
     )
 
     data class Match(
@@ -24,6 +25,7 @@ internal object ReserveCardMatcher {
         val cardCp: Int?,
         val confirmed: Boolean,
         val cardDex: Int? = null,
+        val cardSpeciesId: String? = null,
         val source: String = "fallback"
     )
 
@@ -32,7 +34,8 @@ internal object ReserveCardMatcher {
         activeName: String?,
         activeCp: Int?,
         cardCps: List<Int?>,
-        cardDexes: List<Int?> = emptyList()
+        cardDexes: List<Int?> = emptyList(),
+        cardSpeciesIds: List<String?> = emptyList()
     ): List<Match> {
         if (team.isEmpty()) return emptyList()
 
@@ -57,8 +60,31 @@ internal object ReserveCardMatcher {
                     member = member,
                     cardCp = cp,
                     cardDex = cardDexes.getOrNull(cardIndex),
+                    cardSpeciesId = cardSpeciesIds.getOrNull(cardIndex),
                     confirmed = true,
                     source = "cp"
+                )
+                used += member.slot
+            }
+        }
+
+        // Form-aware visual speciesId is stronger than dex-only evidence because
+        // regional/forms can share the same National Dex while having different types.
+        result.indices.forEach { cardIndex ->
+            if (result[cardIndex] != null) return@forEach
+            val speciesId = cardSpeciesIds.getOrNull(cardIndex)?.takeIf { it.isNotBlank() } ?: return@forEach
+            val matches = reserves.filter {
+                it.slot !in used && it.speciesId.equals(speciesId, ignoreCase = true)
+            }
+            if (matches.size == 1) {
+                val member = matches.first()
+                result[cardIndex] = Match(
+                    member = member,
+                    cardCp = cardCps.getOrNull(cardIndex),
+                    cardDex = cardDexes.getOrNull(cardIndex),
+                    cardSpeciesId = speciesId,
+                    confirmed = true,
+                    source = "image-form"
                 )
                 used += member.slot
             }
@@ -78,6 +104,7 @@ internal object ReserveCardMatcher {
                     member = member,
                     cardCp = cardCps.getOrNull(cardIndex),
                     cardDex = dex,
+                    cardSpeciesId = cardSpeciesIds.getOrNull(cardIndex),
                     confirmed = true,
                     source = "image"
                 )
@@ -94,6 +121,7 @@ internal object ReserveCardMatcher {
                     member = remainingMember,
                     cardCp = cardCps.getOrNull(emptyIndex),
                     cardDex = cardDexes.getOrNull(emptyIndex),
+                    cardSpeciesId = cardSpeciesIds.getOrNull(emptyIndex),
                     confirmed = true,
                     source = "elimination"
                 )
@@ -110,6 +138,7 @@ internal object ReserveCardMatcher {
                     member = remaining,
                     cardCp = cardCps.getOrNull(index),
                     cardDex = cardDexes.getOrNull(index),
+                    cardSpeciesId = cardSpeciesIds.getOrNull(index),
                     confirmed = false,
                     source = "fallback"
                 )
