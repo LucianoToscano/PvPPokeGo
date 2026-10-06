@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var historyRepo: BattleHistoryRepository
     private var overlayGranted by mutableStateOf(false)
     private var historyRevision by mutableStateOf(0)
+    private var pendingHistoryExportBattleId: Long? = null
     /** True after capture permission succeeds until the service-running flag catches up. */
     private var overlayStarting = false
     private val projectionManager by lazy {
@@ -67,7 +68,7 @@ class MainActivity : ComponentActivity() {
                         entry(
                             "device.txt",
                             buildString {
-                                appendLine("PvPPokeGo=0.5.17")
+                                appendLine("PvPPokeGo=0.5.18")
                                 appendLine("package=" + packageName)
                                 appendLine("manufacturer=" + android.os.Build.MANUFACTURER)
                                 appendLine("model=" + android.os.Build.MODEL)
@@ -80,7 +81,7 @@ class MainActivity : ComponentActivity() {
                         )
                         entry(
                             "README.txt",
-                            "Diagnóstico PvPPokeGo 0.5.17\n" +
+                            "Diagnóstico PvPPokeGo 0.5.18\n" +
                                 "Inclui configurações, posições, histórico de batalhas, fontes/confiança dos eventos e dados do aparelho.\n"
                         )
                     }
@@ -89,6 +90,51 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Diagnóstico exportado", Toast.LENGTH_LONG).show()
             }.onFailure {
                 Toast.makeText(this, "Falha ao exportar diagnóstico: " + it.message, Toast.LENGTH_LONG).show()
+            }
+        }
+
+    private val exportHistoryLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            val selectedId = pendingHistoryExportBattleId
+            pendingHistoryExportBattleId = null
+            if (uri == null || !::historyRepo.isInitialized) return@registerForActivityResult
+
+            runCatching {
+                val entries = if (selectedId != null) {
+                    listOfNotNull(historyRepo.battleById(selectedId))
+                } else {
+                    historyRepo.loadHistory()
+                }
+                require(entries.isNotEmpty()) { "Nenhuma batalha para exportar" }
+
+                contentResolver.openOutputStream(uri)?.use { raw ->
+                    ZipOutputStream(raw.buffered()).use { zip ->
+                        fun entry(name: String, text: String) {
+                            zip.putNextEntry(ZipEntry(name))
+                            zip.write(text.toByteArray(Charsets.UTF_8))
+                            zip.closeEntry()
+                        }
+                        entry("historico.json", historyRepo.exportJson(entries))
+                        entry("historico-legivel.txt", historyRepo.exportAnalysisText(entries))
+                        entry("historico.csv", historyRepo.exportCsv(entries))
+                        entry(
+                            "README.txt",
+                            buildString {
+                                appendLine("PvPPokeGo 0.5.18 — exportação de histórico")
+                                appendLine()
+                                appendLine("Envie este ZIP diretamente para análise.")
+                                appendLine("historico-legivel.txt: leitura humana, separada por VOCÊ / INIMIGO / ASSISTENTE / DIAGNÓSTICO.")
+                                appendLine("historico.json: dados completos e estruturados.")
+                                appendLine("historico.csv: eventos em formato tabular.")
+                                appendLine("Batalhas exportadas: " + entries.size)
+                            }
+                        )
+                    }
+                } ?: error("Não foi possível criar o ZIP")
+            }.onSuccess {
+                Toast.makeText(this, "Histórico exportado para análise", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(this, "Falha ao exportar histórico: " + it.message, Toast.LENGTH_LONG).show()
             }
         }
 
@@ -148,6 +194,8 @@ class MainActivity : ComponentActivity() {
                 onExportSettings = ::exportSettings,
                 onImportSettings = ::importSettings,
                 onExportDiagnostics = ::exportDiagnostics,
+                onExportHistory = ::exportHistory,
+                onExportBattle = ::exportBattle,
                 onToggleRecording = ::toggleRecording
             )
         }
@@ -204,11 +252,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportSettings() {
-        exportSettingsLauncher.launch("PvPPokeGo-0.5.17-config.json")
+        exportSettingsLauncher.launch("PvPPokeGo-0.5.18-config.json")
     }
 
     private fun exportDiagnostics() {
-        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.17-diagnostico.zip")
+        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.18-diagnostico.zip")
+    }
+
+    private fun exportHistory() {
+        pendingHistoryExportBattleId = null
+        exportHistoryLauncher.launch("PvPPokeGo-0.5.18-historico.zip")
+    }
+
+    private fun exportBattle(id: Long) {
+        pendingHistoryExportBattleId = id
+        exportHistoryLauncher.launch("PvPPokeGo-0.5.18-batalha-$id.zip")
     }
 
     private fun toggleRecording() {
