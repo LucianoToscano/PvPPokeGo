@@ -1172,6 +1172,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             hpRatio = engine?.latestPlayerHpRatio(),
             energyMin = ownEnergy?.minEnergy,
             energyMax = ownEnergy?.maxEnergy,
+            shields = ui.ownShieldsRemaining,
             confidence = ownEnergy?.confidence?.let(::energyConfidenceLabel),
             nowMs = nowMs
         )
@@ -1181,6 +1182,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             hpRatio = engine?.latestOpponentHpRatio(),
             energyMin = enemyEnergy?.minEnergy,
             energyMax = enemyEnergy?.maxEnergy,
+            shields = ui.opponentShieldsRemaining,
             confidence = enemyEnergy?.confidence?.let(::energyConfidenceLabel),
             nowMs = nowMs
         )
