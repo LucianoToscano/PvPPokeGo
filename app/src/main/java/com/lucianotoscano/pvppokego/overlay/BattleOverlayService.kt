@@ -218,11 +218,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     ?: 1500
 
                 withContext(Dispatchers.IO) { gameRepo.load(currentLeagueCp) }
-                engine = BattleEngine(gameRepo)
+                if (engine == null) engine = BattleEngine(gameRepo)
                 detector?.close()
                 detector = BattleOcrDetector(this@BattleOverlayService, gameRepo)
-                frameDetector = BattleFrameEventDetector()
-                presenceTracker.reset()
+                if (frameDetector == null) frameDetector = BattleFrameEventDetector()
+                if (!battleActive && !historyRecorder.hasActiveSession()) presenceTracker.reset()
 
                 projectionRevokedBySystem = true
                 usingAccessibilityFallback = true
@@ -1136,7 +1136,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         }
 
                         var e = engine
-                        if (settingsRepo.autoRecognition && e != null && !usingAccessibilityFallback) {
+                        if (settingsRepo.autoRecognition && e != null) {
                             val event = frameDetector?.analyze(
                                 frame,
                                 e.currentFastDurationMs(),
@@ -1428,6 +1428,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         hudLockTouch?.visibility = if (chromeEnabled && !hudCollapsed) View.VISIBLE else View.GONE
         // Original lock/eye icons are drawn on the HUD canvas; touch views stay transparent.
         quickMenu?.setVisible(chromeEnabled && !hudCollapsed)
+        quickMenu?.setBattleActive(battleActive)
         if (!hudCollapsed) quickMenu?.refreshStatusBadge()
         if (!selectorsEnabled) dismissMoveMenu()
     }
