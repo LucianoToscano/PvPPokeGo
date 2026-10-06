@@ -1,137 +1,292 @@
-# PvPPokeGo — Handoff atual
+# PvPPokeGo — Handoff atual 0.5.20
 
-Atualizado em: 2026-09-27
-Branch: `v04-v03-stable-base`
+Atualizado em: 2026-10-06  
+Branch estável: `v04-v03-stable-base`  
+Package: `com.lucianotoscano.pvppokego`  
+Versão: `0.5.20` / versionCode `25`
 
-## LEIA PRIMEIRO
+## Release validada
 
-O contexto mestre atual está em:
+- PR #22: **PvPPokeGo 0.5.20 — continuidade, identidade visual por forma e modo gravador externo**
+- merge commit: `475a6e68f9830f4d79019429e456f3a965d56bc8`
+- release branch validada: `release/0.5.20`
+- build run: `37492085202`
+- artifact ID: `11425824095`
+- APK: `PvPPokeGo-0.5.20.apk`
+- SHA-256: `c134b25fc817384d3b6933eb95e77c15b9b2a36205c9959930829047ea9a1772`
+- resultado: `testDebugUnitTest + assembleDebug + unzip -t` = sucesso
 
-`docs/MASTER_PROJECT_CONTEXT_2026-09-27.md`
+## O que a 0.5.20 resolveu
 
-Qualquer novo chat, conta, GPT ou desenvolvedor deve ler esse arquivo antes de continuar o projeto.
+### 1. Correspondência e continuidade de batalha
 
-Para histórico anterior mais extenso, a branch `main` também contém:
+A sessão não deve mais ser dividida por troca, animação de carregado, um frame ruim de OCR ou PC truncado.
 
-- `docs/CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md`
-- `docs/VISUAL_CONTRACT_2026-09-26.md`
+Componentes:
+- `BattleContinuityPolicy`
+- `BattleCorrespondenceTracker`
+- `BattleHistorySegmentMatcher`
 
-## Estado técnico atual
+Regras importantes:
+- troca de apenas um lado permanece na mesma partida;
+- uma leitura incompatível isolada é segurada;
+- novo adversário desconhecido precisa de confirmação;
+- Pokémon conhecido que retorna é aceito imediatamente;
+- PC divergente sozinho nunca cria nova partida;
+- tela de equipe completa e confiável pode encerrar/iniciar fronteira;
+- formas regionais/alternativas com mesmo nome são identidades distintas pelo `speciesId`;
+- rematch rápido normal não é unido apenas por identidade;
+- fragmentos realmente iniciados no meio da luta podem ser reconectados no histórico.
 
-Package: `com.lucianotoscano.pvppokego`
+### 2. Reconhecimento de Pokémon por imagem + OCR + PC
 
-Versão atual no código:
+Foi adicionado um terceiro sinal de identidade: a imagem do próprio Pokémon.
 
-- `versionCode = 6`
-- `versionName = 0.5.1-overlay-controls-fix`
+Arquivos:
+- `detect/PokemonVisualRecognizer.kt`
+- `tools/package_visual_fingerprints.py`
+- `assets/pokemon_visual_fingerprints.json`
 
-Android atual:
+O banco visual:
+- é offline;
+- contém fingerprints compactos, não um catálogo inteiro de imagens;
+- é gerado a partir de renders HOME;
+- preserva `speciesId`/forma;
+- cobre centenas de entradas;
+- usa forma exata quando o banco permite;
+- quando uma imagem é ambígua entre formas do mesmo Dex, não inventa identidade: exige OCR/PC/outro sinal.
 
-- minSdk 29
-- compileSdk 36
-- targetSdk 36
-- Java 17
-- Gradle CI 8.11.1
+Fusão de identidade:
+1. PC confiável do card;
+2. espécie/forma visual confiável;
+3. OCR de nome;
+4. eliminação apenas quando segura.
 
-Build principal: `.github/workflows/android-debug.yml`
+Depois da identidade confirmada, tipos, golpes e matchup vêm do banco PvPoke.
 
-Último build auditado e validado:
+### 3. Formas e estado exato por Pokémon
 
-- run `#89`
-- run id `36317141354`
-- conclusão: `success`
-- head `54a413dd4ffe20476e66fab1a1161f42e3298e2f`
-- artifact id `10931047917`
-- artifact `PVPPokeGo-V05-FIX2-audited-build`
-- APK interno: `PVPPokeGo_V05_FIX2-audited-debug.apk`
-- SHA-256 do APK: `909a9956539e5051aa1e9ae7df1e51ba4580ac0e5bd59c53b7dbabb653a98e82`
-- validação: `lintDebug + testDebugUnitTest + assembleDebug`
-- lint: 0 erros bloqueantes; 70 avisos não bloqueantes
+O estado interno passou a preservar `speciesId`/forma exata em:
+- equipe;
+- Pokémon ativo;
+- reservas;
+- trocas;
+- movesets;
+- tipos;
+- energia;
+- restauração de estado;
+- correspondência de batalha.
 
-## Regras que não podem regredir
+Duas formas com mesmo nome/Dex podem manter energia separada.
 
-O PvPPokeGo continua sendo assistente externo: MediaProjection + visão/OCR + overlay. Não injeta código, não modifica Pokémon GO e não automatiza cliques/gestos no jogo.
+### 4. Reservas e matchup
 
-O HUD não pode cobrir nome/PC, HP, Pokébolas, escudos, tipos nativos, botões de ataque do jogador nem áreas importantes de toque.
+- `ReserveCardMatcher` usa PC + espécie visual exata + Dex apenas quando seguro.
+- CP tem prioridade quando é único.
+- Evidência visual exata pode recuperar card cujo CP ficou ilegível.
+- forma visual exata vence um Dex compartilhado.
+- Dex ambíguo sozinho não confirma forma.
+- reserva não confirmada não recebe recomendação específica confiável.
+- `identitySource` registra de onde veio a confirmação.
+- tipos e matchup ficam escondidos/desconhecidos enquanto a identidade é insuficiente.
 
-Energia inimiga e energia própria são modelos separados. Fast Move inimigo só deve ser contado por evidência do inimigo; ação do jogador não pode incrementar energia inimiga.
+### 5. Carregados duplicados
 
-Cada Pokémon adversário preserva energia/contagem ao trocar e voltar.
+Foi criado `ChargedAnimationCycleGate`.
 
-## Funções V05 integradas
+O mesmo carregado visto em vários frames da mesma animação:
+- gera um único evento;
+- desconta energia uma única vez;
+- não rearma por uma falha isolada de OCR.
 
-- confiança de presença de batalha
-- HUD oculto fora da batalha automática
-- modo manual disponível mesmo sem `battleActive`
-- energia inimiga com estado confirmado/estimado/faixa
-- energia própria para recomendações
-- Battle Assist / Copilot
-- Shield Advisor
-- reservas `MELHOR / NEUTRO / EVITAR`
-- histórico opcional do inimigo
-- topo ancorado dinamicamente aos cards nativos
-- ataques inimigos com visual de Charged do GO
-- quick menu básico/avançado
-- menu ícone+texto ou somente ícones
-- engrenagem independente e arrastável
-- badge de liga independente e arrastável
-- detecção de Liga Grande/Ultra/Mestra/Auto
-- olho para ocultar/restaurar HUD
-- cadeado global para travar/destravar posições
-- modo edição avançado com escala/opacidade/hide/undo/reset
+Dois carregados legítimos consecutivos continuam possíveis depois que a animação anterior realmente terminou.
 
-## Auditoria V05 FIX2 — bugs corrigidos
+### 6. Dois carregados do inimigo
 
-Além do reparo original de arraste `66e40a9247bee74b489dd724e630ac7f5014a18e`, a auditoria encontrou e corrigiu:
+Foi criado/reforçado `ChargedMoveSlotResolver`.
 
-1. HUD desaparecendo no modo manual quando reconhecimento automático estava desligado.
-2. Submenu de golpes recusando toque no modo manual por exigir `battleActive=true`.
-3. Locks/hide individuais não respeitados em alguns hit-tests de tipos fortes, ataques e reservas.
-4. Reset de layout incompleto, que preservava escala/opacidade/lock/edit global.
-5. Estado antigo de edição/free-drag podendo reviver após sessão interrompida.
-6. Corrida de ciclo de vida ao iniciar MediaProjection, capaz de deixar HUD preso oculto ou aparecer sobre a própria tela do app.
-7. Corrida de memória no `ScreenCapture`: bitmap podia ser reciclado enquanto outra thread copiava o frame.
-8. OCR filtrado por cor bloqueando indevidamente o fallback para OCR da imagem original quando gerava texto inválido.
-9. Uso de `currentWindowMetrics` sem fallback de API, incompatível com Android 10 apesar de `minSdk=29`.
-10. Ausência de testes Android reais no módulo `app`; foram adicionados testes de energia residual/faixa/cap e presença/histerese de batalha.
-11. Modo edição explicitamente escolhido antes de um início limpo agora é preservado; somente sessão anterior interrompida limpa o estado por segurança.
+Regras:
+- primeiro carregado observado ocupa o primeiro slot disponível;
+- segundo golpe **distinto** ocupa o segundo slot;
+- repetir o mesmo golpe mantém o mesmo slot;
+- escolha manual não é sobrescrita por observação automática;
+- dois slots manuais não são substituídos automaticamente.
 
-## Controles atuais da overlay
+### 7. PC estável
 
-- olho: ocultar/mostrar HUD inteiro; quando oculto, somente o olho deve permanecer para restaurar;
-- cadeado: destravar/travar posições;
-- engrenagem: abrir menu rápido; arrastável quando cadeado está aberto;
-- badge da liga: mostrar modo atual; arrastável independentemente quando cadeado está aberto.
+`StableCpTracker` impede que leituras como 1486 → 143 ou 1499 → 149 substituam imediatamente o valor confiável.
 
-Esses controles devem ser independentes, não colados uns aos outros.
+- um frame truncado não vira verdade;
+- uma leitura ruim isolada não substitui CP estável;
+- mudança real de sujeito limpa o contexto antigo;
+- o motor restaura CP pelo slot exato/forma antes de fallback por nome.
 
-## Limitação conhecida de interação
+### 8. Ataques rápidos e energia
 
-Enquanto o cadeado global está aberto ou o modo edição está ativo, a implementação atual usa uma camada transparente fullscreen para selecionar/arrastar blocos. Portanto, essa fase de posicionamento pode interceptar os toques do Pokémon GO.
+`FastMoveSignalFuser` e `BattleFrameEventDetector` foram endurecidos:
+- queda de HP é o sinal principal;
+- microqueda pode acumular;
+- duração/cadência do Fast Move limita duplicação;
+- quedas compatíveis com carregado são rejeitadas para contagem FAST;
+- produção não cria Fast Move apenas por movimento visual;
+- pode recuperar rápidos perdidos por cadência quando há evidência de HP;
+- energia é mantida por Pokémon/forma e respeita cap;
+- carregado observado desconta energia uma vez.
 
-Regra de uso atual: posicionar o HUD e **fechar o cadeado antes de batalhar**. O serviço sempre rearma o cadeado fechado ao criar uma nova sessão de overlay.
+### 9. Recomendações e confiança
 
-Uma evolução futura pode substituir essa camada fullscreen por touch-zones de arraste por bloco para permitir edição sem capturar o restante da tela.
+Recomendação específica exige contexto suficiente.
 
-## Dados PvP
+- identidade fraca/ambígua não deve gerar conselho específico como se fosse confirmado;
+- visual de baixa confiança não pode substituir estado confiável;
+- reserva não confirmada é excluída de recomendação;
+- moveset observado/manual/estimado permanece distinguido;
+- golpes estimados da reserva não devem ser apresentados como confirmação real.
 
-PvPoke continua como fonte principal para rankings, movesets, energia e matchups.
+### 10. Histórico e exportação
 
-RankedBoost pode ser usado apenas como fonte secundária de stats gerais/consulta, não como ranking PvP principal.
+O histórico mantém:
+- JSON;
+- CSV;
+- TXT legível;
+- exportação por batalha ou completa;
+- início/fim de sessão;
+- motivo de encerramento;
+- trocas estáveis;
+- snapshots de estado;
+- HP;
+- energia/faixa;
+- escudos;
+- ativos;
+- confiança;
+- fonte dos eventos;
+- versão real do app;
+- versão/snapshot da base PvPoke;
+- resultado apenas quando detectado.
 
-## Próxima validação em aparelho
+A UI do histórico separa por batalha e por grupos:
+- Resumo;
+- Você;
+- Inimigo;
+- Assistente;
+- Diagnóstico técnico.
 
-Testar a FIX2 auditada nesta ordem:
+### 11. Gravação de tela
 
-1. iniciar overlay e entrar em batalha;
-2. tocar no cadeado e confirmar mudança visual fechado/aberto;
-3. com cadeado aberto, arrastar ataques, reservas, ícones do topo, Assistido, olho/cadeado/engrenagem/badge;
-4. fechar cadeado e confirmar que os elementos ficam fixos;
-5. tocar no olho e confirmar que tudo desaparece exceto o próprio olho;
-6. restaurar pelo olho;
-7. testar modo manual com Reconhecimento automático desligado;
-8. testar submenu dos ataques em modo manual;
-9. confirmar reconhecimento do jogador/oponente e contagem durante uma batalha real;
-10. em Android 10, confirmar que a captura inicia sem crash.
+Existem dois caminhos:
 
-Se houver falha em aparelho, usar esta FIX2 como baseline e corrigir incrementalmente; não voltar ao APK V05 de SHA `5a04510515e89d0acd0473ae5ed1ec4b52f746cde0e0410134a1b637afedff8a`.
+**Gravação interna**
+- `ScreenFrameRecorder`;
+- MediaCodec/MP4;
+- validação de arquivo;
+- erro do encoder é mostrado em vez de falhar silenciosamente.
+
+**Gravador Samsung/externo**
+- novo `PvPPokeGoAccessibilityCaptureService`;
+- usa a API de screenshot do AccessibilityService como fonte alternativa;
+- não lê nós da interface e não executa toques;
+- opção de iniciar overlay em modo compatível sem abrir MediaProjection;
+- se outra gravação revoga MediaProjection, o serviço não encerra automaticamente e tenta migrar para a captura de acessibilidade.
+
+Limitação real:
+- a API de screenshot de acessibilidade tem taxa menor que MediaProjection;
+- OCR/identidade/tipos/matchup continuam úteis;
+- contagem FAST de alta frequência pode ficar menos precisa;
+- compatibilidade Samsung/gravadores externos ainda precisa de validação em aparelho real com o serviço de acessibilidade habilitado.
+
+### 12. Ícone oficial
+
+O ícone oficial é a imagem enviada pelo usuário: **Icon PVPPokeGo.png**.
+
+No projeto:
+- `app/src/main/res/drawable-nodpi/pvppokego_launcher.png`
+- `drawable/pvppokego_launcher_foreground.xml`
+- `mipmap-anydpi-v26/ic_launcher.xml`
+- `mipmap-anydpi-v26/ic_launcher_round.xml`
+- Manifest usa `@mipmap/ic_launcher` e `@mipmap/ic_launcher_round`.
+
+Não substituir por Android genérico.
+
+## Testes unitários importantes
+
+Arquivos atuais:
+- `BattleHistorySegmentMatcherTest`
+- `PokemonTypeSanitizerTest`
+- `BattlePresenceTrackerTest`
+- `FastMoveSignalFuserTest`
+- `BattleContinuityPolicyTest`
+- `BattleCorrespondenceTrackerTest`
+- `BattleStateStoreTest`
+- `ChargedAnimationCycleGateTest`
+- `ChargedMoveSlotResolverTest`
+- `EnergyTrackerTest`
+- `ReserveCardMatcherTest`
+- `StableCpTrackerTest`
+
+Casos cobertos incluem:
+- animação de carregado repetida em vários frames = 1 evento;
+- carregados consecutivos legítimos;
+- segundo carregado distinto ocupa segundo slot;
+- escolha manual preservada;
+- CP truncado não substitui CP confiável;
+- troca não divide batalha;
+- um frame ruim não cria nova batalha;
+- rematch normal permanece separado;
+- fragmento de batalha pode ser reconectado;
+- formas regionais distintas;
+- energia separada por forma;
+- Cramorant/Rillaboom por CP;
+- recuperação visual quando CP não é legível;
+- Dex compartilhado permanece incerto sem sinal adicional;
+- Rillaboom somente Planta;
+- Cramorant Voador/Água.
+
+## Arquivos-chave alterados na 0.5.20
+
+- `app/build.gradle.kts`
+- `app/src/main/AndroidManifest.xml`
+- `capture/AccessibilityScreenCapture.kt`
+- `capture/ScreenCapture.kt`
+- `capture/ScreenFrameRecorder.kt`
+- `data/Models.kt`
+- `data/GameDataRepository.kt`
+- `data/BattleHistoryRepository.kt`
+- `data/BattleHistorySegmentMatcher.kt`
+- `detect/BattleOcrDetector.kt`
+- `detect/PokemonVisualRecognizer.kt`
+- `detect/BattleFrameEventDetector.kt`
+- `engine/BattleEngine.kt`
+- `engine/BattleAssistAdvisor.kt`
+- `engine/BattleContinuityPolicy.kt`
+- `engine/BattleCorrespondenceTracker.kt`
+- `engine/BattleStateStore.kt`
+- `engine/ReserveCardMatcher.kt`
+- `engine/ChargedAnimationCycleGate.kt`
+- `engine/ChargedMoveSlotResolver.kt`
+- `engine/StableCpTracker.kt`
+- `overlay/BattleOverlayService.kt`
+- `overlay/BattleOverlayView.kt`
+- `overlay/QuickOverlayMenu.kt`
+- `ui/SettingsScreen.kt`
+- launcher/adaptive icon resources
+- `tools/package_visual_fingerprints.py`
+- `.github/workflows/release-0.5.20.yml`
+- `.github/workflows/package-project-zip.yml`
+- testes correspondentes.
+
+## O que ainda depende de aparelho/vídeo real
+
+1. Samsung Screen Recorder + modo de acessibilidade habilitado.
+2. Gravadores externos específicos.
+3. Precisão FAST em captura de acessibilidade mais lenta.
+4. Pokémon/formas/costumes raros que não tenham fingerprint visual forte.
+5. Ajustes finos de regiões visuais em outras proporções/resoluções de tela.
+6. Comportamento do encoder MP4 em modelos Android diferentes.
+
+Esses itens não invalidam o build; são validações de hardware/cenário real.
+
+## Próxima versão
+
+A próxima versão nova deve ser **0.5.21**.
+
+Nunca gerar outro binário diferente chamado 0.5.20.
