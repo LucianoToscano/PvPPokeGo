@@ -57,6 +57,7 @@ data class DetectedPokemon(
     val rawText: String,
     /** Optional independent visual evidence from the Pokémon portrait. */
     val visualDex: Int? = null,
+    val visualSpeciesId: String? = null,
     val visualConfidence: Float? = null
 )
 
@@ -69,6 +70,7 @@ data class BattleDetection(
 data class ReserveCardEvidence(
     val cp: Int?,
     val visualDex: Int? = null,
+    val visualSpeciesId: String? = null,
     val visualConfidence: Float? = null
 )
 
