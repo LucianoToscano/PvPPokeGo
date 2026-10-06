@@ -9,6 +9,7 @@ import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
+import com.lucianotoscano.pvppokego.data.ReserveCardEvidence
 import com.lucianotoscano.pvppokego.data.ReserveState
 import java.text.Normalizer
 
@@ -59,6 +60,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val reserveCardCps = arrayOfNulls<Int>(2)
     private val reserveCpCandidate = arrayOfNulls<Int>(2)
     private val reserveCpStreak = IntArray(2)
+    private val reserveCardDexes = arrayOfNulls<Int>(2)
+    private val reserveDexCandidate = arrayOfNulls<Int>(2)
+    private val reserveDexStreak = IntArray(2)
     private var ownSwitchReadyAtMs: Long = 0L
     private var opponentSwitchReadyAtMs: Long = 0L
     private var chargedPendingSinceMs: Long? = null
@@ -94,6 +98,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
         reserveCpStreak.fill(0)
+        reserveCardDexes.fill(null)
+        reserveDexCandidate.fill(null)
+        reserveDexStreak.fill(0)
         ownSwitchReadyAtMs = 0L
         opponentSwitchReadyAtMs = 0L
         chargedPendingSinceMs = null
@@ -198,15 +205,14 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     /**
-     * Receives CPs OCR'd directly from Pokemon GO's two native reserve cards.
-     * Two equal observations are required before a CP becomes authoritative.
+     * Fuses OCR CP and visual National Dex evidence from Pokemon GO's two reserve cards.
+     * CP always has priority. Image evidence is accepted only when it is strong and maps
+     * to exactly one known team member.
      */
-    fun onReserveCardCps(topCp: Int?, bottomCp: Int?) {
-        fun update(index: Int, cp: Int?) {
+    fun onReserveCardEvidence(top: ReserveCardEvidence, bottom: ReserveCardEvidence) {
+        fun updateCp(index: Int, cp: Int?) {
             if (cp == null) return
 
-            // With three independently OCR'd team cards, a reserve CP that uniquely
-            // matches one stable team member is safe to accept immediately.
             val uniqueKnownCp = ownTeamSlots.count { it.cp == cp } == 1
             if (uniqueKnownCp) {
                 reserveCardCps[index] = cp
@@ -223,17 +229,54 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
             if (reserveCpStreak[index] >= 2) reserveCardCps[index] = cp
         }
-        update(0, topCp)
-        update(1, bottomCp)
+
+        fun updateDex(index: Int, evidence: ReserveCardEvidence) {
+            val dex = evidence.visualDex ?: return
+            val confidence = evidence.visualConfidence ?: return
+            if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
+
+            val matchingMembers = ownTeamSlots.filter { slot ->
+                repo.pokemon(slot.name)?.dex?.takeIf { it > 0 } == dex
+            }
+            if (matchingMembers.size != 1) return
+
+            if (reserveDexCandidate[index] == dex) {
+                reserveDexStreak[index]++
+            } else {
+                reserveDexCandidate[index] = dex
+                reserveDexStreak[index] = 1
+            }
+
+            if (
+                confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
+                reserveDexStreak[index] >= RESERVE_VISUAL_CONFIRM_FRAMES
+            ) {
+                reserveCardDexes[index] = dex
+            }
+        }
+
+        listOf(top, bottom).forEachIndexed { index, evidence ->
+            updateCp(index, evidence.cp)
+            updateDex(index, evidence)
+        }
     }
 
+    fun onReserveCardCps(topCp: Int?, bottomCp: Int?) =
+        onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
+
     fun needsReserveCardScan(): Boolean =
-        ownTeamSlots.size >= 2 && reserveCardCps.any { it == null }
+        ownTeamSlots.size >= 2 &&
+            reserveCardCps.indices.any { index ->
+                reserveCardCps[index] == null && reserveCardDexes[index] == null
+            }
 
     private fun clearReserveCardIdentity() {
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
         reserveCpStreak.fill(0)
+        reserveCardDexes.fill(null)
+        reserveDexCandidate.fill(null)
+        reserveDexStreak.fill(0)
     }
 
     fun needsOwnTeamScan(): Boolean =
@@ -680,7 +723,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.minEnergy}-${tracker.maxEnergy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
                 appendLine("Battle conf=${"%.2f".format(lastBattleConfidence)} HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"}/${lastOpponentHpRatio?.let { "%.3f".format(it) } ?: "?"}")
-                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }}")
+                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }} DEXcards=${reserveCardDexes.joinToString { it?.toString() ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
                 append("Own C1=${ownCharge1?.name ?: "?"} C2=${ownCharge2?.name ?: "?"} state=${os?.speciesName ?: "?"}")
@@ -735,12 +778,20 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
         if (slots.isEmpty()) return emptyList()
 
-        val members = slots.map { ReserveCardMatcher.Member(it.slot, it.name, it.cp) }
+        val members = slots.map { slot ->
+            ReserveCardMatcher.Member(
+                slot = slot.slot,
+                name = slot.name,
+                cp = slot.cp,
+                dex = repo.pokemon(slot.name)?.dex?.takeIf { it > 0 }
+            )
+        }
         return ReserveCardMatcher.resolve(
             team = members,
             activeName = playerName,
             activeCp = playerCp,
-            cardCps = reserveCardCps.toList()
+            cardCps = reserveCardCps.toList(),
+            cardDexes = reserveCardDexes.toList()
         ).mapNotNull { match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
                 ResolvedOwnReserve(slot, match.cardCp, match.confirmed)
@@ -839,6 +890,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         .replace(Regex("[^a-z0-9]+"), "")
 
     companion object {
+        private const val RESERVE_VISUAL_MIN_CONFIDENCE = 0.76f
+        private const val RESERVE_VISUAL_IMMEDIATE_CONFIDENCE = 0.88f
+        private const val RESERVE_VISUAL_CONFIRM_FRAMES = 2
         private const val CHARGED_DEBOUNCE_MS = 4_200L
         private const val SWITCH_COOLDOWN_MS = 50_000L
         private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
