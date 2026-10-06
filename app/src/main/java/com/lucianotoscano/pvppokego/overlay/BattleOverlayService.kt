@@ -215,7 +215,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                     ?: error("MediaProjection indisponível")
                 mediaProjection.registerCallback(object : MediaProjection.Callback() {
                     override fun onStop() {
-                        if (!destroyingService) handleProjectionRevoked()
+                        if (!destroyingService) {
+                            scope.launch { handleProjectionRevoked() }
+                        }
                     }
                 }, null)
                 projection = mediaProjection
@@ -1452,7 +1454,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         return fresh.first
     }
 
-    private fun handleProjectionRevoked() {
+    private suspend fun handleProjectionRevoked() {
         projectionRevokedBySystem = true
         projection = null
         runCatching { capture?.stop() }
@@ -1466,15 +1468,19 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         if (usingAccessibilityFallback) {
             AccessibilityScreenCapture.clearLatest()
             lastAccessibilityFrameAtMs = 0L
-            refreshForegroundNotification(
-                "Gravador externo ativo • compatibilidade por screenshot • análise reduzida"
-            )
-        } else {
-            refreshForegroundNotification(
-                "Captura tomada por outro gravador • ative Compatibilidade com gravador externo"
-            )
         }
-        redraw()
+        withContext(Dispatchers.Main) {
+            if (usingAccessibilityFallback) {
+                refreshForegroundNotification(
+                    "Gravador externo ativo • compatibilidade por screenshot • análise reduzida"
+                )
+            } else {
+                refreshForegroundNotification(
+                    "Captura tomada por outro gravador • ative Compatibilidade com gravador externo"
+                )
+            }
+            redraw()
+        }
     }
 
     private fun currentBattleModeLabelText(): String {
