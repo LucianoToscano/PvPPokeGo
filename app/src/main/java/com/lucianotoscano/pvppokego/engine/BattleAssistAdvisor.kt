@@ -102,7 +102,7 @@ object BattleAssistAdvisor {
         }
 
         // 4) Smarter swap recommendation using the engine's move-aware reserve score.
-        val visibleReserves = state.reserves.filter { it.visible }
+        val visibleReserves = state.reserves.filter { it.visible && it.identityConfirmed }
         val bestReserve = visibleReserves.maxByOrNull { it.score }
         if (state.playerMatchup == MatchupState.UNFAVORABLE && bestReserve != null && bestReserve.score > -.10) {
             return Advice(
