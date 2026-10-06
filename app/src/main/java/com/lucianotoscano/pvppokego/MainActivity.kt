@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -46,6 +48,47 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Configurações exportadas", Toast.LENGTH_SHORT).show()
             }.onFailure {
                 Toast.makeText(this, "Falha ao exportar: ${it.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+
+    private val exportDiagnosticsLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            if (uri == null || !::settingsRepo.isInitialized || !::historyRepo.isInitialized) return@registerForActivityResult
+            runCatching {
+                contentResolver.openOutputStream(uri)?.use { raw ->
+                    ZipOutputStream(raw.buffered()).use { zip ->
+                        fun entry(name: String, text: String) {
+                            zip.putNextEntry(ZipEntry(name))
+                            zip.write(text.toByteArray(Charsets.UTF_8))
+                            zip.closeEntry()
+                        }
+                        entry("settings.json", settingsRepo.exportBackupJson())
+                        entry("battle_history.json", historyRepo.exportJson())
+                        entry(
+                            "device.txt",
+                            buildString {
+                                appendLine("PvPPokeGo=0.5.16")
+                                appendLine("package=" + packageName)
+                                appendLine("manufacturer=" + android.os.Build.MANUFACTURER)
+                                appendLine("model=" + android.os.Build.MODEL)
+                                appendLine("android=" + android.os.Build.VERSION.RELEASE)
+                                appendLine("sdk=" + android.os.Build.VERSION.SDK_INT)
+                                val dm = resources.displayMetrics
+                                appendLine("display=" + dm.widthPixels + "x" + dm.heightPixels)
+                                appendLine("densityDpi=" + dm.densityDpi)
+                            }
+                        )
+                        entry(
+                            "README.txt",
+                            "Diagnóstico PvPPokeGo 0.5.16\n" +
+                                "Inclui configurações, posições, histórico de batalhas, fontes/confiança dos eventos e dados do aparelho.\n"
+                        )
+                    }
+                } ?: error("Não foi possível criar o ZIP")
+            }.onSuccess {
+                Toast.makeText(this, "Diagnóstico exportado", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(this, "Falha ao exportar diagnóstico: " + it.message, Toast.LENGTH_LONG).show()
             }
         }
 
@@ -103,7 +146,9 @@ class MainActivity : ComponentActivity() {
                 onStopOverlay = ::stopOverlay,
                 onResetBattle = ::resetBattle,
                 onExportSettings = ::exportSettings,
-                onImportSettings = ::importSettings
+                onImportSettings = ::importSettings,
+                onExportDiagnostics = ::exportDiagnostics,
+                onToggleRecording = ::toggleRecording
             )
         }
     }
@@ -159,7 +204,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportSettings() {
-        exportSettingsLauncher.launch("PvPPokeGo-0.5.15-config.json")
+        exportSettingsLauncher.launch("PvPPokeGo-0.5.16-config.json")
+    }
+
+    private fun exportDiagnostics() {
+        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.16-diagnostico.zip")
+    }
+
+    private fun toggleRecording() {
+        if (!settingsRepo.overlayServiceRunning) {
+            Toast.makeText(this, "Inicie o overlay antes de gravar", Toast.LENGTH_LONG).show()
+            return
+        }
+        startService(
+            Intent(this, BattleOverlayService::class.java)
+                .setAction(BattleOverlayService.ACTION_TOGGLE_RECORDING)
+        )
     }
 
     private fun importSettings() {
