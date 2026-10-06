@@ -1080,10 +1080,14 @@ class BattleEngine(private val repo: GameDataRepository) {
         // nothing. Wait long enough for the impact animation and require several
         // stable HP observations before consuming a shield, so a delayed frame cannot
         // turn into a false shield event.
+        val defenderShields = if (targetIsOwn) ownShieldsRemaining else opponentShieldsRemaining
         if (
-            sample.observations >= MIN_SHIELD_OBSERVATIONS &&
-            nowMs - sample.armedAtMs >= CHARGED_SHIELD_SETTLE_MS &&
-            damage < MIN_CHARGED_DAMAGE_SAMPLE_FRACTION
+            ShieldObservationPolicy.isShieldLikely(
+                damageFraction = damage,
+                observations = sample.observations,
+                elapsedMs = nowMs - sample.armedAtMs,
+                shieldsRemaining = defenderShields
+            )
         ) {
             val remaining = if (targetIsOwn) {
                 if (ownShieldsRemaining <= 0) return null
@@ -1818,8 +1822,6 @@ class BattleEngine(private val repo: GameDataRepository) {
         private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
         private const val CHARGED_DAMAGE_OBSERVATION_WINDOW_MS = 6_000L
         private const val CHARGED_DAMAGE_SETTLE_MS = 420L
-        private const val CHARGED_SHIELD_SETTLE_MS = 2_800L
-        private const val MIN_SHIELD_OBSERVATIONS = 4
         private const val MIN_CHARGED_DAMAGE_SAMPLE_FRACTION = 0.010f
         private const val CHARGED_FAST_GUARD_MS = 2_200L
         private const val PENDING_CONFIRM_DELAY_MS = 2_400L
