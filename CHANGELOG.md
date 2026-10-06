@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.22
+
+- Corrigido o início do overlay no APK padrão após a separação do modo Recorder Compat.
+- O APK padrão volta ao caminho de foreground service comprovado na 0.5.19: somente `mediaProjection`, sem `specialUse`.
+- `FOREGROUND_SERVICE_SPECIAL_USE` e `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` ficam exclusivos da variante Recorder Compat.
+- Se o Android revogar a MediaProjection no APK padrão, o serviço encerra de forma limpa em vez de permanecer ativo sem uma fonte de captura.
+- A variante Recorder Compat preserva o fallback por screenshots de Acessibilidade para gravadores externos.
+- Nenhuma lógica de OCR, reconhecimento visual, correspondência/continuidade, reservas, energia, Charged, FAST, histórico ou HUD foi removida.
+
+
 ## 0.5.21
 
 - Corrigido o bloqueio de instalação mostrado pelo Google Play Protect: o APK principal não declara nem empacota mais o serviço de Acessibilidade usado para captura de compatibilidade.
