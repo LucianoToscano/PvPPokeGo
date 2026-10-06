@@ -20,6 +20,7 @@ class GameDataRepository(private val context: Context) {
     @Volatile private var gameMaster: GameMaster? = null
     @Volatile private var movesById: Map<String, MoveDef> = emptyMap()
     @Volatile private var pokemonByName: Map<String, PokemonDef> = emptyMap()
+    @Volatile private var pokemonByDex: Map<Int, List<PokemonDef>> = emptyMap()
     @Volatile private var uniquePokemon: List<PokemonDef> = emptyList()
     @Volatile private var ranking: List<RankingEntry> = emptyList()
     @Volatile private var moveNamesPtBr: Map<String, String> = emptyMap()
@@ -49,6 +50,9 @@ class GameDataRepository(private val context: Context) {
         pokemonByName = uniquePokemon
             .flatMap { p -> listOf(p.speciesName to p, p.speciesId to p) }
             .associate { normalizeName(it.first) to it.second }
+        pokemonByDex = uniquePokemon
+            .filter { it.dex > 0 }
+            .groupBy { it.dex }
 
         val rankingText = runCatching {
             context.assets.open("rankings-$leagueCp.json").bufferedReader().use { it.readText() }
@@ -73,6 +77,18 @@ class GameDataRepository(private val context: Context) {
     }
 
     fun pokemon(nameOrId: String?): PokemonDef? = nameOrId?.let { pokemonByName[normalizeName(it)] }
+
+    fun pokemonForDex(dex: Int): List<PokemonDef> = pokemonByDex[dex].orEmpty()
+
+    /**
+     * Visual recognition is only allowed to choose a species directly when that Pokédex
+     * number maps to one unambiguous PvPoke entry. Regional/forms that share a dex number
+     * are left to OCR/CP instead of guessing a potentially wrong type.
+     */
+    fun uniquePokemonForVisualDex(dex: Int): PokemonDef? {
+        val candidates = pokemonByDex[dex].orEmpty()
+        return candidates.singleOrNull()
+    }
 
     fun possibleFastMoves(speciesName: String): List<MoveDef> {
         val entry = ranking.firstOrNull { normalizeName(it.speciesName) == normalizeName(speciesName) }
