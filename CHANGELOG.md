@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.17
+
+- Ícone oficial enviado pelo usuário aplicado como ícone do APK/launcher.
+- Notificação persistente ganhou ícone grande do PvPPokeGo, estado ON/PAUSADO/OCULTO e ações rápidas no estilo Poke Genie/IVision.
+- As três ações prioritárias da notificação são Pausar/Retomar visão, Remover/Mostrar sobreposição e Parar serviço.
+- OCR passa a ler o CP dos dois cards nativos de reserva durante a batalha.
+- Tipos/matchup das reservas são associados ao Pokémon pelo CP real do card, em vez de depender de rotação presumida dos slots.
+- Após troca do Pokémon ativo, a associação dos cards é invalidada e confirmada novamente por OCR.
+- Dois resultados iguais de CP são exigidos antes de a associação virar autoritativa.
+- Quando a identidade de um card ainda não está confirmada, o HUD mostra estado desconhecido/IDENTIFICANDO em vez de exibir um tipo errado.
+- Detecção do time foi reforçada para preservar pares nome+CP quando aparecem na mesma linha ou em linhas adjacentes.
+- Testes adicionados para o caso Houndoom / Cramorant / Rillaboom e trocas de Pokémon.
+- Mantidas gravação interna, PvPoke offline, detector híbrido e diagnóstico da 0.5.16.
+
+
 ## 0.5.16
 
 - Novo detector híbrido de Fast Move: combina queda de HP, microqueda, cadência esperada e pico de movimento com confiança.

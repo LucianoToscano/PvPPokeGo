@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.media.projection.MediaProjection
@@ -25,6 +26,7 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.lucianotoscano.pvppokego.MainActivity
 import com.lucianotoscano.pvppokego.PvPPokeGoApp
+import com.lucianotoscano.pvppokego.R
 import com.lucianotoscano.pvppokego.capture.ScreenCapture
 import com.lucianotoscano.pvppokego.capture.ScreenFrameRecorder
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
@@ -214,7 +216,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 capture = ScreenCapture(this@BattleOverlayService, mediaProjection).also { it.start() }
                 withContext(Dispatchers.Main) { attachOverlay() }
                 startScanLoop()
-                startForeground(NOTIFICATION_ID, notification("0.5.16 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
+                startForeground(NOTIFICATION_ID, notification("0.5.17 • ${leagueLabel(currentLeagueCp)} • HUD PvP ativo"))
             } catch (t: Throwable) {
                 startForeground(NOTIFICATION_ID, notification("Erro: ${t.javaClass.simpleName}"))
                 stopSelf()
@@ -1152,6 +1154,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     switchChoicePromptUntilMs = now + SWITCH_CHOICE_PROMPT_GRACE_MS
                                 }
                                 val changes = e?.onDetection(d)
+                                if (battleActive || pairedCards) {
+                                    detector?.detectReserveCps(frame)?.let { (topCp, bottomCp) ->
+                                        e?.onReserveCardCps(topCp, bottomCp)
+                                    }
+                                }
                                 if (battleActive) historyRecorder.observeDetection(d, currentLeagueCp, now)
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
@@ -1305,7 +1312,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         switchChoicePromptUntilMs = 0L
         withContext(Dispatchers.Main) {
             dismissMoveMenu()
-            startForeground(NOTIFICATION_ID, notification("0.5.16 • ${leagueLabel(cp)} • HUD PvP ativo"))
+            startForeground(NOTIFICATION_ID, notification("0.5.17 • ${leagueLabel(cp)} • HUD PvP ativo"))
             redraw()
         }
     }
@@ -1440,19 +1447,25 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         val vision = serviceAction(1, ACTION_TOGGLE_VISION)
         val overlay = serviceAction(2, ACTION_TOGGLE_OVERLAY)
         val stop = serviceAction(3, ACTION_STOP)
-        val record = serviceAction(4, ACTION_TOGGLE_RECORDING)
+        val statusLabel = when {
+            overlaySuppressed -> "OCULTO"
+            visionPaused -> "PAUSADO"
+            else -> "ON"
+        }
+        val largeIcon = runCatching {
+            BitmapFactory.decodeResource(resources, R.drawable.pvppokego_launcher)
+        }.getOrNull()
         return NotificationCompat.Builder(this, PvPPokeGoApp.CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("PvPPokeGo")
+            .setSmallIcon(R.drawable.ic_stat_pvppokego)
+            .setLargeIcon(largeIcon)
+            .setContentTitle("PvPPokeGo • $statusLabel")
             .setContentText(text)
+            .setSubText("Assistente PvP • toque para abrir")
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setShowWhen(false)
             .setContentIntent(open)
-            .addAction(
-                android.R.drawable.ic_menu_camera,
-                if (screenRecorder?.isRecording == true) "Parar gravação" else "Gravar tela",
-                record
-            )
             .addAction(
                 android.R.drawable.ic_media_pause,
                 if (visionPaused) "Retomar visão" else "Pausar visão",

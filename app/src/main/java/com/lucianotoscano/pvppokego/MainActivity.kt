@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
                         entry(
                             "device.txt",
                             buildString {
-                                appendLine("PvPPokeGo=0.5.16")
+                                appendLine("PvPPokeGo=0.5.17")
                                 appendLine("package=" + packageName)
                                 appendLine("manufacturer=" + android.os.Build.MANUFACTURER)
                                 appendLine("model=" + android.os.Build.MODEL)
@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
                         )
                         entry(
                             "README.txt",
-                            "Diagnóstico PvPPokeGo 0.5.16\n" +
+                            "Diagnóstico PvPPokeGo 0.5.17\n" +
                                 "Inclui configurações, posições, histórico de batalhas, fontes/confiança dos eventos e dados do aparelho.\n"
                         )
                     }
@@ -204,11 +204,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportSettings() {
-        exportSettingsLauncher.launch("PvPPokeGo-0.5.16-config.json")
+        exportSettingsLauncher.launch("PvPPokeGo-0.5.17-config.json")
     }
 
     private fun exportDiagnostics() {
-        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.16-diagnostico.zip")
+        exportDiagnosticsLauncher.launch("PvPPokeGo-0.5.17-diagnostico.zip")
     }
 
     private fun toggleRecording() {

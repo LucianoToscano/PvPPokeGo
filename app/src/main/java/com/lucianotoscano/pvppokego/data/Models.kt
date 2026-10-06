@@ -80,6 +80,10 @@ data class ReserveState(
     val score: Double = 0.0,
     val teamSlot: Int? = null,
     val identityKey: String? = null,
+    /** CP read from Pokemon GO's native reserve card. */
+    val cardCp: Int? = null,
+    /** True when this reserve card was pinned to a team member by CP (or elimination). */
+    val identityConfirmed: Boolean = false,
     val fastMove: MoveDef? = null,
     val chargedMove1: MoveDef? = null,
     val chargedMove2: MoveDef? = null,
