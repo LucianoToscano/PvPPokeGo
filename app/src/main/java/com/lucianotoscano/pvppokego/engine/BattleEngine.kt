@@ -337,7 +337,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun needsOwnTeamScan(): Boolean =
         ownTeamSlots.size < 3 || ownTeamSlots.any { it.cp == null }
-    fun battleCorrespondenceContext(
+    internal fun battleCorrespondenceContext(
         inactiveForMs: Long,
         sessionAgeMs: Long
     ): BattleCorrespondenceTracker.Context {
@@ -371,7 +371,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         )
     }
 
-    fun battleCorrespondenceObservation(
+    internal fun battleCorrespondenceObservation(
         detection: BattleDetection,
         pairedCards: Boolean,
         battleTextEvidence: Boolean,
