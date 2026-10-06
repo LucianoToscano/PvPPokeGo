@@ -332,6 +332,71 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun needsOwnTeamScan(): Boolean =
         ownTeamSlots.size < 3 || ownTeamSlots.any { it.cp == null }
+    fun battleCorrespondenceContext(
+        inactiveForMs: Long,
+        sessionAgeMs: Long
+    ): BattleCorrespondenceTracker.Context {
+        fun identity(name: String?, cp: Int?): BattleCorrespondenceTracker.Identity? {
+            if (name.isNullOrBlank()) return null
+            val def = repo.pokemon(name)
+            return BattleCorrespondenceTracker.Identity(
+                name = name,
+                speciesId = def?.speciesId,
+                cp = cp,
+                confidence = 1f
+            )
+        }
+
+        val team = if (ownTeamSlots.isNotEmpty()) {
+            ownTeamSlots.mapNotNull { identity(it.name, it.cp) }
+        } else {
+            ownTeam.mapNotNull { (name, cp) -> identity(name, cp) }
+        }
+        val opponents = enemyStates.all()
+            .mapNotNull { state -> identity(state.speciesName, null) }
+            .distinctBy { it.stableKey() }
+
+        return BattleCorrespondenceTracker.Context(
+            activePlayer = identity(playerName, playerCp),
+            activeOpponent = identity(enemyName, enemyCp),
+            ownTeam = team,
+            knownOpponents = opponents,
+            inactiveForMs = inactiveForMs.coerceAtLeast(0L),
+            sessionAgeMs = sessionAgeMs.coerceAtLeast(0L)
+        )
+    }
+
+    fun battleCorrespondenceObservation(
+        detection: BattleDetection,
+        pairedCards: Boolean,
+        battleTextEvidence: Boolean,
+        switchPrompt: Boolean
+    ): BattleCorrespondenceTracker.Observation {
+        fun identity(pokemon: DetectedPokemon?): BattleCorrespondenceTracker.Identity? {
+            pokemon ?: return null
+            val def = pokemon.visualSpeciesId
+                ?.let(repo::pokemon)
+                ?: repo.pokemon(pokemon.name)
+            val confidence = maxOf(
+                pokemon.confidence,
+                pokemon.visualConfidence ?: 0f
+            ).coerceIn(0f, 1f)
+            return BattleCorrespondenceTracker.Identity(
+                name = def?.speciesName ?: pokemon.name,
+                speciesId = pokemon.visualSpeciesId ?: def?.speciesId,
+                cp = pokemon.cp,
+                confidence = confidence
+            )
+        }
+        return BattleCorrespondenceTracker.Observation(
+            player = identity(detection.player),
+            opponent = identity(detection.opponent),
+            pairedCards = pairedCards,
+            battleTextEvidence = battleTextEvidence,
+            switchPrompt = switchPrompt
+        )
+    }
+
     fun activePlayerName(): String? = playerName
     fun activeEnemyName(): String? = enemyName
     fun latestPlayerHpRatio(): Float? = lastHpRatio
