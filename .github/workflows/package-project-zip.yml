@@ -26,7 +26,10 @@ jobs:
 
       - name: Create project ZIP
         run: |
-          zip -r PvPPokeGo_COMPLETE_PROJECT.zip . -x "./.git/*"
+          # Keep generated offline assets, but never ship the temporary Python venv.
+          rm -rf .venv-visual
+          zip -r PvPPokeGo_COMPLETE_PROJECT.zip . \
+            -x "./.git/*" "./.gradle/*" "./app/build/*" "./build/*"
 
       - name: Upload project ZIP
         uses: actions/upload-artifact@v4
