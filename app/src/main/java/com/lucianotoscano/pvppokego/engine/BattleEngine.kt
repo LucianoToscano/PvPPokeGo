@@ -157,8 +157,12 @@ class BattleEngine(private val repo: GameDataRepository) {
             .take(3)
 
         // A complete team scan defines stable slot identities for the whole battle.
-        // Partial scans only enrich existing slots and never reorder them.
-        if (canonical.size >= 3) {
+        // Require name+CP for all three cards before replacing the stable mapping;
+        // a partial/uncertain OCR result may enrich existing slots but may not reorder them.
+        val completeTeam = canonical.size >= 3 && canonical.take(3).all { (_, cp, confidence) ->
+            cp != null && confidence >= 0.90f
+        }
+        if (completeTeam) {
             ownTeamSlots.clear()
             canonical.forEachIndexed { index, (name, cp, _) ->
                 ownTeamSlots += OwnTeamSlot(index, name, cp)
@@ -200,6 +204,17 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onReserveCardCps(topCp: Int?, bottomCp: Int?) {
         fun update(index: Int, cp: Int?) {
             if (cp == null) return
+
+            // With three independently OCR'd team cards, a reserve CP that uniquely
+            // matches one stable team member is safe to accept immediately.
+            val uniqueKnownCp = ownTeamSlots.count { it.cp == cp } == 1
+            if (uniqueKnownCp) {
+                reserveCardCps[index] = cp
+                reserveCpCandidate[index] = cp
+                reserveCpStreak[index] = 2
+                return
+            }
+
             if (reserveCpCandidate[index] == cp) {
                 reserveCpStreak[index]++
             } else {
@@ -212,13 +227,17 @@ class BattleEngine(private val repo: GameDataRepository) {
         update(1, bottomCp)
     }
 
+    fun needsReserveCardScan(): Boolean =
+        ownTeamSlots.size >= 2 && reserveCardCps.any { it == null }
+
     private fun clearReserveCardIdentity() {
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
         reserveCpStreak.fill(0)
     }
 
-    fun needsOwnTeamScan(): Boolean = ownTeamSlots.size < 3
+    fun needsOwnTeamScan(): Boolean =
+        ownTeamSlots.size < 3 || ownTeamSlots.any { it.cp == null }
     fun activePlayerName(): String? = playerName
     fun activeEnemyName(): String? = enemyName
     fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
@@ -577,7 +596,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     likely.second,
                     likely.third
                 )
-                val score = reserveScore(name, cp, types, eTypes)
+                val score = if (resolved.confirmed) reserveScore(name, cp, types, eTypes) else 0.0
                 ReserveState(
                     name = name,
                     cp = cp,
@@ -597,10 +616,12 @@ class BattleEngine(private val repo: GameDataRepository) {
                     chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2)
                 )
             }
-        val bestVisibleScore = rawReserves.filter { it.visible }.maxOfOrNull { it.score }
+        val bestVisibleScore = rawReserves
+            .filter { it.visible && it.identityConfirmed }
+            .maxOfOrNull { it.score }
         val reserveStates = rawReserves.map { r ->
             val label = when {
-                !r.visible -> null
+                !r.visible || !r.identityConfirmed -> null
                 bestVisibleScore != null && r.score >= bestVisibleScore - .08 && r.score > .05 -> "MELHOR"
                 r.score < -.35 -> "EVITAR"
                 else -> "NEUTRO"
