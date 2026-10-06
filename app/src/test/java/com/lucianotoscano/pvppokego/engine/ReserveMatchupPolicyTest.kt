@@ -2,6 +2,8 @@ package com.lucianotoscano.pvppokego.engine
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import com.lucianotoscano.pvppokego.data.MatchupState
 import org.junit.Test
 
 class ReserveMatchupPolicyTest {
@@ -55,5 +57,12 @@ class ReserveMatchupPolicyTest {
                 cardMappingConfirmed = true
             )
         )
+    }
+
+    @Test
+    fun scoreProducesExplicitStrongNeutralWeakStates() {
+        assertEquals(MatchupState.FAVORABLE, ReserveMatchupPolicy.classifyScore(0.45))
+        assertEquals(MatchupState.NEUTRAL, ReserveMatchupPolicy.classifyScore(0.02))
+        assertEquals(MatchupState.UNFAVORABLE, ReserveMatchupPolicy.classifyScore(-0.40))
     }
 }
