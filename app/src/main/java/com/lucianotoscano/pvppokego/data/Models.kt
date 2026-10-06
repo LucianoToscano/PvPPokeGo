@@ -250,6 +250,9 @@ data class BattleUiState(
     val incomingDamagePreview: DamageForecast? = null,
     val captureHealth: CaptureHealth = CaptureHealth.FRESH,
     val captureStatusText: String? = null,
+    /** Local-only history pattern, never stronger than current battle evidence. */
+    val strategyPatternHint: String? = null,
+    val strategyPatternConfidence: Float = 0f,
     /** Damage learned from observations in this battle/matchup. */
     val incomingFastDamage: ObservedDamageEstimate? = null,
     val incomingCharged1Damage: ObservedDamageEstimate? = null,
