@@ -192,6 +192,7 @@ class MainActivity : ComponentActivity() {
                 onRequestOverlayPermission = ::requestOverlayPermission,
                 recorderCompatibilityEnabled = recorderCompatibilityEnabled,
                 onOpenRecorderCompatibility = ::openRecorderCompatibility,
+                onStartExternalRecorderMode = ::startExternalRecorderMode,
                 onStartOverlay = ::startOverlay,
                 onStopOverlay = ::stopOverlay,
                 onResetBattle = ::resetBattle,
@@ -247,6 +248,28 @@ class MainActivity : ComponentActivity() {
             Toast.LENGTH_LONG
         ).show()
         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+    private fun startExternalRecorderMode() {
+        if (!Settings.canDrawOverlays(this)) {
+            requestOverlayPermission()
+            return
+        }
+        if (!AccessibilityScreenCapture.isConnected) {
+            openRecorderCompatibility()
+            return
+        }
+        overlayStarting = true
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, BattleOverlayService::class.java)
+                .setAction(BattleOverlayService.ACTION_START_ACCESSIBILITY_CAPTURE)
+        )
+        Toast.makeText(
+            this,
+            "Modo gravador externo iniciado. Agora você pode iniciar o gravador Samsung/terceiro.",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun startOverlay() {
