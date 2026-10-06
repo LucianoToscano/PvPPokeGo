@@ -56,6 +56,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val ownTeamSlots = mutableListOf<OwnTeamSlot>()
     private val reserveSlotVisible = arrayOfNulls<Boolean>(2)
     private val reserveMissingStreak = IntArray(2)
+    private val reserveCardCps = arrayOfNulls<Int>(2)
+    private val reserveCpCandidate = arrayOfNulls<Int>(2)
+    private val reserveCpStreak = IntArray(2)
     private var ownSwitchReadyAtMs: Long = 0L
     private var opponentSwitchReadyAtMs: Long = 0L
     private var chargedPendingSinceMs: Long? = null
@@ -88,6 +91,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownTeamSlots.clear()
         reserveSlotVisible.fill(null)
         reserveMissingStreak.fill(0)
+        reserveCardCps.fill(null)
+        reserveCpCandidate.fill(null)
+        reserveCpStreak.fill(0)
         ownSwitchReadyAtMs = 0L
         opponentSwitchReadyAtMs = 0L
         chargedPendingSinceMs = null
@@ -130,6 +136,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         if (playerChanged) {
             reserveSlotVisible.fill(null)
             reserveMissingStreak.fill(0)
+            clearReserveCardIdentity()
             ownSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
         }
         if (enemyChanged) opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
@@ -178,6 +185,31 @@ class BattleEngine(private val repo: GameDataRepository) {
         }
         update(0, firstVisible)
         update(1, secondVisible)
+    }
+
+    /**
+     * Receives CPs OCR'd directly from Pokemon GO's two native reserve cards.
+     * Two equal observations are required before a CP becomes authoritative.
+     */
+    fun onReserveCardCps(topCp: Int?, bottomCp: Int?) {
+        fun update(index: Int, cp: Int?) {
+            if (cp == null) return
+            if (reserveCpCandidate[index] == cp) {
+                reserveCpStreak[index]++
+            } else {
+                reserveCpCandidate[index] = cp
+                reserveCpStreak[index] = 1
+            }
+            if (reserveCpStreak[index] >= 2) reserveCardCps[index] = cp
+        }
+        update(0, topCp)
+        update(1, bottomCp)
+    }
+
+    private fun clearReserveCardIdentity() {
+        reserveCardCps.fill(null)
+        reserveCpCandidate.fill(null)
+        reserveCpStreak.fill(0)
     }
 
     fun needsOwnTeamScan(): Boolean = ownTeamSlots.size < 3
@@ -521,9 +553,10 @@ class BattleEngine(private val repo: GameDataRepository) {
         val f = fast
         val of = ownFast
 
-        val rawReserves = orderedOwnReserves()
+        val rawReserves = resolvedOwnReserves()
             .take(2)
-            .mapIndexed { index, slot ->
+            .mapIndexed { index, resolved ->
+                val slot = resolved.slot
                 val name = slot.name
                 val cp = slot.cp
                 val types = repo.pokemon(name)?.types.orEmpty()
@@ -548,6 +581,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                     score = score,
                     teamSlot = slot.slot,
                     identityKey = identity,
+                    cardCp = resolved.cardCp,
+                    identityConfirmed = resolved.confirmed,
                     fastMove = reserveFast,
                     chargedMove1 = reserveC1,
                     chargedMove2 = reserveC2,
@@ -618,7 +653,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.minEnergy}-${tracker.maxEnergy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
                 appendLine("Battle conf=${"%.2f".format(lastBattleConfidence)} HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"}/${lastOpponentHpRatio?.let { "%.3f".format(it) } ?: "?"}")
-                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }}")
+                appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
                 append("Own C1=${ownCharge1?.name ?: "?"} C2=${ownCharge2?.name ?: "?"} state=${os?.speciesName ?: "?"}")
@@ -657,21 +692,33 @@ class BattleEngine(private val repo: GameDataRepository) {
         return typeBase + (offense - 1.0) * .75 - (danger - 1.0) * .65
     }
 
+    private data class ResolvedOwnReserve(
+        val slot: OwnTeamSlot,
+        val cardCp: Int?,
+        val confirmed: Boolean
+    )
+
     /**
-     * Pokemon GO rotates the two reserve cards after a switch. Keep the three team
-     * identities fixed, then derive the two visible reserves relative to the active slot.
+     * Native reserve-card CPs are authoritative. This replaces the old circular-slot
+     * assumption that could place Houndoom's Fire/Dark types under a Rillaboom card.
      */
-    private fun orderedOwnReserves(): List<OwnTeamSlot> {
+    private fun resolvedOwnReserves(): List<ResolvedOwnReserve> {
         val slots = if (ownTeamSlots.isNotEmpty()) ownTeamSlots.toList() else {
             ownTeam.entries.mapIndexed { index, (name, cp) -> OwnTeamSlot(index, name, cp) }
         }
         if (slots.isEmpty()) return emptyList()
-        val active = playerName ?: return slots
-        val activeIndex = slots.indexOfFirst {
-            it.name.equals(active, ignoreCase = true) && (playerCp == null || it.cp == null || it.cp == playerCp)
-        }.let { if (it >= 0) it else slots.indexOfFirst { s -> s.name.equals(active, true) } }
-        if (activeIndex < 0) return slots.filterNot { it.name.equals(active, true) }
-        return (1 until slots.size).map { offset -> slots[(activeIndex + offset) % slots.size] }
+
+        val members = slots.map { ReserveCardMatcher.Member(it.slot, it.name, it.cp) }
+        return ReserveCardMatcher.resolve(
+            team = members,
+            activeName = playerName,
+            activeCp = playerCp,
+            cardCps = reserveCardCps.toList()
+        ).mapNotNull { match ->
+            slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
+                ResolvedOwnReserve(slot, match.cardCp, match.confirmed)
+            }
+        }
     }
 
     /** Picks two distinct charged moves and never reuses slot #1 as slot #2. */
