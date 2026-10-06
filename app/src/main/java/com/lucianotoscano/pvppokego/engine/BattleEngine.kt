@@ -179,12 +179,20 @@ class BattleEngine(private val repo: GameDataRepository) {
                 detected.cp
             )
 
+            val activeConfidence = maxOf(detected.confidence, detected.visualConfidence ?: 0f)
             rememberOwnPokemon(
                 canonical,
                 stableCp,
                 speciesId,
                 dex,
-                maxOf(detected.confidence, detected.visualConfidence ?: 0f)
+                activeConfidence
+            )
+            ensureActiveOwnTeamSlot(
+                name = canonical,
+                cp = stableCp,
+                speciesId = speciesId,
+                dex = dex,
+                confidence = activeConfidence
             )
             if (!samePokemonIdentity(playerName, playerSpeciesId, canonical, speciesId)) {
                 onPlayerChanged(canonical, stableCp, speciesId)
@@ -394,11 +402,6 @@ class BattleEngine(private val repo: GameDataRepository) {
             val confidence = evidence.visualConfidence ?: return
             if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
 
-            val matchingMembers = ownTeamSlots.filter { slot ->
-                slot.speciesId.equals(speciesId, ignoreCase = true)
-            }
-            if (matchingMembers.size != 1) return
-
             if (reserveSpeciesCandidate[index].equals(speciesId, ignoreCase = true)) {
                 reserveSpeciesStreak[index]++
             } else {
@@ -406,23 +409,22 @@ class BattleEngine(private val repo: GameDataRepository) {
                 reserveSpeciesStreak[index] = 1
             }
 
-            if (
-                confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
+            val accepted = confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
                 reserveSpeciesStreak[index] >= RESERVE_VISUAL_CONFIRM_FRAMES
-            ) {
-                reserveCardSpeciesIds[index] = speciesId
-            }
+            if (!accepted) return
+
+            // A reserve card is first-class own-team evidence. Older code only accepted
+            // a visual match if that Pokémon was already present in ownTeamSlots, which
+            // made mid-battle starts get stuck on "IDENTIFICANDO". Exact form-aware
+            // speciesId may now seed the missing team member conservatively.
+            reserveCardSpeciesIds[index] = speciesId
+            bootstrapReserveTeamMember(evidence)
         }
 
         fun updateDex(index: Int, evidence: ReserveCardEvidence) {
             val dex = evidence.visualDex ?: return
             val confidence = evidence.visualConfidence ?: return
             if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
-
-            val matchingMembers = ownTeamSlots.filter { slot ->
-                (slot.dex ?: slotDefinition(slot)?.dex?.takeIf { it > 0 }) == dex
-            }
-            if (matchingMembers.size != 1) return
 
             if (reserveDexCandidate[index] == dex) {
                 reserveDexStreak[index]++
@@ -431,12 +433,12 @@ class BattleEngine(private val repo: GameDataRepository) {
                 reserveDexStreak[index] = 1
             }
 
-            if (
-                confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
+            val accepted = confidence >= RESERVE_VISUAL_IMMEDIATE_CONFIDENCE ||
                 reserveDexStreak[index] >= RESERVE_VISUAL_CONFIRM_FRAMES
-            ) {
-                reserveCardDexes[index] = dex
-            }
+            if (!accepted) return
+
+            reserveCardDexes[index] = dex
+            bootstrapReserveTeamMember(evidence)
         }
 
         listOf(top, bottom).forEachIndexed { index, evidence ->
@@ -450,12 +452,13 @@ class BattleEngine(private val repo: GameDataRepository) {
         onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
 
     fun needsReserveCardScan(): Boolean =
-        ownTeamSlots.size >= 2 &&
-            reserveCardCps.indices.any { index ->
-                reserveCardCps[index] == null &&
-                    reserveCardSpeciesIds[index] == null &&
-                    reserveCardDexes[index] == null
-            }
+        ReserveScanPolicy.shouldScan(
+            hasActivePlayer = !playerName.isNullOrBlank(),
+            knownTeamSize = ownTeamSlots.size,
+            cardCps = reserveCardCps.toList(),
+            cardDexes = reserveCardDexes.toList(),
+            cardSpeciesIds = reserveCardSpeciesIds.toList()
+        )
 
     private fun clearReserveCardIdentity() {
         reserveCardCps.fill(null)
@@ -601,6 +604,71 @@ class BattleEngine(private val repo: GameDataRepository) {
             it.name.equals(name, ignoreCase = true) &&
                 (cp == null || it.cp == null || it.cp == cp)
         }
+    }
+
+    private fun ensureActiveOwnTeamSlot(
+        name: String,
+        cp: Int?,
+        speciesId: String?,
+        dex: Int?,
+        confidence: Float
+    ) {
+        val existing = findOwnSlot(name, cp, speciesId)
+        if (existing != null) {
+            if (cp != null) existing.cp = cp
+            if (!speciesId.isNullOrBlank()) existing.speciesId = speciesId
+            if (dex != null && dex > 0) existing.dex = dex
+            existing.identityConfidence = maxOf(existing.identityConfidence, confidence)
+            return
+        }
+        if (confidence < IdentityThresholds.MIN_ACTIVE_BOOTSTRAP_CONFIDENCE || ownTeamSlots.size >= 3) return
+
+        val freeSlot = (0..2).firstOrNull { wanted -> ownTeamSlots.none { it.slot == wanted } } ?: return
+        val def = speciesId?.let(repo::pokemon) ?: repo.pokemon(name)
+        ownTeamSlots += OwnTeamSlot(
+            slot = freeSlot,
+            name = def?.speciesName ?: name,
+            cp = cp,
+            speciesId = def?.speciesId ?: speciesId,
+            dex = def?.dex?.takeIf { it > 0 } ?: dex,
+            identityConfidence = confidence
+        )
+    }
+
+    private fun bootstrapReserveTeamMember(evidence: ReserveCardEvidence) {
+        val confidence = evidence.visualConfidence ?: return
+        if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE || ownTeamSlots.size >= 3) return
+
+        val def = repo.pokemonForVisualIdentity(
+            evidence.visualSpeciesId,
+            evidence.visualDex ?: 0
+        ) ?: return
+
+        // During switch animation a stale native card can briefly contain the Pokémon
+        // that just became active. Never duplicate the active identity as a reserve.
+        if (samePokemonIdentity(playerName, playerSpeciesId, def.speciesName, def.speciesId)) return
+
+        val existing = findOwnSlot(def.speciesName, evidence.cp, def.speciesId)
+        if (existing != null) {
+            if (evidence.cp != null) existing.cp = evidence.cp
+            existing.speciesId = def.speciesId
+            if (def.dex > 0) existing.dex = def.dex
+            existing.identityConfidence = maxOf(existing.identityConfidence, confidence)
+            rememberOwnPokemon(def.speciesName, evidence.cp, def.speciesId, def.dex, confidence)
+            return
+        }
+
+        val freeSlot = (0..2).firstOrNull { wanted -> ownTeamSlots.none { it.slot == wanted } } ?: return
+        ownTeamSlots += OwnTeamSlot(
+            slot = freeSlot,
+            name = def.speciesName,
+            cp = evidence.cp,
+            speciesId = def.speciesId,
+            dex = def.dex.takeIf { it > 0 },
+            identityConfidence = confidence
+        )
+        rememberOwnPokemon(def.speciesName, evidence.cp, def.speciesId, def.dex, confidence)
+        rebindOwnActiveStateToStableSlot()
     }
 
     private fun rememberOwnPokemon(
@@ -1341,6 +1409,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         const val MIN_STABLE_TEAM_CONFIDENCE = 0.90f
         const val TEAM_VISUAL_MIN_CONFIDENCE = 0.76f
         const val ACTIVE_VISUAL_MIN_CONFIDENCE = 0.80f
+        const val MIN_ACTIVE_BOOTSTRAP_CONFIDENCE = 0.90f
     }
 
     companion object {
