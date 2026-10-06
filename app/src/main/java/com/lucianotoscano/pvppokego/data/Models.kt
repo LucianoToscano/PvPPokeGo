@@ -21,7 +21,9 @@ data class MoveDef(
 data class PokemonDef(
     val speciesId: String,
     val speciesName: String,
-    val types: List<String> = emptyList()
+    val types: List<String> = emptyList(),
+    /** National Pokédex number from the PvPoke gamemaster. Used by visual recognition. */
+    val dex: Int = 0
 )
 
 @Serializable
@@ -52,7 +54,10 @@ data class DetectedPokemon(
     val name: String,
     val cp: Int?,
     val confidence: Float,
-    val rawText: String
+    val rawText: String,
+    /** Optional independent visual evidence from the Pokémon portrait. */
+    val visualDex: Int? = null,
+    val visualConfidence: Float? = null
 )
 
 data class BattleDetection(
