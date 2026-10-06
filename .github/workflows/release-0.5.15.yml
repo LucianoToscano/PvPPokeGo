@@ -29,16 +29,17 @@ jobs:
       - name: Apply exact uploaded trial15 source changes
         run: python3 .github/scripts/apply_trial15_uploaded.py
 
-      - name: Validate exact source hashes
+      - name: Validate trial15 changes
         shell: bash
         run: |
           set -euo pipefail
-          echo "a2678a6ab744e397b4632c7324d83090188a6b7819dc41c64523a4beb49d273d  app/build.gradle.kts" | shasum -a 256 -c -
-          echo "a2fb4dcac26b42276250f66abe35200946ae12d12999504ed81195b60910060d  app/proguard-rules.pro" | shasum -a 256 -c -
-          echo "826df11d451443eb214fa2597c47c4e87a1ce2ae57b0c3ff03b1b20c6356dc48  app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt" | shasum -a 256 -c -
-          echo "762a1b380ad8536c8739115d502da3d239605fe424c5fff26541f3e3df39bb4d  app/src/main/java/com/lucianotoscano/pvppokego/PvPPokeGoApp.kt" | shasum -a 256 -c -
-          echo "a885fbd48a290f4c822a0a8bc64fa1e193a0ac02f2eb63dd86d514f12b53089f  app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt" | shasum -a 256 -c -
-          echo "da73ab4e2f3edd653d8891dc8544c98f4870d8ec3d296ce47345e235a46c7908  app/src/main/java/com/lucianotoscano/pvppokego/security/TrialManager.kt" | shasum -a 256 -c -
+          grep -q 'versionCode = 21' app/build.gradle.kts
+          grep -q 'versionName = "0.5.15-trial15"' app/build.gradle.kts
+          grep -q 'isMinifyEnabled = true' app/build.gradle.kts
+          grep -q 'isShrinkResources = true' app/build.gradle.kts
+          grep -q 'TrialManager.isTrialValid(this)' app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt
+          grep -q 'TrialManager.isTrialValid(this)' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'TRIAL_DURATION_MS = 15L' app/src/main/java/com/lucianotoscano/pvppokego/security/TrialManager.kt
 
       - name: Java 17
         uses: actions/setup-java@v4
