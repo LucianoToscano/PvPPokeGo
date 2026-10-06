@@ -17,15 +17,17 @@ import kotlin.math.min
  * Lightweight offline visual recognizer used as an independent third identity signal.
  *
  * It compares a Pokémon portrait against compact perceptual fingerprints generated from
- * PokeAPI HOME artwork. Source artwork is not stored in the APK; only dHash + color
- * histogram fingerprints are packaged.
+ * Pokémon GO addressable artwork (PokeMiners). Source artwork is not stored in the APK;
+ * only dHash + color histogram fingerprints are packaged.
  *
- * Visual evidence never guesses regional/forms that share the same National Dex number;
- * GameDataRepository decides whether a visual dex is unambiguous enough to become a name.
+ * Fingerprints are form-aware: the exact PvPoke speciesId is carried together with the
+ * National Dex number. Consumers may still fall back to dex-only evidence when an older
+ * bank does not contain speciesId.
  */
 class PokemonVisualRecognizer(context: Context) {
     data class Match(
         val dex: Int,
+        val speciesId: String?,
         val confidence: Float,
         val hashSimilarity: Float,
         val colorSimilarity: Float
@@ -34,6 +36,7 @@ class PokemonVisualRecognizer(context: Context) {
     @Serializable
     private data class FingerprintEntry(
         val dex: Int,
+        val speciesId: String? = null,
         val dhash: String,
         val hue: List<Int> = emptyList()
     )
@@ -47,6 +50,7 @@ class PokemonVisualRecognizer(context: Context) {
 
     private data class RuntimeEntry(
         val dex: Int,
+        val speciesId: String?,
         val hash: Long,
         val hue: IntArray
     )
@@ -65,6 +69,7 @@ class PokemonVisualRecognizer(context: Context) {
                     runCatching {
                         RuntimeEntry(
                             dex = entry.dex,
+                            speciesId = entry.speciesId?.takeIf { it.isNotBlank() },
                             hash = entry.dhash.toULong(16).toLong(),
                             hue = entry.hue.toIntArray()
                         )
@@ -107,6 +112,7 @@ class PokemonVisualRecognizer(context: Context) {
         if (bestScore < MIN_SCORE || margin < MIN_MARGIN) return null
         return Match(
             dex = winner.dex,
+            speciesId = winner.speciesId,
             confidence = bestScore.toFloat().coerceIn(0f, 1f),
             hashSimilarity = bestHash.toFloat().coerceIn(0f, 1f),
             colorSimilarity = bestColor.toFloat().coerceIn(0f, 1f)
