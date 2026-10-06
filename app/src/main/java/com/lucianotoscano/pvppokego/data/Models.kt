@@ -77,6 +77,19 @@ data class ReserveCardEvidence(
 enum class MatchupState { FAVORABLE, NEUTRAL, UNFAVORABLE, UNKNOWN }
 enum class EnergyConfidence { CONFIRMED, ESTIMATED, RANGE }
 
+enum class DamageConfidence { FIRST_SAMPLE, ESTIMATED, STABLE }
+
+data class ObservedDamageEstimate(
+    val averagePercent: Float,
+    val minPercent: Float,
+    val maxPercent: Float,
+    /** Normalized bar points: 1000 = 100% HP. Not the Pokémon's real HP stat. */
+    val averagePoints: Int,
+    val samples: Int,
+    val projectedRemainingPercent: Float? = null,
+    val confidence: DamageConfidence = DamageConfidence.FIRST_SAMPLE
+)
+
 /**
  * How the app knows a move. CONFIRMED = observed in battle, MANUAL = user choice,
  * RANKED = PvPoke/default inference, UNKNOWN = no trustworthy move yet.
@@ -181,6 +194,13 @@ data class BattleUiState(
     val ownSwitchSeconds: Int? = null,
     val opponentSwitchSeconds: Int? = null,
     val chargedIncoming: Boolean = false,
+    /** Visible HP-bar estimates. 1.0 = 100%. */
+    val playerHpRatio: Float? = null,
+    val opponentHpRatio: Float? = null,
+    /** Damage learned from observations in this battle/matchup. */
+    val incomingFastDamage: ObservedDamageEstimate? = null,
+    val incomingCharged1Damage: ObservedDamageEstimate? = null,
+    val incomingCharged2Damage: ObservedDamageEstimate? = null,
     val detectorConfidence: Float = 0f,
     val battleConfidence: Float = 0f,
     /** Compact per-enemy memory for optional history display. */
