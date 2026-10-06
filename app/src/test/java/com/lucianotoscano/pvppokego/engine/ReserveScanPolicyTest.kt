@@ -56,4 +56,18 @@ class ReserveScanPolicyTest {
             )
         )
     }
+    @Test
+    fun fullKnownTeamWithBothNativeCpsDoesNotNeedVisualScan() {
+        assertFalse(
+            ReserveScanPolicy.shouldScan(
+                hasActivePlayer = true,
+                knownTeamSize = 3,
+                cardCps = listOf(1485, 1494),
+                cardDexes = listOf(null, null),
+                cardSpeciesIds = listOf(null, null)
+            )
+        )
+    }
+
+
 }
