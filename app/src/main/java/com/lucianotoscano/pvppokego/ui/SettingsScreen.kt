@@ -48,6 +48,8 @@ fun SettingsScreen(
     historyRevision: Int,
     overlayPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
+    recorderCompatibilityEnabled: Boolean,
+    onOpenRecorderCompatibility: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
     onResetBattle: () -> Unit,
@@ -132,8 +134,32 @@ fun SettingsScreen(
                     Text("Gravar / parar gravação pelo PvPPokeGo")
                 }
                 Text(
-                    "A gravação interna reutiliza a captura do overlay, evitando a disputa de MediaProjection com gravadores externos. " +
+                    "A gravação interna reutiliza a captura do overlay e mantém a detecção completa. " +
                         "O vídeo é salvo em Movies/PvPPokeGo.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                OutlinedButton(
+                    onClick = onOpenRecorderCompatibility,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (recorderCompatibilityEnabled) {
+                            "Compatibilidade com gravador externo: ATIVA"
+                        } else {
+                            "Ativar compatibilidade com gravador externo"
+                        }
+                    )
+                }
+                Text(
+                    if (recorderCompatibilityEnabled) {
+                        "Pronto para Samsung Screen Recorder e outros gravadores. Se o Android retirar a MediaProjection do PvPPokeGo, " +
+                            "o HUD continua ativo e o app muda para capturas de tela de compatibilidade. OCR, tipos e matchup continuam; " +
+                            "a contagem automática de ataques rápidos fica reduzida nesse modo."
+                    } else {
+                        "Android normalmente permite apenas uma sessão principal de captura. Um gravador externo pode retirar a MediaProjection do PvPPokeGo. " +
+                            "Ative esta opção antes de gravar para o app continuar com OCR, tipos e matchup por capturas de compatibilidade."
+                    },
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -144,7 +170,7 @@ fun SettingsScreen(
                         "• ◉ → mostrar / ocultar HUD\n" +
                         "• ⚙ → menu rápido (liga, edição, opções)\n" +
                         "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
-                        "Versão 0.5.19",
+                        "Versão 0.5.20",
                     style = MaterialTheme.typography.bodySmall
                 )
 
