@@ -1049,11 +1049,19 @@ class BattleEngine(private val repo: GameDataRepository) {
                     likely.second,
                     likely.third
                 )
-                val score = if (resolved.confirmed) {
+                val stableSpeciesId = slot.speciesId ?: def?.speciesId
+                val identityReady = ReserveMatchupPolicy.canEvaluate(
+                    speciesId = stableSpeciesId,
+                    identityConfidence = slot.identityConfidence,
+                    types = types,
+                    enemyTypes = eTypes,
+                    cardMappingConfirmed = resolved.confirmed
+                )
+                val score = if (identityReady) {
                     reserveScore(
                         name = name,
                         cp = cp,
-                        speciesId = slot.speciesId ?: def?.speciesId,
+                        speciesId = stableSpeciesId,
                         myTypes = types,
                         enemyTypes = eTypes
                     )
@@ -1062,16 +1070,24 @@ class BattleEngine(private val repo: GameDataRepository) {
                 }
                 ReserveState(
                     name = name,
-                    speciesId = slot.speciesId ?: def?.speciesId,
+                    speciesId = stableSpeciesId,
                     cp = cp,
                     types = types,
-                    matchup = if (resolved.confirmed) classify(types, eTypes) else MatchupState.UNKNOWN,
-                    visible = reserveSlotVisible.getOrNull(index) != false,
+                    matchup = if (identityReady) classify(types, eTypes) else MatchupState.UNKNOWN,
+                    // Visibility belongs to a physical native card. Until that card is
+                    // mapped, do not mark a known team member dead just because the
+                    // opposite card temporarily disappeared.
+                    visible = if (resolved.confirmed) {
+                        reserveSlotVisible.getOrNull(index) != false
+                    } else {
+                        true
+                    },
                     score = score,
                     teamSlot = slot.slot,
                     identityKey = identity,
                     cardCp = resolved.cardCp,
-                    identityConfirmed = resolved.confirmed,
+                    identityConfirmed = identityReady,
+                    cardMappingConfirmed = resolved.confirmed,
                     identitySource = resolved.source,
                     fastMove = reserveFast,
                     chargedMove1 = reserveC1,
