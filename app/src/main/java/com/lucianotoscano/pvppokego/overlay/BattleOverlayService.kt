@@ -1314,13 +1314,16 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     Long.MAX_VALUE
                                 }
 
-                                val correspondenceDecision = if (historyRecorder.hasActiveSession()) {
+                                val correspondenceEngine = e
+                                val correspondenceDecision = if (
+                                    historyRecorder.hasActiveSession() && correspondenceEngine != null
+                                ) {
                                     battleCorrespondence.observe(
-                                        context = e.battleCorrespondenceContext(
+                                        context = correspondenceEngine.battleCorrespondenceContext(
                                             inactiveForMs = previousEvidenceGap,
                                             sessionAgeMs = historyRecorder.activeElapsedMs(now) ?: 0L
                                         ),
-                                        observation = e.battleCorrespondenceObservation(
+                                        observation = correspondenceEngine.battleCorrespondenceObservation(
                                             detection = d,
                                             pairedCards = pairedCards,
                                             battleTextEvidence = textEvidence,
@@ -1417,8 +1420,9 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 if (changes?.playerChanged == true || changes?.enemyChanged == true) frameDetector?.reset()
                                 if (changes?.playerChanged == true) switchChoicePromptUntilMs = 0L
 
-                                val textEvent = if (!holdIdentityMutation) e?.onBattleText(d.battleText, now) else null
-                                if (textEvent != null) {
+                                val textEngine = e
+                                val textEvent = if (!holdIdentityMutation) textEngine?.onBattleText(d.battleText, now) else null
+                                if (textEvent != null && textEngine != null) {
                                     val chargedAtSessionStart =
                                         historyRecorder.activeElapsedMs(now)?.let { it <= 3_500L } == true &&
                                             (
@@ -1429,7 +1433,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                     if (chargedAtSessionStart) historyRecorder.markStartedMidBattle()
 
                                     textEvent.enemyChargedMove?.let { move ->
-                                        val snapshot = e.uiState()
+                                        val snapshot = textEngine.uiState()
                                         historyRecorder.recordCharged(
                                             "INIMIGO",
                                             gameRepo.localizedMoveName(move),
