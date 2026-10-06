@@ -13,6 +13,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Package offline PvPoke data
+        run: python3 tools/package_offline_pvpoke_assets.py
+
+      - name: Build Pokémon visual fingerprint bank
+        run: |
+          python3 -m pip install --disable-pip-version-check pillow
+          python3 tools/package_visual_fingerprints.py
+          test -s app/src/main/assets/pokemon_visual_fingerprints.json
+
       - name: Create project ZIP
         run: |
           zip -r PvPPokeGo_COMPLETE_PROJECT.zip . -x "./.git/*"
