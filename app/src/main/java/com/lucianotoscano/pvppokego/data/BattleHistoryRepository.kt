@@ -5,6 +5,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Serializable
 data class BattleHistoryEvent(
@@ -42,6 +45,96 @@ class BattleHistoryRepository(context: Context) {
     }.getOrDefault(emptyList())
 
     fun exportJson(): String = json.encodeToString(loadHistory())
+
+    fun exportJson(entries: List<BattleHistoryEntry>): String = json.encodeToString(entries)
+
+    fun battleById(id: Long): BattleHistoryEntry? = loadHistory().firstOrNull { it.id == id }
+
+    /**
+     * Human-readable export designed to be uploaded to ChatGPT or shared with a coach.
+     * Technical fields are preserved, but the layout separates player, enemy, assistant
+     * and diagnostic events so the file is useful without opening the app.
+     */
+    fun exportAnalysisText(entries: List<BattleHistoryEntry> = loadHistory()): String = buildString {
+        appendLine("PvPPokeGo — histórico para análise")
+        appendLine("Formato: 1")
+        appendLine("Batalhas: ${entries.size}")
+        appendLine()
+        entries.forEachIndexed { index, battle ->
+            val duration = ((battle.endedAtEpochMs - battle.startedAtEpochMs).coerceAtLeast(0L) / 1000.0)
+            val date = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+                .format(Date(battle.startedAtEpochMs))
+            val league = when (battle.leagueCp) {
+                2500 -> "Liga Ultra"
+                10000 -> "Liga Mestra"
+                else -> "Liga Grande"
+            }
+            val ownFast = battle.events.sumOf { if (it.actor == "VOCÊ" && it.category == "RÁPIDO") it.count else 0 }
+            val enemyFast = battle.events.sumOf { if (it.actor == "INIMIGO" && it.category == "RÁPIDO") it.count else 0 }
+            val ownCharged = battle.events.count { it.actor == "VOCÊ" && it.category == "CARREGADO" }
+            val enemyCharged = battle.events.count { it.actor == "INIMIGO" && it.category == "CARREGADO" }
+            val decisions = battle.events.count { it.category == "DECISÃO" }
+
+            appendLine("================================================================")
+            appendLine("BATALHA ${index + 1}  |  ID ${battle.id}")
+            appendLine("$date  |  $league  |  ${"%.1f".format(Locale.US, duration)}s")
+            appendLine("VOCÊ: ${battle.playerName ?: "?"} PC ${battle.playerCp ?: "?"}")
+            appendLine("INIMIGO: ${battle.opponentName ?: "?"} PC ${battle.opponentCp ?: "?"}")
+            appendLine("RESUMO: rápidos você=$ownFast, inimigo=$enemyFast | carregados você=$ownCharged, inimigo=$enemyCharged | decisões=$decisions")
+            appendLine()
+
+            fun section(title: String, predicate: (BattleHistoryEvent) -> Boolean) {
+                val selected = battle.events.filter(predicate)
+                appendLine("## $title (${selected.size})")
+                if (selected.isEmpty()) {
+                    appendLine("- nenhum")
+                } else {
+                    selected.forEach { event ->
+                        val sec = event.elapsedMs / 1000.0
+                        val count = if (event.count > 1) " x${event.count}" else ""
+                        append("[+${"%.1f".format(Locale.US, sec)}s] ")
+                        append(event.category)
+                        append(" • ")
+                        append(event.moveName)
+                        append(count)
+                        event.pokemon?.let { append(" • Pokémon: ").append(it) }
+                        event.confidence?.let { append(" • confiança: ").append(it) }
+                        event.source?.let { append(" • fonte: ").append(it) }
+                        appendLine()
+                        event.reason?.takeIf(String::isNotBlank)?.let { appendLine("  Motivo: $it") }
+                    }
+                }
+                appendLine()
+            }
+
+            section("VOCÊ") { it.actor == "VOCÊ" }
+            section("INIMIGO") { it.actor == "INIMIGO" }
+            section("ASSISTENTE") { it.actor == "ASSISTENTE" || it.category == "DECISÃO" }
+            section("DIAGNÓSTICO TÉCNICO") { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
+        }
+    }
+
+    fun exportCsv(entries: List<BattleHistoryEntry> = loadHistory()): String {
+        fun csv(value: Any?): String {
+            val raw = value?.toString().orEmpty()
+            return "\"" + raw.replace("\"", "\"\"") + "\""
+        }
+        return buildString {
+            appendLine("battle_id,started_at_ms,league_cp,player,player_cp,opponent,opponent_cp,elapsed_ms,actor,category,move,count,pokemon,confidence,source,reason")
+            entries.forEach { battle ->
+                battle.events.forEach { event ->
+                    appendLine(
+                        listOf(
+                            battle.id, battle.startedAtEpochMs, battle.leagueCp,
+                            battle.playerName, battle.playerCp, battle.opponentName, battle.opponentCp,
+                            event.elapsedMs, event.actor, event.category, event.moveName, event.count,
+                            event.pokemon, event.confidence, event.source, event.reason
+                        ).joinToString(",") { csv(it) }
+                    )
+                }
+            }
+        }
+    }
 
     fun append(entry: BattleHistoryEntry) {
         val next = (listOf(entry) + loadHistory()).take(MAX_BATTLES)

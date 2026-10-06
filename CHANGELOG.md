@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.18
+
+- Histórico de batalhas redesenhado em cartões mais legíveis.
+- Resumo por batalha separa ataques rápidos, carregados, decisões do assistente e diagnósticos.
+- Linha do tempo usa blocos visuais distintos para VOCÊ, INIMIGO e ASSISTENTE.
+- Fontes técnicas são traduzidas para descrições legíveis, como "leitura da tela" e "queda de HP do inimigo".
+- Diagnóstico técnico fica oculto por padrão e pode ser expandido separadamente.
+- Nova exportação de TODO o histórico em ZIP diretamente pela tela do histórico.
+- Cada batalha também pode ser exportada isoladamente.
+- O ZIP inclui historico-legivel.txt, historico.json, historico.csv e README.txt.
+- O formato foi pensado para ser enviado diretamente ao ChatGPT ou para análise externa.
+- Mantidas as correções da 0.5.17 para ícone oficial, notificação rápida e identidade/tipos das reservas por CP.
+
+
 ## 0.5.17
 
 - Ícone oficial enviado pelo usuário aplicado como ícone do APK/launcher.
