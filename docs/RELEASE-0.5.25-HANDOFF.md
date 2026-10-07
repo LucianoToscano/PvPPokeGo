@@ -75,6 +75,14 @@ Equivalentes com flavors ao pedido `:app:testDebugUnitTest` / `:app:assembleDebu
 - SHA-256 de todos os APKs entregues;
 - relatório TODO/FIXME e lista de recursos críticos.
 
+## Validação executada nesta consolidação
+
+- Reconstrução independente do source atual a partir da baseline 0.5.20 + arquivos exatos da linha 0.5.25, conferidos por Git blob SHA contra `release/0.5.25`.
+- 111 testes determinísticos do repositório foram compilados e executados localmente em harness JVM para a lógica pura (mesmos arquivos `*Test.kt`), com **111 PASS / 0 FAIL**. Cobertura executada inclui FastMoveSignalFuser, presença, StableCpTracker, EnergyTracker, EnemyEnergyTracker, ChargedMovePredictor, ReactionWindowEstimator, ObservedDamageTracker, DamageForecastEngine, escudos, stages, reservas, ChargedAnimationCycleGate, ChargedMoveSlotResolver, correspondência/continuidade, BattleStateStore e AdviceStabilityGate.
+- A tentativa oficial via GitHub Actions foi repetida com `ubuntu-latest`, `macos-latest` e `ubuntu-slim`. Em todos os casos o job terminou antes de receber runner: a API retornou job concluído/falha com `steps: null` e sem logs de execução. Portanto nenhum comando Gradle chegou a iniciar no GitHub.
+- O ambiente local desta auditoria não possui Android SDK/Gradle cache e não tem acesso de rede de shell para baixar toolchain/dependências. Por isso `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug` e as variantes Recorder Compat permanecem bloqueados por infraestrutura, não por falha de código observada.
+- Os assets `pokemon_icon_atlas.*`, snapshot PvPoke fixado e respectivos hashes são gerados pelo pipeline; a integração e os geradores estão presentes, mas a geração final não pôde ser reexecutada enquanto nenhum runner é alocado.
+
 ## Teste físico ainda necessário
 
 Mesmo com CI verde, estes pontos dependem do Samsung real: qualidade OCR/crops nas resoluções do aparelho, estabilidade de MediaProjection ao abrir/fechar o Pokémon GO, Samsung Screen Recorder no Recorder Compat, codec OEM do gravador interno, aparência do adaptive icon no launcher/cache Samsung, posição final dos blocos aprovados e comportamento de recomendações em batalhas reais.
