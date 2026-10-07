@@ -14,6 +14,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.Normalizer
+import java.util.concurrent.ConcurrentHashMap
 
 internal fun sanitizePokemonTypes(types: List<String>): List<String> =
     types.map { it.lowercase() }
@@ -31,11 +32,19 @@ class GameDataRepository(private val context: Context) {
     @Volatile private var ranking: List<RankingEntry> = emptyList()
     @Volatile private var moveNamesPtBr: Map<String, String> = emptyMap()
     @Volatile private var cpMultipliers: List<Double> = emptyList()
+    private val legalFastCache = ConcurrentHashMap<String, List<MoveDef>>()
+    private val legalChargedCache = ConcurrentHashMap<String, List<MoveDef>>()
+    private val weightedFastCache = ConcurrentHashMap<String, List<WeightedMove>>()
+    private val weightedChargedCache = ConcurrentHashMap<String, List<WeightedMove>>()
     @Volatile var currentLeagueCp: Int = 1500
         private set
 
     suspend fun load(leagueCp: Int = 1500) = withContext(Dispatchers.IO) {
         currentLeagueCp = leagueCp
+        legalFastCache.clear()
+        legalChargedCache.clear()
+        weightedFastCache.clear()
+        weightedChargedCache.clear()
         val gmText = runCatching {
             context.assets.open("gamemaster.json").bufferedReader().use { it.readText() }
         }.getOrElse {
@@ -135,6 +144,73 @@ class GameDataRepository(private val context: Context) {
         return entry?.moves?.chargedMoves.orEmpty()
             .sortedByDescending { it.uses }
             .mapNotNull { move(it.moveId) }
+    }
+
+    /** Full Game Master movepool used by the predictive engine, not just the top-ranked set. */
+    fun legalFastMoves(nameOrSpeciesId: String): List<MoveDef> {
+        val key = normalizeName(nameOrSpeciesId)
+        return legalFastCache.getOrPut(key) {
+            val def = pokemon(nameOrSpeciesId)
+            val ids = linkedSetOf<String>().apply {
+                def?.fastMoves.orEmpty().forEach(::add)
+                rankingEntry(nameOrSpeciesId)?.moves?.fastMoves.orEmpty().forEach { add(it.moveId) }
+            }
+            ids.mapNotNull(::move)
+                .filter { it.energyGain > 0 }
+                .distinctBy { it.moveId }
+        }
+    }
+
+    fun legalChargedMoves(nameOrSpeciesId: String): List<MoveDef> {
+        val key = normalizeName(nameOrSpeciesId)
+        return legalChargedCache.getOrPut(key) {
+            val def = pokemon(nameOrSpeciesId)
+            val ids = linkedSetOf<String>().apply {
+                def?.chargedMoves.orEmpty().forEach(::add)
+                rankingEntry(nameOrSpeciesId)?.moves?.chargedMoves.orEmpty().forEach { add(it.moveId) }
+            }
+            ids.mapNotNull(::move)
+                .filter { it.chargedCost > 0 }
+                .distinctBy { it.moveId }
+        }
+    }
+
+    fun weightedFastMoves(nameOrSpeciesId: String): List<WeightedMove> {
+        val key = normalizeName(nameOrSpeciesId)
+        return weightedFastCache.getOrPut(key) {
+            weightedMoves(
+                legal = legalFastMoves(nameOrSpeciesId),
+                ranked = rankingEntry(nameOrSpeciesId)?.moves?.fastMoves.orEmpty()
+            )
+        }
+    }
+
+    fun weightedChargedMoves(nameOrSpeciesId: String): List<WeightedMove> {
+        val key = normalizeName(nameOrSpeciesId)
+        return weightedChargedCache.getOrPut(key) {
+            weightedMoves(
+                legal = legalChargedMoves(nameOrSpeciesId),
+                ranked = rankingEntry(nameOrSpeciesId)?.moves?.chargedMoves.orEmpty()
+            )
+        }
+    }
+
+    private fun weightedMoves(legal: List<MoveDef>, ranked: List<RankingMove>): List<WeightedMove> {
+        if (legal.isEmpty()) return emptyList()
+        val rankedUses = ranked.associate { normalizeId(it.moveId) to it.uses.coerceAtLeast(0.0) }
+        val raw = legal.map { candidate ->
+            val use = rankedUses[normalizeId(candidate.moveId)]
+            // Legal but unranked moves remain mathematically possible with a small prior.
+            candidate to when {
+                use != null && use > 0.0 -> use.toFloat()
+                rankedUses.isNotEmpty() -> 2.5f
+                else -> 1f
+            }
+        }
+        val total = raw.sumOf { it.second.toDouble() }.toFloat().takeIf { it > 0f }
+            ?: raw.size.toFloat()
+        return raw.map { (move, weight) -> WeightedMove(move, (weight / total).coerceIn(0f, 1f)) }
+            .sortedByDescending { it.weight }
     }
 
     fun likelyMoveset(nameOrSpeciesId: String): Triple<MoveDef?, MoveDef?, MoveDef?> {
