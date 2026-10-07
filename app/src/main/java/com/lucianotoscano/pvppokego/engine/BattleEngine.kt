@@ -717,7 +717,18 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun activeEnemyName(): String? = enemyName
     fun latestPlayerHpRatio(): Float? = lastHpRatio
     fun latestOpponentHpRatio(): Float? = lastOpponentHpRatio
-    fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
+    fun currentFastDurationMs(): Long {
+        ensurePredictiveEnergyInitialized()
+        val manualOrOnlyHypothesis =
+            activeState?.fastMoveManual == true || predictiveEnergy.hypothesisCount() <= 1
+        return if (manualOrOnlyHypothesis) {
+            effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
+        } else {
+            (predictiveEnergy.likelyFastTurns() * EnemyEnergyTracker.TURN_MS)
+                .toLong()
+                .coerceIn(500L, 3_500L)
+        }
+    }
     fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
     private fun samePokemonIdentity(
