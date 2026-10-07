@@ -61,8 +61,39 @@ class BattleOverlayView(
     private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
     private val pokemonIconAtlas = PokemonIconAtlas(context.applicationContext)
+    private val reservePortraits = arrayOfNulls<Bitmap>(2)
     private val adviceStabilityGate = AdviceStabilityGate()
     private var stableAdvice: BattleAssistAdvisor.Advice? = null
+
+    /**
+     * Live native-card crops are a visual fallback only. They never confer identity confidence.
+     * The offline atlas remains primary once species/form is known.
+     */
+    fun setReservePortraits(first: Bitmap?, second: Bitmap?) {
+        replaceReservePortrait(0, first)
+        replaceReservePortrait(1, second)
+        postInvalidate()
+    }
+
+    fun clearReservePortraits() {
+        replaceReservePortrait(0, null)
+        replaceReservePortrait(1, null)
+        postInvalidate()
+    }
+
+    fun release() {
+        clearReservePortraits()
+    }
+
+    private fun replaceReservePortrait(index: Int, next: Bitmap?) {
+        if (index !in 0..1) {
+            next?.let { if (!it.isRecycled) it.recycle() }
+            return
+        }
+        val old = reservePortraits[index]
+        if (old !== next) old?.let { if (!it.isRecycled) it.recycle() }
+        reservePortraits[index] = next?.takeUnless { it.isRecycled }
+    }
 
     fun render(newState: BattleUiState) {
         if (newState.playerName.isNullOrBlank() && newState.opponentName.isNullOrBlank()) {
@@ -668,7 +699,7 @@ class BattleOverlayView(
 
     private fun drawReserves(canvas: Canvas) {
         state.reserves.take(2).forEachIndexed { index, reserve ->
-            val reserveName = reserve.name?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
+            val reserveName = reserve.name?.takeIf { it.isNotBlank() } ?: "POKÉMON ${index + 2}"
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
             if (settings.isBlockHidden(block)) return@forEachIndexed
 
@@ -696,6 +727,7 @@ class BattleOverlayView(
             val iconRadius = 23f * u() * bs
             drawReservePokemonIcon(
                 canvas = canvas,
+                index = index,
                 reserve = reserve,
                 fallbackName = reserveName,
                 centerX = iconCenterX,
@@ -717,12 +749,12 @@ class BattleOverlayView(
                 canvas.drawText(shortReserveTitle(title), textX, cardCenterY - 8f * u() * bs, paint)
 
                 val matchupText = when {
-                    !identityReady -> "IDENTIFICANDO"
+                    !identityReady -> "ANALISANDO"
                     matchup == MatchupState.UNKNOWN -> "ANALISANDO"
                     else -> reserveMatchupLabel(matchup)
                 }
                 val recommendation = reserve.recommendation
-                    ?.takeIf { it == "MELHOR" || it == "EVITAR" }
+                    ?.takeIf { identityReady && (it == "MELHOR" || it == "EVITAR") }
                 val hpLabel = if (settings.showHpAssist) {
                     reserve.hpRatio?.let { "HP " + (it.coerceIn(0f, 1f) * 100f).toInt() + "%" }
                 } else null
@@ -767,6 +799,7 @@ class BattleOverlayView(
 
     private fun drawReservePokemonIcon(
         canvas: Canvas,
+        index: Int,
         reserve: com.lucianotoscano.pvppokego.data.ReserveState,
         fallbackName: String,
         centerX: Float,
@@ -804,17 +837,29 @@ class BattleOverlayView(
         paint.alpha = oldPaintAlpha
 
         if (!drawn) {
-            paint.color = hudColor(Color.WHITE, .95f)
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.DEFAULT_BOLD
-            paint.textSize = radius * .72f
-            val initials = fallbackName
-                .split(Regex("\\s+"))
-                .filter { it.isNotBlank() }
-                .take(2)
-                .joinToString("") { it.take(1).uppercase() }
-                .ifBlank { "?" }
-            canvas.drawText(initials, centerX, centerY + radius * .25f, paint)
+            val portrait = reservePortraits.getOrNull(index)
+            if (portrait != null && !portrait.isRecycled) {
+                val clip = Path().apply { addCircle(centerX, centerY, radius, Path.Direction.CW) }
+                canvas.save()
+                canvas.clipPath(clip)
+                val previousAlpha = paint.alpha
+                paint.alpha = (hudAlpha * blockAlphaMultiplier).toInt().coerceIn(0, 255)
+                canvas.drawBitmap(portrait, null, destination, paint)
+                paint.alpha = previousAlpha
+                canvas.restore()
+            } else {
+                paint.color = hudColor(Color.WHITE, .95f)
+                paint.textAlign = Paint.Align.CENTER
+                paint.typeface = Typeface.DEFAULT_BOLD
+                paint.textSize = radius * .72f
+                val initials = fallbackName
+                    .split(Regex("\\s+"))
+                    .filter { it.isNotBlank() }
+                    .take(2)
+                    .joinToString("") { it.take(1).uppercase() }
+                    .ifBlank { "?" }
+                canvas.drawText(initials, centerX, centerY + radius * .25f, paint)
+            }
         }
     }
 
