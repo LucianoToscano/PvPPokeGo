@@ -170,6 +170,7 @@ object BattleAssistAdvisor {
                             shortName(threat.move.name),
                             energyRange,
                             damageText,
+                            if (threat.baitPotential) "bait possível" else null,
                             if (threat.doubleReadyPossible) "pode armazenar 2" else null,
                             if (state.ownShieldsRemaining <= 0) "sem escudos" else null
                         ).joinToString(" • "),
@@ -194,6 +195,7 @@ object BattleAssistAdvisor {
                             fastText,
                             "~" + seconds + "s",
                             damageText,
+                            if (threat.mayKoBeforeCharged) "Fast pode nocautear antes" else null,
                             if (lethal) "risco de KO" else null
                         ).joinToString(" • "),
                         if (insideReactionWindow) Color.rgb(245, 175, 52) else Color.rgb(110, 170, 235),
