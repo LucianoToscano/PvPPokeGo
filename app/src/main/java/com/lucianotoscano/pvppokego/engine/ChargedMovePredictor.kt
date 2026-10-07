@@ -86,10 +86,10 @@ internal object ChargedMovePredictor {
         val attackerStats = attacker?.let { repo.estimatedBattleStats(it.speciesId, attackerCp) }
         val defenderStats = defender?.let { repo.estimatedBattleStats(it.speciesId, defenderCp) }
 
-        val candidates = chargedMoves.mapNotNull { weightedMove ->
+        val candidates = chargedMoves.mapNotNull candidate@ { weightedMove ->
             val move = weightedMove.move
-            val cost = move.chargedCost.takeIf { it > 0 } ?: return@mapNotNull null
-            val window = energyWindow(hypotheses, cost) ?: return@mapNotNull null
+            val cost = move.chargedCost.takeIf { it > 0 } ?: return@candidate null
+            val window = energyWindow(hypotheses, cost) ?: return@candidate null
             val fastMin = window.fastMovesMin
             val fastMax = window.fastMovesMax
             val fastLikely = window.fastMovesLikely
@@ -113,9 +113,9 @@ internal object ChargedMovePredictor {
                 defenderDefenseStages = defenderDefenseStages
             )
 
-            val fastPressure = hypotheses.mapNotNull { h ->
+            val fastPressure = hypotheses.mapNotNull pressure@ { h ->
                 if (attacker == null || defender == null || attackerStats == null || defenderStats == null) {
-                    return@mapNotNull null
+                    return@pressure null
                 }
                 val pct = DamageForecastEngine.modelDamagePercent(
                     attacker = attacker,
@@ -125,7 +125,7 @@ internal object ChargedMovePredictor {
                     move = h.fastMove,
                     attackerAttackStage = attackerAttackStages,
                     defenderDefenseStage = defenderDefenseStages
-                ) ?: return@mapNotNull null
+                ) ?: return@pressure null
                 val moveTurns = h.fastMove.turns.coerceAtLeast(1)
                 val dpt = pct / moveTurns.toFloat()
                 val missing = (cost - h.energy).coerceAtLeast(0)
