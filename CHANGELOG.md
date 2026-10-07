@@ -2,6 +2,8 @@
 
 ## 0.5.23
 
+- Pipeline de validação restaurado para o runner macOS já comprovado nas 0.5.21/0.5.22, mantendo hashes portáveis com `shasum -a 256`.
+
 - Novo motor preditivo de energia inimiga: `EnemyEnergyTracker` mantém hipóteses discretas por Fast Move legal, energia residual, turns, contagem e confiança; não converte spam de toques em energia.
 - `ChargedMovePredictor` calcula antecipadamente, para todos os Charged Moves legais da espécie/forma, FAST restantes, turns, janela mais cedo/provável, READY possível/certo, dois Chargeds armazenados, EPT/DPT/DPE, bait, pressão de escudo e risco de KO/farm-down.
 - Ataque carregado revelado corrige o estado futuro: hipóteses impossíveis são eliminadas, custo é descontado só das compatíveis e Charged não identificado ramifica pelos custos legalmente possíveis.
