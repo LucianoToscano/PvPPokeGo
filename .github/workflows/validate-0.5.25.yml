@@ -1,0 +1,90 @@
+name: Validate PvPPokeGo 0.5.25
+
+on:
+  pull_request:
+    branches:
+      - release/0.5.24
+      - ci/0.5.25-validation-base
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Package PvPoke assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/package_offline_pvpoke_assets.py
+          test -s app/src/main/assets/gamemaster.json
+          test -s app/src/main/assets/rankings-1500.json
+          test -s app/src/main/assets/rankings-2500.json
+          test -s app/src/main/assets/rankings-10000.json
+          test -s app/src/main/assets/pvpoke_snapshot.json
+
+      - name: Build visual bank and atlas
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check pillow
+          python3 tools/package_visual_fingerprints.py
+          test -s app/src/main/assets/pokemon_visual_fingerprints.json
+          test -s app/src/main/assets/pokemon_icon_atlas.png
+          test -s app/src/main/assets/pokemon_icon_atlas.json
+
+      - name: Test and build both variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace \
+            :app:testStandardDebugUnitTest \
+            :app:testRecorderCompatDebugUnitTest \
+            :app:assembleStandardDebug \
+            :app:assembleRecorderCompatDebug
+
+      - name: Verify manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          STD_MANIFEST="$(find app/build/intermediates/merged_manifests/standardDebug -name AndroidManifest.xml | head -1)"
+          COMPAT_MANIFEST="$(find app/build/intermediates/merged_manifests/recorderCompatDebug -name AndroidManifest.xml | head -1)"
+          test -n "$STD_MANIFEST"
+          test -n "$COMPAT_MANIFEST"
+          ! grep -q 'PvPPokeGoAccessibilityCaptureService' "$STD_MANIFEST"
+          ! grep -q 'FOREGROUND_SERVICE_SPECIAL_USE\|specialUse\|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$STD_MANIFEST"
+          grep -q 'PvPPokeGoAccessibilityCaptureService' "$COMPAT_MANIFEST"
+
+      - name: Package QA artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          cp app/build/outputs/apk/standard/debug/app-standard-debug.apk artifact/PvPPokeGo-0.5.25-QA-debug.apk
+          cp app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk artifact/PvPPokeGo-0.5.25-recorder-compat-QA-debug.apk
+          unzip -t artifact/PvPPokeGo-0.5.25-QA-debug.apk
+          unzip -t artifact/PvPPokeGo-0.5.25-recorder-compat-QA-debug.apk
+          sha256sum artifact/*.apk | tee artifact/SHA256SUMS.txt
+
+      - name: Upload QA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.25-QA
+          path: artifact/
+          retention-days: 30
