@@ -1,6 +1,7 @@
 package com.lucianotoscano.pvppokego.overlay
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -61,8 +62,94 @@ class BattleOverlayView(
     private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
     private val pokemonIconAtlas = PokemonIconAtlas(context.applicationContext)
+    /** Current native reserve-card crops, indexed by top/bottom card. */
+    private val reservePortraits = arrayOfNulls<Bitmap>(2)
+    /** Stable team-selection/card portraits, indexed by original team slot 0..2. */
+    private val ownTeamPortraits = arrayOfNulls<Bitmap>(3)
     private val adviceStabilityGate = AdviceStabilityGate()
     private var stableAdvice: BattleAssistAdvisor.Advice? = null
+
+    /**
+     * Live native-card crops are a visual fallback only. They never confer identity confidence.
+     * The offline atlas remains primary once species/form is known.
+     */
+    fun setReservePortraits(first: Bitmap?, second: Bitmap?) {
+        replaceReservePortrait(0, first)
+        replaceReservePortrait(1, second)
+        promoteMappedReservePortraits()
+        postInvalidate()
+    }
+
+    /**
+     * Team portraits survive native-card reordering and therefore remain usable after a
+     * switch/faint and inside the switch chooser. Null entries do not erase a good cache.
+     */
+    fun setOwnTeamPortraits(portraits: List<Bitmap?>) {
+        portraits.take(3).forEachIndexed { index, portrait ->
+            if (portrait != null && !portrait.isRecycled) replaceOwnTeamPortrait(index, portrait)
+        }
+        promoteMappedReservePortraits()
+        postInvalidate()
+    }
+
+    fun clearReservePortraits() {
+        replaceReservePortrait(0, null)
+        replaceReservePortrait(1, null)
+        postInvalidate()
+    }
+
+    fun clearPokemonPortraits() {
+        replaceReservePortrait(0, null)
+        replaceReservePortrait(1, null)
+        ownTeamPortraits.indices.forEach { replaceOwnTeamPortrait(it, null) }
+        postInvalidate()
+    }
+
+    fun release() {
+        clearPokemonPortraits()
+    }
+
+    private fun replaceReservePortrait(index: Int, next: Bitmap?) {
+        if (index !in 0..1) {
+            next?.let { if (!it.isRecycled) it.recycle() }
+            return
+        }
+        val old = reservePortraits[index]
+        if (old !== next) old?.let { if (!it.isRecycled) it.recycle() }
+        reservePortraits[index] = next?.takeUnless { it.isRecycled }
+    }
+
+    private fun replaceOwnTeamPortrait(index: Int, next: Bitmap?) {
+        if (index !in ownTeamPortraits.indices) {
+            next?.let { if (!it.isRecycled) it.recycle() }
+            return
+        }
+        val old = ownTeamPortraits[index]
+        if (old !== next) old?.let { if (!it.isRecycled) it.recycle() }
+        ownTeamPortraits[index] = next?.takeUnless { it.isRecycled }
+    }
+
+    /**
+     * Once CP/species evidence maps a native reserve card to a stable team slot, copy the
+     * live card portrait into that slot. This makes the icon independent from atlas
+     * availability and keeps it after the native card disappears during a switch prompt.
+     */
+    private fun promoteMappedReservePortraits() {
+        state.reserves.take(2).forEachIndexed { cardIndex, reserve ->
+            val teamSlot = reserve.teamSlot ?: return@forEachIndexed
+            if (!reserve.cardMappingConfirmed || teamSlot !in ownTeamPortraits.indices) return@forEachIndexed
+            val source = reservePortraits.getOrNull(cardIndex)
+                ?.takeUnless { it.isRecycled }
+                ?: return@forEachIndexed
+            val existing = ownTeamPortraits[teamSlot]
+            if (existing == null || existing.isRecycled) {
+                replaceOwnTeamPortrait(
+                    teamSlot,
+                    source.copy(Bitmap.Config.ARGB_8888, false)
+                )
+            }
+        }
+    }
 
     fun render(newState: BattleUiState) {
         if (newState.playerName.isNullOrBlank() && newState.opponentName.isNullOrBlank()) {
@@ -70,6 +157,7 @@ class BattleOverlayView(
             stableAdvice = null
         }
         state = newState
+        promoteMappedReservePortraits()
         scaleFactor = settings.scale
         opacityFactor = settings.opacity
         if (!switchChoicePromptVisible) {
@@ -365,10 +453,20 @@ class BattleOverlayView(
                 com.lucianotoscano.pvppokego.data.DamageForecastConfidence.MODEL -> "MODELO"
             }
             val phase = if (predictiveOnly) "PREVIEW" else "IMPACTO"
-            val shields = if (state.ownShieldsRemaining > 0) "ESC " + state.ownShieldsRemaining else "SEM ESCUDO"
-            val label = phase + " • " + shields + " • -" + "%.0f".format(forecast.minPercent) + "-" +
-                "%.0f".format(forecast.maxPercent) + "% • →" + "%.0f".format(remainMin) + "-" +
-                "%.0f".format(remainMax) + "% • " + source
+            val noShield = "SEM ESC -" + "%.0f".format(forecast.minPercent) + "-" +
+                "%.0f".format(forecast.maxPercent) + "% →" + "%.0f".format(remainMin) + "-" +
+                "%.0f".format(remainMax) + "%"
+            val withShield = when {
+                !state.ownShieldsKnown -> "COM ESC se disponível"
+                state.ownShieldsRemaining > 0 -> "COM ESC protegido"
+                else -> "COM ESC indisponível"
+            }
+            val ko = when {
+                remainMax <= 0.5f -> " • KO PROVÁVEL"
+                remainMin <= 0.5f -> " • KO POSSÍVEL"
+                else -> ""
+            }
+            val label = phase + " • " + noShield + " • " + withShield + ko + " • " + source
             paint.color = hudColor(Color.WHITE, .96f)
             paint.textAlign = Paint.Align.LEFT
             paint.textSize = 8.8f*u()
@@ -603,12 +701,29 @@ class BattleOverlayView(
         canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
         if (settings.showEnergyProgress) {
             val progress=prediction.progress.coerceIn(0f,1f)
+            val primaryColor=typeColor(prediction.move.type)
             val fillTop=cy+radius-2f*radius*progress
-            paint.color=hudColor(typeColor(prediction.move.type),.92f)
+            paint.color=hudColor(primaryColor,.92f)
             canvas.drawRect(cx-radius,fillTop,cx+radius,cy+radius,paint)
             if (progress>.02f && progress<.98f) {
                 paint.color=hudColor(Color.WHITE,.62f)
                 canvas.drawRect(cx-radius,fillTop-1.1f*u(),cx+radius,fillTop+1.1f*u(),paint)
+            }
+
+            // One full Charged stays visible; a darker second layer shows overfarm
+            // toward another copy, up to Pokemon GO's 100-energy cap.
+            if (prediction.ready && prediction.overflowProgress > .01f) {
+                val overflow=prediction.overflowProgress.coerceIn(0f,1f)
+                val overflowTop=cy+radius-2f*radius*overflow
+                val dark=Color.rgb(
+                    (Color.red(primaryColor)*.48f).toInt().coerceIn(0,255),
+                    (Color.green(primaryColor)*.48f).toInt().coerceIn(0,255),
+                    (Color.blue(primaryColor)*.48f).toInt().coerceIn(0,255)
+                )
+                paint.color=hudColor(dark,.96f)
+                canvas.drawRect(cx-radius,overflowTop,cx+radius,cy+radius,paint)
+                paint.color=hudColor(Color.WHITE,.72f)
+                canvas.drawRect(cx-radius,overflowTop-1.1f*u(),cx+radius,overflowTop+1.1f*u(),paint)
             }
         } else {
             paint.color=hudColor(typeColor(prediction.move.type),.90f)
@@ -668,7 +783,7 @@ class BattleOverlayView(
 
     private fun drawReserves(canvas: Canvas) {
         state.reserves.take(2).forEachIndexed { index, reserve ->
-            val reserveName = reserve.name?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
+            val reserveName = reserve.name?.takeIf { it.isNotBlank() } ?: "POKÉMON ${index + 2}"
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
             if (settings.isBlockHidden(block)) return@forEachIndexed
 
@@ -696,6 +811,7 @@ class BattleOverlayView(
             val iconRadius = 23f * u() * bs
             drawReservePokemonIcon(
                 canvas = canvas,
+                index = index,
                 reserve = reserve,
                 fallbackName = reserveName,
                 centerX = iconCenterX,
@@ -717,12 +833,12 @@ class BattleOverlayView(
                 canvas.drawText(shortReserveTitle(title), textX, cardCenterY - 8f * u() * bs, paint)
 
                 val matchupText = when {
-                    !identityReady -> "IDENTIFICANDO"
+                    !identityReady -> "ANALISANDO"
                     matchup == MatchupState.UNKNOWN -> "ANALISANDO"
                     else -> reserveMatchupLabel(matchup)
                 }
                 val recommendation = reserve.recommendation
-                    ?.takeIf { it == "MELHOR" || it == "EVITAR" }
+                    ?.takeIf { identityReady && (it == "MELHOR" || it == "EVITAR") }
                 val hpLabel = if (settings.showHpAssist) {
                     reserve.hpRatio?.let { "HP " + (it.coerceIn(0f, 1f) * 100f).toInt() + "%" }
                 } else null
@@ -767,6 +883,7 @@ class BattleOverlayView(
 
     private fun drawReservePokemonIcon(
         canvas: Canvas,
+        index: Int,
         reserve: com.lucianotoscano.pvppokego.data.ReserveState,
         fallbackName: String,
         centerX: Float,
@@ -804,17 +921,34 @@ class BattleOverlayView(
         paint.alpha = oldPaintAlpha
 
         if (!drawn) {
-            paint.color = hudColor(Color.WHITE, .95f)
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.DEFAULT_BOLD
-            paint.textSize = radius * .72f
-            val initials = fallbackName
-                .split(Regex("\\s+"))
-                .filter { it.isNotBlank() }
-                .take(2)
-                .joinToString("") { it.take(1).uppercase() }
-                .ifBlank { "?" }
-            canvas.drawText(initials, centerX, centerY + radius * .25f, paint)
+            val stableTeamPortrait = reserve.teamSlot
+                ?.takeIf { reserve.cardMappingConfirmed && it in ownTeamPortraits.indices }
+                ?.let { ownTeamPortraits[it] }
+                ?.takeUnless { it.isRecycled }
+            val portrait = stableTeamPortrait
+                ?: reservePortraits.getOrNull(index)?.takeUnless { it.isRecycled }
+            if (portrait != null) {
+                val clip = Path().apply { addCircle(centerX, centerY, radius, Path.Direction.CW) }
+                canvas.save()
+                canvas.clipPath(clip)
+                val previousAlpha = paint.alpha
+                paint.alpha = (hudAlpha * blockAlphaMultiplier).toInt().coerceIn(0, 255)
+                canvas.drawBitmap(portrait, null, destination, paint)
+                paint.alpha = previousAlpha
+                canvas.restore()
+            } else {
+                paint.color = hudColor(Color.WHITE, .95f)
+                paint.textAlign = Paint.Align.CENTER
+                paint.typeface = Typeface.DEFAULT_BOLD
+                paint.textSize = radius * .72f
+                val initials = fallbackName
+                    .split(Regex("\\s+"))
+                    .filter { it.isNotBlank() }
+                    .take(2)
+                    .joinToString("") { it.take(1).uppercase() }
+                    .ifBlank { "?" }
+                canvas.drawText(initials, centerX, centerY + radius * .25f, paint)
+            }
         }
     }
 
@@ -835,25 +969,38 @@ class BattleOverlayView(
     private fun shortReserveTitle(value: String): String =
         if (value.length <= 23) value else value.take(22) + "…"
 
-    /** During Pokemon GO's switch chooser, show matchup only for a confirmed card identity. */
+    /**
+     * During Pokémon GO's switch chooser, keep the two confirmed card positions visible
+     * even while matchup confidence is still UNKNOWN. The icon should never disappear
+     * merely because opponent typing/recommendation is still being resolved.
+     */
     private fun drawSwitchChoiceIndicators(canvas: Canvas) {
         val candidates = state.reserves.take(2).mapIndexedNotNull { index, reserve ->
             if (
                 reserveUsableCache.getOrElse(index) { true } &&
-                reserve.identityConfirmed &&
                 reserve.cardMappingConfirmed
             ) index to reserve else null
         }
         if (candidates.isEmpty()) return
 
-        val y = ry(SWITCH_CHOICE_INDICATOR_Y)
+        val indicatorY = ry(SWITCH_CHOICE_INDICATOR_Y)
+        val iconY = ry(SWITCH_CHOICE_ICON_Y)
         candidates.forEach { (slotIndex, reserve) ->
             val x = if (slotIndex == 0) rx(SWITCH_CHOICE_LEFT_X) else rx(SWITCH_CHOICE_RIGHT_X)
-            drawMatchupIndicator(canvas, x, y, reserve.matchup, 16f*u())
+            drawReservePokemonIcon(
+                canvas = canvas,
+                index = slotIndex,
+                reserve = reserve,
+                fallbackName = reserve.name ?: "POKÉMON ${slotIndex + 2}",
+                centerX = x,
+                centerY = iconY,
+                radius = 30f * u()
+            )
+            drawMatchupIndicator(canvas, x, indicatorY, reserve.matchup, 16f*u())
             if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
                 paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
                 paint.textAlign=Paint.Align.CENTER; paint.textSize=10f*u(); paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,x,y+30f*u(),paint); paint.clearShadowLayer()
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,x,indicatorY+30f*u(),paint); paint.clearShadowLayer()
             }
         }
     }
@@ -1008,6 +1155,8 @@ class BattleOverlayView(
         const val RESERVE_SPACING_Y=140f
         const val SWITCH_CHOICE_LEFT_X=282f
         const val SWITCH_CHOICE_RIGHT_X=582f
+        /** Center of the Pokémon portrait over each native switch-choice card. */
+        const val SWITCH_CHOICE_ICON_Y=1322f
         const val SWITCH_CHOICE_INDICATOR_Y=1444f
         const val BATTLE_ASSIST_X=432f
         const val BATTLE_ASSIST_Y=770f

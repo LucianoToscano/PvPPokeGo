@@ -74,10 +74,23 @@ internal object ChargedMovePredictor {
         reaction: ReactionWindowEstimator,
         observedDamage: (MoveDef) -> ObservedDamageEstimate?,
         attackerAttackStages: StatStageRange = StatStageRange(),
-        defenderDefenseStages: StatStageRange = StatStageRange()
+        defenderDefenseStages: StatStageRange = StatStageRange(),
+        /** Time since the player HP bar was last readable. Projection is non-mutating. */
+        unobservedFastWindowMs: Long = 0L
     ): EnemyEnergyForecast? {
-        val hypotheses = energyTracker.hypotheses()
+        val hypotheses = energyTracker.projectedHypotheses(unobservedFastWindowMs)
         if (hypotheses.isEmpty() || chargedMoves.isEmpty()) return null
+
+        val projectedEnergyMin = hypotheses.minOf { it.energy }
+        val projectedEnergyMax = hypotheses.maxOf { it.energy }
+        val projectedEnergyLikely = weightedMedian(hypotheses.map { it.energy to it.weight })
+        val projectionPenalty = when {
+            unobservedFastWindowMs <= 0L -> 1f
+            unobservedFastWindowMs < 1_500L -> .88f
+            unobservedFastWindowMs < 3_000L -> .78f
+            else -> .68f
+        }
+        val mathematicalConfidence = (energyTracker.confidence() * projectionPenalty).coerceIn(0f, 1f)
 
         val reactionTurns = reaction.reactionTurns()
         val leadTimeMs = reaction.leadTimeMs()
@@ -155,7 +168,6 @@ internal object ChargedMovePredictor {
             }
 
             val prior = weightedMove.weight.coerceIn(.01f, 1f)
-            val mathematicalConfidence = energyTracker.confidence()
             val urgency = when {
                 readyCertain -> 1f
                 readyPossible -> .92f
@@ -188,8 +200,8 @@ internal object ChargedMovePredictor {
             ChargedThreatForecast(
                 move = move,
                 energyCost = cost,
-                currentEnergyMin = energyTracker.energyMin(),
-                currentEnergyMax = energyTracker.energyMax(),
+                currentEnergyMin = projectedEnergyMin,
+                currentEnergyMax = projectedEnergyMax,
                 fastMovesRemainingMin = fastMin,
                 fastMovesRemainingLikely = fastLikely,
                 fastMovesRemainingMax = fastMax,
@@ -228,10 +240,10 @@ internal object ChargedMovePredictor {
 
         if (candidates.isEmpty()) return null
         return EnemyEnergyForecast(
-            energyMin = energyTracker.energyMin(),
-            energyLikely = energyTracker.energyLikely(),
-            energyMax = energyTracker.energyMax(),
-            hypothesisCount = energyTracker.hypothesisCount(),
+            energyMin = projectedEnergyMin,
+            energyLikely = projectedEnergyLikely,
+            energyMax = projectedEnergyMax,
+            hypothesisCount = hypotheses.size,
             fastMoveNames = hypotheses
                 .sortedByDescending { it.weight }
                 .map { repo.localizedMoveName(it.fastMove) }
@@ -240,7 +252,7 @@ internal object ChargedMovePredictor {
             candidates = candidates,
             leadTimeMs = leadTimeMs,
             reactionTurns = reactionTurns,
-            confidence = energyTracker.confidence()
+            confidence = mathematicalConfidence
         )
     }
 

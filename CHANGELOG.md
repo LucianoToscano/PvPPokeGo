@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.25
+
+- Adicionado modelo matemático híbrido para Fast Moves inimigos: HP drop continua sendo evidência primária, cadência e dano observado reponderam os golpes legais, e períodos curtos com barra de HP oculta usam apenas projeção não-mutante 0..N por tempo/turnos; overfarm do segundo Charged agora tem camada visual escura.
+
+- Corrigida a exibição dos ícones/retratos dos Pokémon de reserva: cache estável por slot da equipe, fallback pelos cards nativos e ícones mantidos também na tela de troca; o recorte duplicado que podia deixar miniaturas quase vazias foi removido.
+
+- Nesta etapa, a validação/build foi reduzida ao APK `standard`; gravação interna e Recorder Compat permanecem no código, sem remoção, mas ficam para uma etapa posterior conforme decisão do projeto.
+- Adicionada configuração de assinatura permanente também no Gradle/Android Studio via `keystore.properties` local ou variáveis `PVPPG_*`; o repositório continua sem armazenar a chave privada.
+- Adicionados scripts reproduzíveis para `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug` e verificação da integridade/assets do APK.
+
+- Consolidação criada a partir de `release/0.5.24` sem alterar a baseline congelada `release/0.5.20`.
+- Corrigida a divergência de versionamento: a linha mais nova estava na branch 0.5.24, mas ainda declarava `versionName 0.5.23`; a entrega consolidada passa a `versionName 0.5.25` e `versionCode 30`.
+- Restaurado, de forma seletiva, o thumbnail ao vivo dos dois cards de reserva que existia na linha 0.5.23 e havia sido perdido na 0.5.24. O atlas offline continua sendo a fonte visual principal quando espécie/forma está confirmada; o crop ao vivo é apenas fallback de apresentação.
+- Os dois blocos de reserva permanecem visíveis mesmo antes da identidade ser confirmada. Sem confiança suficiente mostram `ANALISANDO` e não exibem `MELHOR`/`EVITAR`.
+- Preview de dano passou a explicitar simultaneamente o cenário `SEM ESC`, HP restante/faixa, risco de KO e o cenário `COM ESC` quando um escudo estiver disponível.
+- Launcher passa a usar os recursos adaptive/round oficiais, cujo foreground referencia a mesma arte oficial `pvppokego_launcher`, melhorando consistência em launchers Samsung/Android.
+- Mantida a separação de manifests: APK padrão sem AccessibilityService/specialUse; Recorder Compat mantém somente o fallback de screenshots por Acessibilidade.
+- Novo pipeline 0.5.25 audita assets/atlas/PvPoke, manifests, TODO/FIXME, executa testes das duas variantes, compila, valida APKs com `unzip -t`, calcula SHA-256 e empacota build/projeto Android Studio.
+- Estratégia de assinatura permanente preparada no CI: releases podem ser assinados por um keystore injetado exclusivamente por GitHub Secrets; nenhuma chave privada ou senha é armazenada no repositório. Na ausência desses secrets, o pipeline gera apenas APKs QA/debug claramente identificados.
+
 ## 0.5.23
 
 - Pipeline de validação restaurado para o runner macOS já comprovado nas 0.5.21/0.5.22, mantendo hashes portáveis com `shasum -a 256`.

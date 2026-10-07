@@ -60,6 +60,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val predictiveEnergy = EnemyEnergyTracker()
     private val reactionWindow = ReactionWindowEstimator()
     private var lastEnemyFastEventAtMs = 0L
+    /** Last frame where the player's HP bar was readable; used only for non-mutating time projection. */
+    private var lastPlayerHpVisibleAtMs = 0L
     private var activeState: BattlePokemonState? = null
     private var fast: MoveDef? = null
     private var charge1: MoveDef? = null
@@ -156,6 +158,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         tracker.reset()
         predictiveEnergy.clear()
         lastEnemyFastEventAtMs = 0L
+        lastPlayerHpVisibleAtMs = 0L
         ownTracker.reset()
         activeState = null
         ownActiveState = null
@@ -961,6 +964,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             tracker.restoreRange(minE, maxE, saved.fastMoveCount)
         }
         lastEnemyFastEventAtMs = 0L
+        lastPlayerHpVisibleAtMs = 0L
         saveActiveState()
     }
 
@@ -1066,7 +1070,25 @@ class BattleEngine(private val repo: GameDataRepository) {
                 confidence = confidence,
                 observedIntervalMs = observedInterval
             )
-            if (activeState?.fastMoveManual == true) predictiveEnergy.confirmFastMove(f)
+            predictiveEnergy.reweightByDamageEvidence(
+                observedDamageFraction = damageFraction,
+                hits = count,
+                expectedDamagePercent = ::expectedEnemyFastDamagePercent
+            )
+            if (activeState?.fastMoveManual == true) {
+                predictiveEnergy.confirmFastMove(f)
+            } else {
+                predictiveEnergy.fastMoveInference()?.let { inference ->
+                    val strongEnough = inference.observedEvents >= 2 &&
+                        ((inference.probability >= .72f && inference.margin >= .18f) ||
+                            inference.probability >= .88f)
+                    if (strongEnough) {
+                        fast = inference.move
+                        activeState?.fastMoveId = inference.move.moveId
+                        lastAutoSource = source + "+cadencia/dano:" + inference.move.moveId
+                    }
+                }
+            }
             syncLegacyEnemyEnergyFromPredictive()
         }
         lastEnemyFastEventAtMs = nowMs
@@ -1100,6 +1122,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     ): List<DamageObservation> {
         playerHpRatio?.let { value ->
             lastHpRatio = value.coerceIn(0f, 1f)
+            lastPlayerHpVisibleAtMs = nowMs
             ownActiveState?.let { state ->
                 state.lastHpRatio = lastHpRatio
                 if (value <= .01f) state.fainted = true
@@ -1295,6 +1318,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         recordChargedMove(move, observed = true)
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = nowMs
+        lastPlayerHpVisibleAtMs = nowMs
         ignoreFastUntilMs = maxOf(ignoreFastUntilMs, nowMs + CHARGED_FAST_GUARD_MS)
         lastAutoSource = "charged:${move.moveId}"
         saveActiveState()
@@ -1314,6 +1338,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         if (!accepted) return false
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = nowMs
+        lastPlayerHpVisibleAtMs = nowMs
         ignoreFastUntilMs = maxOf(ignoreFastUntilMs, nowMs + CHARGED_FAST_GUARD_MS)
         lastAutoSource = "charged:unknown-range"
         saveActiveState()
@@ -1472,6 +1497,39 @@ class BattleEngine(private val repo: GameDataRepository) {
             return false
         }
         return observedUnknownChargedUsed(nowMs)
+    }
+
+    /**
+     * Model damage for a legal enemy Fast Move. It is used only to identify which Fast
+     * Move best explains an HP drop that the detector already confirmed.
+     */
+    private fun expectedEnemyFastDamagePercent(move: MoveDef): Float? {
+        val attacker = repo.pokemon(enemySpeciesId ?: enemyName) ?: return null
+        val defender = repo.pokemon(playerSpeciesId ?: playerName) ?: return null
+        val attackerStats = repo.estimatedBattleStats(attacker.speciesId, enemyCp) ?: return null
+        val defenderStats = repo.estimatedBattleStats(defender.speciesId, playerCp) ?: return null
+        return DamageForecastEngine.modelDamagePercent(
+            attacker = attacker,
+            attackerStats = attackerStats,
+            defender = defender,
+            defenderStats = defenderStats,
+            move = move,
+            attackerAttackStage = stages(activeState).attack,
+            defenderDefenseStage = stages(ownActiveState).defense
+        )
+    }
+
+    /**
+     * If the HP bar is hidden by a large Pokemon/VFX, project only a possible energy
+     * window from elapsed Fast-Move durations. No permanent Fast count is added here.
+     */
+    private fun unobservedEnemyFastWindowMs(nowMs: Long = System.currentTimeMillis()): Long {
+        if (lastPlayerHpVisibleAtMs <= 0L) return 0L
+        if (lastBattleConfidence < .45f) return 0L
+        if (chargedPendingSinceMs != null || nowMs < ignoreFastUntilMs) return 0L
+        if (captureHealth == CaptureHealth.STALE || captureHealth == CaptureHealth.PAUSED) return 0L
+        val gap = (nowMs - lastPlayerHpVisibleAtMs).coerceAtLeast(0L)
+        return if (gap >= 600L) gap.coerceAtMost(MAX_PASSIVE_FAST_PROJECTION_MS) else 0L
     }
 
     /**
@@ -1707,7 +1765,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                     )
                 },
                 attackerAttackStages = enemyStages.attack,
-                defenderDefenseStages = ownStages.defense
+                defenderDefenseStages = ownStages.defense,
+                unobservedFastWindowMs = unobservedEnemyFastWindowMs()
             )
         } else null
 
@@ -2197,6 +2256,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         private const val MIN_CHARGED_DAMAGE_SAMPLE_FRACTION = 0.010f
         private const val CHARGED_FAST_GUARD_MS = 2_200L
         private const val PENDING_CONFIRM_DELAY_MS = 2_400L
+        private const val MAX_PASSIVE_FAST_PROJECTION_MS = 5_000L
 
         private val CHARGED_PROMPTS = listOf(
             "ataquecarregado", "ataquechegando", "ataquecarregadoagora",

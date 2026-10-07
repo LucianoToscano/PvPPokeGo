@@ -125,4 +125,35 @@ class EnemyEnergyTrackerTest {
         assertEquals(24, tracker.energyMin())
         assertEquals(40, tracker.energyMax())
     }
+    @Test
+    fun damageEvidenceCanIdentifyFastMoveWhenCadenceIsAmbiguous() {
+        val lowDamage = fast("LOW_DAMAGE", 10, 2)
+        val highDamage = fast("HIGH_DAMAGE", 10, 2)
+        val tracker = EnemyEnergyTracker()
+        tracker.reset(listOf(WeightedMove(lowDamage, .5f), WeightedMove(highDamage, .5f)))
+
+        tracker.observeFastCompletion(1, 71L, .95f, observedIntervalMs = 1000L)
+        tracker.reweightByDamageEvidence(.10f, 1) { move ->
+            if (move.moveId == "HIGH_DAMAGE") 10f else 3f
+        }
+
+        val inference = tracker.fastMoveInference()!!
+        assertEquals("HIGH_DAMAGE", inference.move.moveId)
+        assertTrue(inference.probability > .70f)
+        assertTrue(inference.margin > .25f)
+    }
+
+    @Test
+    fun hiddenHpProjectionUsesMoveDurationWithoutMutatingTrackedEnergy() {
+        val oneSecond = fast("ONE_SECOND", 10, 2)
+        val tracker = EnemyEnergyTracker()
+        tracker.reset(listOf(WeightedMove(oneSecond, 1f)))
+        tracker.observeFastCompletion(2, 80L, 1f) // 20E confirmed
+
+        val projected = tracker.projectedHypotheses(2_100L)
+        assertEquals(setOf(20, 30, 40), projected.map { it.energy }.toSet())
+        assertEquals(20, tracker.energyLikely())
+        assertTrue(projected.maxByOrNull { it.weight }!!.energy >= 30)
+    }
+
 }

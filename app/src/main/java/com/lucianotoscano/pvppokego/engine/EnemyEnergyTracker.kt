@@ -27,6 +27,15 @@ internal class EnemyEnergyTracker(
         val weight: Float
     )
 
+    data class FastMoveInference(
+        val move: MoveDef,
+        /** Posterior probability from ranking prior + cadence + observed HP damage. */
+        val probability: Float,
+        /** Separation from the second most likely Fast Move. */
+        val margin: Float,
+        val observedEvents: Int
+    )
+
     private var hypotheses: List<Hypothesis> = emptyList()
     private var observedFastEvents: Int = 0
     private var lastObservedTurn: Int = 0
@@ -107,6 +116,91 @@ internal class EnemyEnergyTracker(
         lastObservedTurn = hypotheses.maxOfOrNull { it.elapsedTurns } ?: lastObservedTurn
         normalizeAndPrune()
         return true
+    }
+
+    /**
+     * Reweight legal Fast-Move hypotheses using damage from an already-confirmed
+     * HP-drop event. This never creates a new attack; it only helps identify the move.
+     */
+    fun reweightByDamageEvidence(
+        observedDamageFraction: Float?,
+        hits: Int,
+        expectedDamagePercent: (MoveDef) -> Float?
+    ) {
+        val observedPercentPerHit = observedDamageFraction
+            ?.takeIf { it > 0f && it < 0.50f }
+            ?.times(100f)
+            ?.div(hits.coerceAtLeast(1).toFloat())
+            ?: return
+        if (hypotheses.isEmpty()) return
+
+        hypotheses = hypotheses.map { h ->
+            val expected = expectedDamagePercent(h.fastMove)
+                ?.takeIf { it > 0f }
+                ?: return@map h
+            val relativeError = abs(observedPercentPerHit - expected) / expected.coerceAtLeast(1.0f)
+            val likelihood = exp(-1.75 * relativeError.toDouble())
+                .toFloat()
+                .coerceIn(DAMAGE_MIN_LIKELIHOOD, 1f)
+            h.copy(weight = h.weight * likelihood)
+        }
+        normalizeAndPrune()
+    }
+
+    /**
+     * Best current Fast-Move identity without collapsing the uncertainty set.
+     */
+    fun fastMoveInference(): FastMoveInference? {
+        if (hypotheses.isEmpty()) return null
+        val grouped = hypotheses
+            .groupBy { it.fastMove.moveId }
+            .map { (_, group) ->
+                group.first().fastMove to group.sumOf { it.weight.toDouble() }.toFloat()
+            }
+            .sortedByDescending { it.second }
+        val top = grouped.firstOrNull() ?: return null
+        val second = grouped.getOrNull(1)?.second ?: 0f
+        val total = grouped.sumOf { it.second.toDouble() }.toFloat().takeIf { it > 0f } ?: 1f
+        val probability = (top.second / total).coerceIn(0f, 1f)
+        val secondProbability = (second / total).coerceIn(0f, 1f)
+        return FastMoveInference(
+            move = top.first,
+            probability = probability,
+            margin = (probability - secondProbability).coerceIn(0f, 1f),
+            observedEvents = observedFastEvents
+        )
+    }
+
+    /**
+     * Non-mutating projection for an interval where the player's HP bar cannot be read.
+     * Perfect tapping gets the largest weight, but 0..N completions remain possible.
+     */
+    fun projectedHypotheses(
+        unobservedMs: Long,
+        maxExtraMoves: Int = MAX_GAP_RECOVERY_MOVES
+    ): List<Hypothesis> {
+        if (hypotheses.isEmpty() || unobservedMs < MIN_PROJECTION_GAP_MS) return hypotheses
+        val cappedExtra = maxExtraMoves.coerceIn(0, MAX_GAP_RECOVERY_MOVES)
+        val projected = hypotheses.flatMap { h ->
+            val durationMs = h.fastMove.turns.coerceAtLeast(1) * TURN_MS.toLong()
+            val maximumCompleted = (unobservedMs / durationMs).toInt().coerceIn(0, cappedExtra)
+            if (maximumCompleted <= 0) {
+                listOf(h)
+            } else {
+                (0..maximumCompleted).map { extra ->
+                    val gain = h.fastMove.energyGain.coerceAtLeast(0) * extra
+                    val distanceFromPerfectTapping = maximumCompleted - extra
+                    val timingWeight = PROJECTION_WEIGHT_DECAY.pow(distanceFromPerfectTapping)
+                    h.copy(
+                        energy = (h.energy + gain).coerceAtMost(maxEnergy),
+                        completedFastMoves = h.completedFastMoves + extra,
+                        elapsedTurns = h.elapsedTurns + h.fastMove.turns * extra,
+                        weight = h.weight * timingWeight
+                    )
+                }
+            }
+        }
+        return normalizedProjection(projected)
     }
 
     /**
@@ -334,6 +428,26 @@ internal class EnemyEnergyTracker(
         return values.map { it.copy(weight = it.weight / total) }
     }
 
+    private fun normalizedProjection(values: List<Hypothesis>): List<Hypothesis> {
+        if (values.isEmpty()) return emptyList()
+        val merged = values
+            .groupBy {
+                listOf(
+                    it.fastMove.moveId,
+                    it.energy.toString(),
+                    it.completedFastMoves.toString(),
+                    it.elapsedTurns.toString()
+                ).joinToString("|")
+            }
+            .map { (_, group) ->
+                val first = group.first()
+                first.copy(weight = group.sumOf { it.weight.toDouble() }.toFloat())
+            }
+            .sortedByDescending { it.weight }
+            .take(maxHypotheses)
+        return renormalize(merged)
+    }
+
     private fun weightedMedianEnergy(values: List<Hypothesis>): Int {
         if (values.isEmpty()) return 0
         var running = 0f
@@ -349,6 +463,9 @@ internal class EnemyEnergyTracker(
         private const val MIN_WEIGHT = 0.0001f
         private const val RECOVERY_WEIGHT = 0.35f
         private const val GAP_WEIGHT_DECAY = 0.58f
+        private const val PROJECTION_WEIGHT_DECAY = 0.58f
+        private const val DAMAGE_MIN_LIKELIHOOD = 0.05f
+        private const val MIN_PROJECTION_GAP_MS = 600L
         private const val MAX_GAP_RECOVERY_MOVES = 5
     }
 }

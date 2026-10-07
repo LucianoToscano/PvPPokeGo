@@ -187,6 +187,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 lastNativeTopCardY = null
                 lastBattleEvidenceAtMs = 0L
                 switchChoicePromptUntilMs = 0L
+                detector?.clearCachedPortraits()
+                overlayView?.clearPokemonPortraits()
                 dismissMoveMenu()
                 redraw()
                 return START_STICKY
@@ -1168,6 +1170,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         lastNativeTopCardY = null
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
+        detector?.clearCachedPortraits()
+        overlayView?.clearPokemonPortraits()
         dismissMoveMenu()
     }
 
@@ -1459,6 +1463,18 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         ) {
                             detector?.detectReserveEvidence(frame)?.let { (topCard, bottomCard) ->
                                 e.onReserveCardEvidence(topCard, bottomCard)
+                                val portraits = detector?.copyReservePortraits()
+                                if (portraits != null) {
+                                    withContext(Dispatchers.Main) {
+                                        val view = overlayView
+                                        if (view != null) {
+                                            view.setReservePortraits(portraits.first, portraits.second)
+                                        } else {
+                                            portraits.first?.let { if (!it.isRecycled) it.recycle() }
+                                            portraits.second?.let { if (!it.isRecycled) it.recycle() }
+                                        }
+                                    }
+                                }
                             }
                             lastReserveOcrAt = now
                         }
@@ -1669,6 +1685,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS
                         ) {
                             val team = detector?.detectOwnTeam(frame).orEmpty()
+                            // Copy before clearBattleContextAfterConfirmedEnd(): that method clears
+                            // detector caches from the previous battle, but these copies belong to
+                            // the newly detected team-selection screen and must survive it.
+                            val detectedTeamPortraits = if (team.isNotEmpty()) {
+                                detector?.copyOwnTeamPortraits().orEmpty()
+                            } else emptyList()
                             if (
                                 historyRecorder.hasActiveSession() &&
                                 BattleContinuityPolicy.confirmedTeamSelectionBoundary(
@@ -1685,6 +1707,18 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 engine?.onOwnTeamDetected(team)
                             } else if (e.needsOwnTeamScan() && team.isNotEmpty()) {
                                 e.onOwnTeamDetected(team)
+                            }
+                            if (detectedTeamPortraits.any { it != null }) {
+                                withContext(Dispatchers.Main) {
+                                    val view = overlayView
+                                    if (view != null) {
+                                        view.setOwnTeamPortraits(detectedTeamPortraits)
+                                    } else {
+                                        detectedTeamPortraits.forEach { portrait ->
+                                            portrait?.let { if (!it.isRecycled) it.recycle() }
+                                        }
+                                    }
+                                }
                             }
                             lastTeamOcrAt = now
                         }
@@ -1877,6 +1911,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         battleActive = false
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
+        detector?.clearCachedPortraits()
+        overlayView?.clearPokemonPortraits()
         dismissMoveMenu()
         redraw()
     }
@@ -2120,6 +2156,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         quickMenu = null
         removeEditTouchLayer()
         removeFreeDragZones()
+        overlayView?.release()
         runCatching { overlayView?.let { windowManager?.removeView(it) } }
         runCatching { fastTouch?.let { windowManager?.removeView(it) } }
         runCatching { charged1Touch?.let { windowManager?.removeView(it) } }

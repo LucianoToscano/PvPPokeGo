@@ -62,4 +62,35 @@ class EnergyTrackerTest {
         assertEquals(100, tracker.minEnergy)
         assertEquals(100, tracker.maxEnergy)
     }
+    @Test
+    fun overfarmProgressTracksSecondChargedCopy() {
+        val fifty = charged("C50", 50)
+        val tracker = EnergyTracker()
+        tracker.restoreRange(75, 75, 8)
+
+        val prediction = tracker.predict(fifty, fast, EnergyConfidence.CONFIRMED)
+        assertTrue(prediction.ready)
+        assertEquals(1f, prediction.progress, .0001f)
+        assertEquals(.5f, prediction.overflowProgress, .0001f)
+
+        assertTrue(tracker.onObservedChargedMove(fifty))
+        assertEquals(25, tracker.energy)
+        assertEquals(.5f, tracker.predict(fifty, fast).progress, .0001f)
+    }
+
+    @Test
+    fun spendingOneFiftyEnergyChargedLeavesSecondCopyWhenHundredWasStored() {
+        val fiftyA = charged("C50_A", 50)
+        val fiftyB = charged("C50_B", 50)
+        val tracker = EnergyTracker()
+        tracker.restoreRange(100, 100, 10)
+
+        assertTrue(tracker.predict(fiftyA, fast).ready)
+        assertTrue(tracker.predict(fiftyB, fast).ready)
+        assertTrue(tracker.onObservedChargedMove(fiftyA))
+        assertEquals(50, tracker.energy)
+        assertTrue(tracker.predict(fiftyB, fast).ready)
+        assertEquals(0f, tracker.predict(fiftyB, fast).overflowProgress, .0001f)
+    }
+
 }

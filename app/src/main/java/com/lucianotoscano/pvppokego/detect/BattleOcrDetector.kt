@@ -29,6 +29,60 @@ class BattleOcrDetector(
 ) : AutoCloseable {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val visualRecognizer = PokemonVisualRecognizer(context.applicationContext)
+    private val reservePortraitLock = Any()
+    private val reservePortraits = arrayOfNulls<Bitmap>(2)
+    /** Stable portraits captured from the three Pokémon on the team-selection screen. */
+    private val ownTeamPortraits = arrayOfNulls<Bitmap>(3)
+
+    /**
+     * Live thumbnails from Pokemon GO's native reserve cards.
+     * Presentation-only fallback: identity and matchup still require CP/species/form confidence.
+     */
+    fun copyReservePortraits(): Pair<Bitmap?, Bitmap?> = synchronized(reservePortraitLock) {
+        reservePortraits[0]?.takeUnless { it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false) to
+            reservePortraits[1]?.takeUnless { it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false)
+    }
+
+    /**
+     * Copies portraits in original team-slot order (0, 1, 2). These thumbnails are
+     * presentation-only; they never change OCR/species confidence.
+     */
+    fun copyOwnTeamPortraits(): List<Bitmap?> = synchronized(reservePortraitLock) {
+        ownTeamPortraits.map { portrait ->
+            portrait?.takeUnless { it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false)
+        }
+    }
+
+    fun clearCachedPortraits() = synchronized(reservePortraitLock) {
+        reservePortraits.indices.forEach { index ->
+            reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            reservePortraits[index] = null
+        }
+        ownTeamPortraits.indices.forEach { index ->
+            ownTeamPortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            ownTeamPortraits[index] = null
+        }
+    }
+
+    private fun cacheReservePortrait(index: Int, source: Bitmap) {
+        if (source.isRecycled || index !in 0..1) return
+        // The caller already supplies a portrait-only ROI. Cropping it a second time was
+        // cutting off tall/wide Pokémon and could leave an almost empty thumbnail.
+        val thumb = Bitmap.createScaledBitmap(source, RESERVE_THUMB_SIZE, RESERVE_THUMB_SIZE, true)
+        synchronized(reservePortraitLock) {
+            reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            reservePortraits[index] = thumb
+        }
+    }
+
+    private fun cacheOwnTeamPortrait(index: Int, source: Bitmap) {
+        if (source.isRecycled || index !in 0..2) return
+        val thumb = Bitmap.createScaledBitmap(source, TEAM_THUMB_SIZE, TEAM_THUMB_SIZE, true)
+        synchronized(reservePortraitLock) {
+            ownTeamPortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            ownTeamPortraits[index] = thumb
+        }
+    }
 
     suspend fun detect(frame: Bitmap): BattleDetection = coroutineScope {
         if (frame.isRecycled) return@coroutineScope BattleDetection(null, null)
@@ -93,7 +147,8 @@ class BattleOcrDetector(
                 ?.toIntOrNull()
                 ?.takeIf { it in 10..10000 }
 
-            suspend fun read(textRoi: Bitmap, portraitRoi: Bitmap): ReserveCardEvidence = coroutineScope {
+            suspend fun read(index: Int, textRoi: Bitmap, portraitRoi: Bitmap): ReserveCardEvidence = coroutineScope {
+                cacheReservePortrait(index, portraitRoi)
                 val cpJob = async { parseCp(recognize(textRoi)) }
                 val visualJob = async { visualRecognizer.matchReserveCard(portraitRoi) }
                 val visual = visualJob.await()
@@ -105,8 +160,8 @@ class BattleOcrDetector(
                 )
             }
 
-            val topJob = async { read(topText, topPortrait) }
-            val bottomJob = async { read(bottomText, bottomPortrait) }
+            val topJob = async { read(0, topText, topPortrait) }
+            val bottomJob = async { read(1, bottomText, bottomPortrait) }
             topJob.await() to bottomJob.await()
         } finally {
             topText.recycle(); bottomText.recycle()
@@ -144,7 +199,13 @@ class BattleOcrDetector(
                 async {
                     val ocrJob = async { recognizeTeamSlotEvidence(textRois[index]) }
                     val visualJob = async { visualRecognizer.match(portraitRois[index]) }
-                    fuseTeamSlotEvidence(ocrJob.await(), visualJob.await())
+                    val detected = fuseTeamSlotEvidence(ocrJob.await(), visualJob.await())
+                    // Cache only when this column produced real identity evidence. This prevents
+                    // empty transition/battle frames from replacing a good team portrait.
+                    if (detected != null && detected.confidence >= TEAM_PORTRAIT_MIN_CONFIDENCE) {
+                        cacheOwnTeamPortrait(index, portraitRois[index])
+                    }
+                    detected
                 }
             }
             jobs.mapNotNull { it.await() }
@@ -329,7 +390,10 @@ class BattleOcrDetector(
         return out
     }
 
-    override fun close() = recognizer.close()
+    override fun close() {
+        clearCachedPortraits()
+        recognizer.close()
+    }
 
     private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
         addOnSuccessListener { if (cont.isActive) cont.resume(it) }
@@ -403,5 +467,8 @@ class BattleOcrDetector(
         private const val VISUAL_ACCEPT_CONFIDENCE = 0.76f
         private const val VISUAL_FORM_ACCEPT_CONFIDENCE = 0.86f
         private const val VISUAL_CONFLICT_CONFIDENCE = 0.80f
+        private const val RESERVE_THUMB_SIZE = 112
+        private const val TEAM_THUMB_SIZE = 128
+        private const val TEAM_PORTRAIT_MIN_CONFIDENCE = 0.70f
     }
 }

@@ -101,4 +101,13 @@ class ChargedMovePredictorTest {
         assertEquals(3, window.fastMovesLikely)
         assertEquals(15, window.turnsLikely)
     }
+    @Test
+    fun tenEnergyOneSecondFastReachesFiftyEnergyChargedInFiveSeconds() {
+        val quick = fast("EXAMPLE_FAST", 10, 2) // 2 turns = 1.0 s
+        val window = ChargedMovePredictor.energyWindow(listOf(h(quick, 0, 1f)), 50)!!
+        assertEquals(5, window.fastMovesLikely)
+        assertEquals(10, window.turnsLikely)
+        assertEquals(5_000L, window.turnsLikely * EnemyEnergyTracker.TURN_MS.toLong())
+    }
+
 }

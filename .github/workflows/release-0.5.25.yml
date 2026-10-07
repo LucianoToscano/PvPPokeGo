@@ -1,0 +1,264 @@
+name: Release PvPPokeGo 0.5.25
+
+on:
+  push:
+    branches: [release/0.5.25]
+  pull_request:
+    branches: [release/0.5.24, ci/0.5.25-validation-base]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pvppokego-release-0525-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RELEASE_KEYSTORE_B64: ${{ secrets.PVPPKGO_RELEASE_KEYSTORE_B64 }}
+  RELEASE_KEY_ALIAS: ${{ secrets.PVPPKGO_RELEASE_KEY_ALIAS }}
+  RELEASE_STORE_PASSWORD: ${{ secrets.PVPPKGO_RELEASE_STORE_PASSWORD }}
+  RELEASE_KEY_PASSWORD: ${{ secrets.PVPPKGO_RELEASE_KEY_PASSWORD }}
+
+jobs:
+  audit-build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionName = "0.5.25"' app/build.gradle.kts
+          grep -q 'versionCode = 30' app/build.gradle.kts
+          grep -q 'create("standard")' app/build.gradle.kts
+          grep -q 'create("recorderCompat")' app/build.gradle.kts
+
+          grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
+          grep -q 'android:roundIcon="@mipmap/ic_launcher_round"' app/src/main/AndroidManifest.xml
+          test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          grep -q '@drawable/pvppokego_launcher' app/src/main/res/drawable/pvppokego_launcher_foreground.xml
+          test -s app/src/main/res/drawable-nodpi/pvppokego_launcher.png
+
+          grep -q 'BattleCorrespondenceTracker' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt
+          grep -q 'FastMoveSignalFuser' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleFrameEventDetector.kt
+          grep -q 'ChargedAnimationCycleGate' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'ChargedMoveSlotResolver' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'EnemyEnergyTracker' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'DamageForecastEngine' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'copyReservePortraits' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
+          grep -q 'setReservePortraits' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt
+          grep -q 'COM ESC protegido' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt
+
+          if grep -q 'PvPPokeGoAccessibilityCaptureService' app/src/main/AndroidManifest.xml; then
+            echo "Accessibility service leaked into main manifest"
+            exit 1
+          fi
+          if grep -q 'FOREGROUND_SERVICE_SPECIAL_USE\|specialUse\|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' app/src/main/AndroidManifest.xml; then
+            echo "SPECIAL_USE leaked into standard/main manifest"
+            exit 1
+          fi
+
+      - name: Audit TODO FIXME
+        shell: bash
+        run: |
+          mkdir -p audit
+          {
+            echo "PvPPokeGo 0.5.25 TODO/FIXME audit"
+            echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            grep -RInE --exclude-dir=.git --exclude-dir=build --exclude='*.json' --exclude='*.png'               '\b(TODO|FIXME|XXX|HACK)\b' app tools .github docs || true
+          } > audit/todo-fixme.txt
+          cat audit/todo-fixme.txt
+
+      - name: Package offline PvPoke snapshot
+        run: |
+          set -euo pipefail
+          python3 tools/package_offline_pvpoke_assets.py
+          test -s app/src/main/assets/gamemaster.json
+          test -s app/src/main/assets/rankings-1500.json
+          test -s app/src/main/assets/rankings-2500.json
+          test -s app/src/main/assets/rankings-10000.json
+          test -s app/src/main/assets/pvpoke_cpms.json
+          test -s app/src/main/assets/pvpoke_LICENSE.txt
+          test -s app/src/main/assets/pvpoke_snapshot.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open("app/src/main/assets/pvpoke_snapshot.json"))
+          assert p["pvpokeRef"] == "f627e89e53c0c7b903fff097df7a0ad0ac95decc"
+          assert p["turnDurationMs"] == 500
+          assert p["settings"]["maxBuffStages"] == 4
+          assert p["settings"]["buffDivisor"] == 4
+          assert p["sha256"]["gamemaster.json"]
+          assert len(p["sha256"]["rankings"]) == 3
+          print("PvPoke snapshot:", p["pvpokeRef"], p["generatedAtUtc"])
+          PY
+
+      - name: Build visual fingerprint bank and offline icon atlas
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv-visual
+          . .venv-visual/bin/activate
+          python -m pip install --disable-pip-version-check pillow
+          python tools/package_visual_fingerprints.py
+          test -s app/src/main/assets/pokemon_visual_fingerprints.json
+          test -s app/src/main/assets/pokemon_icon_atlas.png
+          test -s app/src/main/assets/pokemon_icon_atlas.json
+          python3 - <<'PY'
+          import json
+          bank=json.load(open("app/src/main/assets/pokemon_visual_fingerprints.json"))
+          atlas=json.load(open("app/src/main/assets/pokemon_icon_atlas.json"))
+          assert bank["format"]=="PvPPokeGo-visual-fingerprints"
+          assert bank.get("version", 0) >= 2
+          assert len(bank["entries"]) >= 500
+          assert any("_alolan" in e.get("speciesId","") for e in bank["entries"])
+          entries=atlas.get("entries", [])
+          assert len(entries) >= 500
+          ids={str(e.get("speciesId","")) for e in entries}
+          assert any("_alolan" in x or "_galarian" in x or "_hisuian" in x for x in ids)
+          print("visual bank", len(bank["entries"]), "atlas", len(entries))
+          PY
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Unit tests and standard debug build
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace             :app:testStandardDebugUnitTest             :app:assembleStandardDebug
+
+      - name: Verify merged manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          STD_MANIFEST="$(find app/build/intermediates/merged_manifests/standardDebug -name AndroidManifest.xml | head -1)"
+          test -n "$STD_MANIFEST"
+          ! grep -q 'PvPPokeGoAccessibilityCaptureService' "$STD_MANIFEST"
+          ! grep -q 'FOREGROUND_SERVICE_SPECIAL_USE\|specialUse\|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$STD_MANIFEST"
+          grep -q 'android:foregroundServiceType="mediaProjection"' "$STD_MANIFEST"
+          cp "$STD_MANIFEST" audit/AndroidManifest-standardDebug.xml
+
+      - name: Verify debug APK integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          STD=app/build/outputs/apk/standard/debug/app-standard-debug.apk
+          test -s "$STD"
+          unzip -t "$STD"
+          unzip -l "$STD" | grep -q 'pvppokego_launcher.png'
+          unzip -l "$STD" | grep -q 'gamemaster.json'
+          unzip -l "$STD" | grep -q 'pvpoke_snapshot.json'
+          unzip -l "$STD" | grep -q 'pvpoke_LICENSE.txt'
+          unzip -l "$STD" | grep -q 'pokemon_visual_fingerprints.json'
+          unzip -l "$STD" | grep -q 'pokemon_icon_atlas.png'
+          unzip -l "$STD" | grep -q 'pokemon_icon_atlas.json'
+          if unzip -p "$STD" classes.dex | strings | grep -q 'PvPPokeGoAccessibilityCaptureService'; then
+            echo "Accessibility implementation leaked into standard APK"
+            exit 1
+          fi
+
+      - name: Detect permanent signing availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$RELEASE_KEYSTORE_B64" && -n "$RELEASE_KEY_ALIAS" && -n "$RELEASE_STORE_PASSWORD" && -n "$RELEASE_KEY_PASSWORD" ]]; then
+            python3 -c 'import base64,os; open(os.path.join(os.environ["RUNNER_TEMP"],"pvppokego-release.jks"),"wb").write(base64.b64decode(os.environ["RELEASE_KEYSTORE_B64"]))'
+            test -s "$RUNNER_TEMP/pvppokego-release.jks"
+            echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+            echo "Permanent release signing: available"
+          else
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "Permanent release signing: NOT configured; delivery will be QA/debug only"
+          fi
+
+      - name: Build unsigned release variants
+        if: env.SIGNING_READY == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace             :app:assembleStandardRelease
+
+      - name: Package and sign delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          if [[ "$SIGNING_READY" == "true" ]]; then
+            STD_UNSIGNED="$(find app/build/outputs/apk/standard/release -name '*unsigned.apk' | head -1)"
+            test -s "$STD_UNSIGNED"
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | tail -1)"
+            test -x "$APKSIGNER"
+            "$APKSIGNER" sign               --ks "$RUNNER_TEMP/pvppokego-release.jks"               --ks-key-alias "$RELEASE_KEY_ALIAS"               --ks-pass env:RELEASE_STORE_PASSWORD               --key-pass env:RELEASE_KEY_PASSWORD               --out delivery/PvPPokeGo-0.5.25.apk               "$STD_UNSIGNED"
+            "$APKSIGNER" verify --verbose --print-certs delivery/PvPPokeGo-0.5.25.apk | tee audit/signing-standard.txt
+            echo "SIGNED_RELEASE=true" > audit/signing-status.txt
+          else
+            cp app/build/outputs/apk/standard/debug/app-standard-debug.apk               delivery/PvPPokeGo-0.5.25-QA-debug.apk
+            echo "SIGNED_RELEASE=false" > audit/signing-status.txt
+            echo "GitHub Secrets for the permanent keystore were not configured." >> audit/signing-status.txt
+          fi
+
+          for apk in delivery/*.apk; do
+            unzip -t "$apk"
+            shasum -a 256 "$apk" > "$apk.sha256"
+          done
+
+          cp app/src/main/assets/pvpoke_snapshot.json delivery/PvPPokeGo-0.5.25-pvpoke-snapshot.json
+          cp CHANGELOG.md delivery/CHANGELOG.md
+          cp docs/RELEASE-0.5.25-HANDOFF.md delivery/RELEASE-0.5.25-HANDOFF.md
+          cp -R audit delivery/audit
+
+      - name: Package Android Studio project and build ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -qry delivery/PvPPokeGo-0.5.25-AndroidStudio.zip .             -x '.git/*' '.gradle/*' '.venv-visual/*' 'app/build/*' 'delivery/*'
+          (
+            cd delivery
+            zip -qr PvPPokeGo-0.5.25-build.zip               . -x 'PvPPokeGo-0.5.25-build.zip' 'PvPPokeGo-0.5.25-AndroidStudio.zip'
+          )
+          shasum -a 256 delivery/PvPPokeGo-0.5.25-AndroidStudio.zip > delivery/PvPPokeGo-0.5.25-AndroidStudio.zip.sha256
+          shasum -a 256 delivery/PvPPokeGo-0.5.25-build.zip > delivery/PvPPokeGo-0.5.25-build.zip.sha256
+          echo "=== SIGNING STATUS ==="
+          cat audit/signing-status.txt
+          echo "=== SHA-256 ==="
+          cat delivery/*.sha256
+          ls -lh delivery
+
+      - name: Upload complete delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.25-delivery
+          path: delivery/
+          retention-days: 30
+
+      - name: Upload standard APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.25-standard
+          path: |
+            delivery/*0.5.25.apk
+            delivery/*0.5.25-QA-debug.apk
+            delivery/*.apk.sha256
+          if-no-files-found: ignore
+          retention-days: 30
+
+
+      - name: Upload Android Studio project
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.25-AndroidStudio
+          path: |
+            delivery/PvPPokeGo-0.5.25-AndroidStudio.zip
+            delivery/PvPPokeGo-0.5.25-AndroidStudio.zip.sha256
+          retention-days: 30
