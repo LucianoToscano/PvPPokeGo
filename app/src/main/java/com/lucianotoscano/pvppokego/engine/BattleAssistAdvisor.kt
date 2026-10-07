@@ -145,6 +145,64 @@ object BattleAssistAdvisor {
             }
         }
 
+        // Predictive warning before the Charged prompt appears.
+        state.enemyEnergyForecast?.let { forecast ->
+            val threat = forecast.candidates.firstOrNull()
+            if (threat != null && threat.confidence >= .30f) {
+                val damage = threat.damageForecast
+                val damageText = damage?.let {
+                    "sem escudo ~" + "%.0f".format(it.minPercent) + "-" + "%.0f".format(it.maxPercent) + "% HP"
+                }
+                val currentHp = state.playerHpRatio?.times(100f)
+                val lethal = threat.likelyKo || (
+                    damage != null && currentHp != null && damage.maxPercent >= currentHp - 1f
+                )
+                val energyRange = if (forecast.energyMin == forecast.energyMax) {
+                    forecast.energyLikely.toString() + "E"
+                } else {
+                    forecast.energyMin.toString() + "-" + forecast.energyMax + "E"
+                }
+                if (threat.readyPossible) {
+                    val readyLabel = if (threat.readyCertain) "READY" else "READY POSSÍVEL"
+                    return Advice(
+                        if (lethal && state.ownShieldsRemaining > 0) "PERIGO • ESCUDO" else "PERIGO • $readyLabel",
+                        listOfNotNull(
+                            shortName(threat.move.name),
+                            energyRange,
+                            damageText,
+                            if (threat.doubleReadyPossible) "pode armazenar 2" else null,
+                            if (state.ownShieldsRemaining <= 0) "sem escudos" else null
+                        ).joinToString(" • "),
+                        if (lethal) Color.rgb(232, 61, 72) else Color.rgb(245, 175, 52),
+                        104
+                    )
+                }
+                val insideReactionWindow = threat.turnsRemainingMin <= forecast.reactionTurns
+                val nearWindow = threat.fastMovesRemainingMin <= 2 ||
+                    threat.turnsRemainingMin <= forecast.reactionTurns + 2
+                if (insideReactionWindow || nearWindow) {
+                    val fastText = if (threat.fastMovesRemainingMin == threat.fastMovesRemainingMax) {
+                        threat.fastMovesRemainingMin.toString() + " Fast"
+                    } else {
+                        threat.fastMovesRemainingMin.toString() + "-" + threat.fastMovesRemainingMax + " Fast"
+                    }
+                    val seconds = "%.1f".format(threat.likelyTimeMs / 1000f)
+                    return Advice(
+                        "PREPARE-SE",
+                        listOfNotNull(
+                            shortName(threat.move.name),
+                            fastText,
+                            "~" + seconds + "s",
+                            damageText,
+                            if (lethal) "risco de KO" else null
+                        ).joinToString(" • "),
+                        if (insideReactionWindow) Color.rgb(245, 175, 52) else Color.rgb(110, 170, 235),
+                        if (insideReactionWindow) 101 else 98
+                    )
+                }
+            }
+        }
+
         // 2) If one of our Charged Moves is ready, prefer actual matchup value rather than slot #1.
         val ownReady = ownCharged.filter { it.ready }
         if (ownReady.isNotEmpty() && enemyTypes.isNotEmpty()) {
