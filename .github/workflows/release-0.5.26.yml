@@ -22,7 +22,7 @@ env:
 
 jobs:
   audit-build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,6 +49,10 @@ jobs:
           grep -q 'ChargedMoveSlotResolver' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
           grep -q 'EnemyEnergyTracker' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
           grep -q 'DamageForecastEngine' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'FastMovePhaseTracker' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'CmpForecastEngine' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'ShieldDecisionEngine' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+          grep -q 'TacticalForecastEngine' app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
           grep -q 'copyReservePortraits' app/src/main/java/com/lucianotoscano/pvppokego/detect/BattleOcrDetector.kt
           grep -q 'setReservePortraits' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt
           grep -q 'COM ESC protegido' app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt
