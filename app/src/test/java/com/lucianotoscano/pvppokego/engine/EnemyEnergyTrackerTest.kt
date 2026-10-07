@@ -113,4 +113,16 @@ class EnemyEnergyTrackerTest {
         assertEquals(setOf(5, 15), tracker.hypotheses().map { it.energy }.toSet())
         assertTrue(tracker.energyMax() >= 15)
     }
+
+    @Test
+    fun captureGapWidensPossibleEnergyWithoutClaimingMissedMoveAsFact() {
+        val move = fast("F", 8, 2)
+        val tracker = EnemyEnergyTracker()
+        tracker.reset(listOf(WeightedMove(move, 1f)))
+        tracker.observeFastCompletion(3, 40L, 1f)
+        tracker.widenForPossibleMissedFast(2)
+        assertEquals(setOf(24, 32, 40), tracker.hypotheses().map { it.energy }.toSet())
+        assertEquals(24, tracker.energyMin())
+        assertEquals(40, tracker.energyMax())
+    }
 }
