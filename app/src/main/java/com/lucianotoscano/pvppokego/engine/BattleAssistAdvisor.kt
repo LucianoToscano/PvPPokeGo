@@ -18,7 +18,7 @@ object BattleAssistAdvisor {
     )
 
     fun advise(state: BattleUiState, repo: GameDataRepository): Advice? {
-        val playerTypes = repo.pokemon(state.playerName)?.types.orEmpty()
+        val playerTypes = state.playerTypes.ifEmpty { repo.pokemon(state.playerName)?.types.orEmpty() }
         val enemyTypes = state.opponentTypes
         val enemyCharged = listOfNotNull(state.charged1, state.charged2)
         val ownCharged = listOfNotNull(state.ownCharged1, state.ownCharged2)
@@ -66,7 +66,7 @@ object BattleAssistAdvisor {
                         " • sem escudo ~${"%.0f".format(f.minPercent)}-${"%.0f".format(f.maxPercent)}% HP"
                     }.orEmpty()
                     return Advice(
-                        if (state.ownShieldsRemaining <= 0) "SEM ESCUDOS" else "ANALISANDO ATAQUE",
+                        if (state.ownShieldsKnown && state.ownShieldsRemaining <= 0) "SEM ESCUDOS" else "ANALISANDO ATAQUE",
                         if (possibleNames.isNotBlank()) {
                             "Possível: $possibleNames$forecast • ${energyLabel(threat)}"
                         } else {
@@ -93,7 +93,7 @@ object BattleAssistAdvisor {
                 val baitPossible = bait != null && bait.move.moveId != threat.move.moveId &&
                     bait.energyCost + 5 <= threat.energyCost && threat.maxEnergy >= threat.energyCost
                 return when {
-                    state.ownShieldsRemaining <= 0 -> Advice(
+                    state.ownShieldsKnown && state.ownShieldsRemaining <= 0 -> Advice(
                         "SEM ESCUDOS",
                         listOfNotNull(
                             shortName(threat.move.name),
@@ -165,14 +165,20 @@ object BattleAssistAdvisor {
                 if (threat.readyPossible) {
                     val readyLabel = if (threat.readyCertain) "READY" else "READY POSSÍVEL"
                     return Advice(
-                        if (lethal && state.ownShieldsRemaining > 0) "PERIGO • ESCUDO" else "PERIGO • $readyLabel",
+                        when {
+                            lethal && state.ownShieldsKnown && state.ownShieldsRemaining > 0 -> "PERIGO • ESCUDO"
+                            lethal && !state.ownShieldsKnown -> "PERIGO • ESCUDO SE DISPONÍVEL"
+                            else -> "PERIGO • $readyLabel"
+                        },
                         listOfNotNull(
                             shortName(threat.move.name),
                             energyRange,
                             damageText,
                             if (threat.baitPotential) "bait possível" else null,
                             if (threat.doubleReadyPossible) "pode armazenar 2" else null,
-                            if (state.ownShieldsRemaining <= 0) "sem escudos" else null
+                            if (state.ownShieldsKnown && state.ownShieldsRemaining <= 0) "sem escudos"
+                            else if (!state.ownShieldsKnown) "escudos restantes não confirmados"
+                            else null
                         ).joinToString(" • "),
                         if (lethal) Color.rgb(232, 61, 72) else Color.rgb(245, 175, 52),
                         104
