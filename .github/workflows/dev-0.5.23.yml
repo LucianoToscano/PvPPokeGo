@@ -55,6 +55,7 @@ jobs:
           test -s app/src/main/assets/rankings-2500.json
           test -s app/src/main/assets/rankings-10000.json
           test -s app/src/main/assets/pvpoke_cpms.json
+          test -s app/src/main/assets/pvpoke_LICENSE.txt
           test -s app/src/main/assets/pvpoke_snapshot.json
           python3 - <<'PY'
           import json
@@ -133,6 +134,7 @@ jobs:
           unzip -l "$STD" | grep -q 'pvppokego_launcher.png'
           unzip -l "$STD" | grep -q 'gamemaster.json'
           unzip -l "$STD" | grep -q 'pvpoke_snapshot.json'
+          unzip -l "$STD" | grep -q 'pvpoke_LICENSE.txt'
           unzip -l "$STD" | grep -q 'pokemon_visual_fingerprints.json'
           if unzip -p "$STD" classes.dex | strings | grep -q 'PvPPokeGoAccessibilityCaptureService'; then
             echo "Sensitive accessibility class leaked into standard APK"
