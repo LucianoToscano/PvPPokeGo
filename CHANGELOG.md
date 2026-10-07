@@ -2,6 +2,8 @@
 
 ## 0.5.25
 
+- Adicionado modelo matemático híbrido para Fast Moves inimigos: HP drop continua sendo evidência primária, cadência e dano observado reponderam os golpes legais, e períodos curtos com barra de HP oculta usam apenas projeção não-mutante 0..N por tempo/turnos; overfarm do segundo Charged agora tem camada visual escura.
+
 - Corrigida a exibição dos ícones/retratos dos Pokémon de reserva: cache estável por slot da equipe, fallback pelos cards nativos e ícones mantidos também na tela de troca; o recorte duplicado que podia deixar miniaturas quase vazias foi removido.
 
 - Nesta etapa, a validação/build foi reduzida ao APK `standard`; gravação interna e Recorder Compat permanecem no código, sem remoção, mas ficam para uma etapa posterior conforme decisão do projeto.
