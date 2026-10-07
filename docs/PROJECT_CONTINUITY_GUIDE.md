@@ -127,7 +127,7 @@ Importante:
 
 ## 5. Bugs prioritários atuais
 
-### 5.1 Ícones dos Pokémon de reserva — ABERTO
+### 5.1 Ícones dos Pokémon de reserva — PARCIAL
 
 Sintomas observados em aparelho real:
 - cards laterais podem ficar em `?` / `IDENTIFICANDO`;
@@ -152,7 +152,7 @@ Fallback desejado:
 Regra:
 **não esconder o ícone apenas porque matchup/recomendação ainda está ANALISANDO.**
 
-Status: **ABERTO / precisa correção + validação em APK real**.
+Status: **PARCIAL — busca de cards ambíguos e fallback do retrato estável corrigidos; validação em APK real pendente**.
 
 ### 5.2 Ícone oficial do aplicativo — ABERTO/PARCIAL
 
@@ -365,6 +365,59 @@ RESULTADO:
 
 STATUS:
 CONCLUÍDO.
+
+### 2026-10-07 — Reservas: continuar busca ambígua e reutilizar retrato estável
+
+Versão: 0.5.26  
+Branch: `release/0.5.26`  
+Commit de código: `fd66d553fc37148c6ab53d96c040b047e01c3bb4`  
+HEAD de entrada conferido: `fdd78ab2998e1ed9ead6d55cf71f436763add5ba`
+
+OBJETIVO/PROBLEMA:
+- Retomar o bug prioritário 5.1 a partir do estado real, após o último registro de continuidade concluído.
+- A leitura dos dois CPs encerrava a busca visual mesmo com associação ambígua/sem correspondência.
+- O fallback de retrato da equipe exigia confirmação da posição nativa, embora o retrato já pertencesse ao slot estável.
+
+ALTERAÇÕES:
+- ReserveScanPolicy exige confirmação do mapeamento de cada card para interromper a busca; BattleEngine fornece o resultado do matcher existente.
+- BattleOverlayView permite o retrato do slot estável mesmo enquanto a posição nativa está pendente, mantendo atlas exato/Dex como prioridade.
+- Preservado o requisito de mapeamento confirmado para promover crops nativos ao cache da equipe e posicionar indicadores no seletor de troca.
+- Acrescentados testes de CP duplicado com formas do mesmo Dex, CP sem correspondência e segundo mapeamento ausente.
+- Checklist atualizado sem promover reconhecimento visual a concluído; espelho do Guia Mestre no Drive sincronizado.
+
+ARQUIVOS PRINCIPAIS:
+- app/src/main/java/com/lucianotoscano/pvppokego/engine/ReserveScanPolicy.kt
+- app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt
+- app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt
+- app/src/test/java/com/lucianotoscano/pvppokego/engine/ReserveScanPolicyTest.kt
+- docs/CHECKLIST-PvPPokeGo-0.5.26.md
+- docs/PROJECT_CONTINUITY_GUIDE.md
+
+TESTES:
+- Kotlin/JVM + JUnit 4.13.2 reais: ReserveScanPolicyTest (8) e ReserveCardMatcherTest (10), **18 PASS / 0 FAIL**.
+- Suíte histórica de 132 testes não reexecutada nesta sessão.
+- Compilação completa Android, renderização de Bitmap/Canvas e APK instalado não validados nesta sessão.
+- PR #34 conferido aberto/draft na branch correta.
+- Run do HEAD de entrada: 37697150072, job 113051559680, failure com steps=[], runner_id=0; nenhum comando de build executado.
+- Ambiente desta sessão possui JDK/Kotlin no Android Studio e SDK android-37.0; isso corrige apenas a descrição do ambiente atual, sem invalidar o bloqueio histórico.
+- Git local sem remote-https; download público do repositório retornou 404. Fontes relevantes obtidas pelo conector autenticado, fixadas no HEAD de entrada; nenhuma cópia parcial foi apresentada como checkout completo.
+- Leitura/escrita do espelho feita pelo conector nativo: o helper de leitura em arquivo rejeitou o caminho absoluto Windows. Estrutura de uma aba inspecionada e preservada.
+
+RESULTADO:
+- Corrigidas duas condições que impediam a recuperação/exibição das reservas; lógica de identificação existente preservada.
+- Nenhum APK gerado; ícone do launcher não alterado.
+
+STATUS:
+PARCIAL — correção de código e testes direcionados concluídos; aceite visual depende de APK real.
+
+PENDÊNCIAS:
+- Build/test Android Standard e validação em aparelho: atlas presente/ausente, CP duplicado, início no meio da batalha, troca/desmaio e seletor de troca.
+- Validar ícone oficial instalado e launcher Samsung.
+- Medir custo das novas tentativas de busca quando a evidência continuar ambígua; intervalo de OCR existente preservado.
+
+PRÓXIMO PASSO:
+- Executar o build Standard em ambiente com acesso ao repositório/dependências e runner funcional; validar os cenários visuais acima antes de encerrar o bug 5.1.
+- Depois retomar replay/fixtures e a ordem PBE já documentada, sem reiniciar pesquisa externa.
 
 ## 12. Regra final
 

@@ -40,7 +40,7 @@ versionCode: `31`
 | 11 | Preview de dano sobre HP | 🟡 | Engine + HUD implementados; falta validar posição/legibilidade em aparelho real. |
 | 12 | Threat Forecast | ✅ | Energia + dano + KO + Fast pressure + confidence integrados. |
 | 13 | Shield Assistant | ✅ | ShieldDecisionEngine retorna SHIELD/HOLD/OPTIONAL com motivo/confiança. |
-| 14 | Reconhecimento visual de Pokémon | 🟡 | OCR + visual + CP + espécie/forma + reservas; precisa QA real mais amplo. |
+| 14 | Reconhecimento visual de Pokémon | 🟡 | Busca mantém cards ambíguos em análise e reutiliza retratos estáveis; 18 testes direcionados passaram. QA em APK/aparelho pendente. |
 | 15 | Matchup automático | ✅ | Recalcula tipos/matchup após identificação/troca. |
 | 16 | Assistente de próxima ação | 🟡 | Advisor, Farm, Shield, Sac Swap e timing existem; planejador completo ainda não. |
 | 17 | Aprendizado de padrões | 🟡 | Histórico/pattern hints existem; aprendizado estatístico/ML amplo ainda não. |
@@ -333,3 +333,13 @@ Probabilidades e ranges detalhados ficam no modo Advanced/debug; modo Normal con
 - OCR inconsistente deve baixar confidence ou abrir hipóteses; não destruir silenciosamente um estado matemático coerente.
 - Nenhum modelo probabilístico deve depender de chamada web no hot path da batalha.
 - Replay/telemetria de outros usuários, se usados no futuro, exigem consentimento e privacidade adequados.
+
+## Continuação — correção dos ícones de reserva
+
+Commit de código: `fd66d553fc37148c6ab53d96c040b047e01c3bb4` (base `fdd78ab2998e1ed9ead6d55cf71f436763add5ba`).
+
+- Item #14 permanece 🟡: corrigida interrupção prematura da busca com CPs ambíguos/sem correspondência e liberado retrato de slot estável sem depender da posição nativa.
+- Validação desta sessão: **18 PASS / 0 FAIL** em ReserveScanPolicyTest e ReserveCardMatcherTest. Os 132 testes anteriores são evidência histórica, não uma nova execução.
+- Placar 1–80 e PBE inalterados; nenhum item elevado a concluído.
+- Prioridade imediata do Guia Mestre: build Standard e QA real dos ícones de reserva/troca, seguido do ícone oficial instalado. A sequência de novas funcionalidades acima permanece posterior a esses bugs.
+- Registro detalhado e limitações no Guia Mestre, seção 11.
