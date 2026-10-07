@@ -37,21 +37,22 @@ O aplicativo continua somente assistivo:
 
 ## Variantes
 
-- Standard: sem AccessibilityService/specialUse.
-- Recorder Compat: mantém fallback de screenshot por Acessibilidade em variante separada.
+- **Standard**: variante de entrega desta etapa, sem AccessibilityService/specialUse.
+- **Recorder Compat**: código preservado no projeto, mas gravação/compatibilidade fica adiada e não bloqueia a entrega 0.5.26, conforme decisão anterior do projeto.
 
 ## Validação exigida para entrega
 
 O workflow `.github/workflows/release-0.5.26.yml` deve:
 1. reconstruir snapshot PvPoke e atlas offline;
 2. executar `:app:testStandardDebugUnitTest`;
-3. executar `:app:testRecorderCompatDebugUnitTest`;
-4. compilar Standard e Recorder Compat;
-5. validar manifests mesclados;
-6. testar integridade dos APKs com `unzip -t`;
-7. confirmar assets offline em ambos;
-8. calcular SHA-256;
-9. assinar release com keystore permanente quando Secrets existirem; caso contrário entregar QA/debug explicitamente identificado.
+3. compilar `:app:assembleStandardDebug`;
+4. validar o manifest mesclado Standard sem AccessibilityService/specialUse;
+5. testar integridade do APK com `unzip -t`;
+6. confirmar assets offline no APK;
+7. calcular SHA-256;
+8. assinar a release Standard com keystore permanente quando Secrets existirem; caso contrário entregar QA/debug explicitamente identificado.
+
+Recorder Compat permanece no código-fonte para retomada posterior, mas não participa do critério de aceite desta entrega.
 
 ## Testes matemáticos adicionais
 
@@ -85,3 +86,10 @@ Bloqueio de infraestrutura:
 - DNS para os hosts necessários ao bootstrap do Gradle/Android SDK está indisponível neste runtime.
 
 Consequência: **nenhum APK 0.5.26 foi gerado nem renomeado artificialmente**. A entrega só deve avançar para APK quando um runner Android/Gradle realmente executar os comandos de build e validação.
+
+
+## Continuação em 2026-10-07
+
+- O último ajuste de lógica antes desta continuação foi o commit `3805eafa01d5ba573b655fa20256696bfd09253c`, que impede conselho de Sac Swap depois que o prompt de Charged já começou.
+- O workflow foi simplificado no commit `61c5c0a2c214e885759455873e8a7dd8ba477f71` para não deixar Recorder Compat/gravação bloquear o APK Standard.
+- A tentativa de rerun do job anterior ainda terminou sem receber runner (`steps = null`), portanto o bloqueio observado continua sendo de infraestrutura de runner, não uma falha de compilação conhecida.
