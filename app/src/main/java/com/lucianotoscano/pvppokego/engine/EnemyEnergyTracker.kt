@@ -6,6 +6,7 @@ import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.WeightedMove
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.pow
 
 /**
  * Discrete enemy-energy hypothesis tracker.
@@ -106,6 +107,28 @@ internal class EnemyEnergyTracker(
         lastObservedTurn = hypotheses.maxOfOrNull { it.elapsedTurns } ?: lastObservedTurn
         normalizeAndPrune()
         return true
+    }
+
+    /**
+     * Widen the state after a capture gap or Charged sequence where a Fast Move may have
+     * registered without a trustworthy HP event. Zero-extra remains possible; no event is
+     * asserted as fact. Higher missed counts receive progressively lower prior weight.
+     */
+    fun widenForPossibleMissedFast(maxExtraMoves: Int) {
+        val extraMax = maxExtraMoves.coerceIn(0, MAX_GAP_RECOVERY_MOVES)
+        if (extraMax <= 0 || hypotheses.isEmpty()) return
+        hypotheses = hypotheses.flatMap { h ->
+            (0..extraMax).map { extra ->
+                val gain = h.fastMove.energyGain.coerceAtLeast(0) * extra
+                h.copy(
+                    energy = (h.energy + gain).coerceAtMost(maxEnergy),
+                    completedFastMoves = h.completedFastMoves + extra,
+                    elapsedTurns = h.elapsedTurns + h.fastMove.turns * extra,
+                    weight = h.weight * GAP_WEIGHT_DECAY.pow(extra)
+                )
+            }
+        }
+        normalizeAndPrune()
     }
 
     fun manualFastDelta(delta: Int, confirmedMove: MoveDef? = null) {
@@ -325,5 +348,7 @@ internal class EnemyEnergyTracker(
         const val TURN_MS = 500
         private const val MIN_WEIGHT = 0.0001f
         private const val RECOVERY_WEIGHT = 0.35f
+        private const val GAP_WEIGHT_DECAY = 0.58f
+        private const val MAX_GAP_RECOVERY_MOVES = 5
     }
 }
