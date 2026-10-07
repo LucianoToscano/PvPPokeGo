@@ -48,4 +48,22 @@ class GameMasterModelTest {
         assertEquals(listOf("AQUA_TAIL","EARTHQUAKE"), pokemon.chargedMoves)
         assertTrue(pokemon.types.contains("water"))
     }
+
+    @Test
+    fun dualTargetBuffFieldsDecodeForObstructShape() {
+        val move = json.decodeFromString<MoveDef>(
+            """{
+              "moveId":"OBSTRUCT",
+              "energy":40,
+              "buffs":[0,1],
+              "buffsSelf":[0,1],
+              "buffsOpponent":[0,-1],
+              "buffTarget":"both",
+              "buffApplyChance":"1"
+            }"""
+        )
+        assertEquals(listOf(0,1), move.buffsSelf)
+        assertEquals(listOf(0,-1), move.buffsOpponent)
+        assertEquals("both", move.buffTarget)
+    }
 }
