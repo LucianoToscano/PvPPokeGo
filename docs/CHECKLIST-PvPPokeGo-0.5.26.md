@@ -136,3 +136,195 @@ A cada mudança relevante:
 3. manter o placar coerente;
 4. não marcar ✅ sem evidência no código/teste;
 5. manter o APK/build como etapa separada de implementação lógica.
+
+
+---
+
+# CHECKLIST COMPLEMENTAR — Predictive Battle Engine (PBE)
+
+Fonte adicional: `PVPPokeGo_Motor_Matematico_Preditivo.txt`.
+
+Este bloco não substitui o checklist 1–80. Ele detalha o núcleo matemático/preditivo e permite acompanhar separadamente o que já existe, o que está parcial e quais melhorias devem ser incorporadas sem criar uma segunda engine paralela.
+
+| PBE | Componente | Status | O que já existe / como aprimorar |
+|---:|---|:---:|---|
+| 1 | Modelo de estado da batalha `S=(t,n,E,H,Sh,M,F,P)` | 🟡 | O projeto já possui BattleUiState, estados por Pokémon, energia, HP, shields, moveset e FastMovePhase. Falta consolidar um snapshot preditivo único com turno lógico e distribuição explícita de próximas ações. |
+| 2 | Energia exata em tempo real | ✅ | Energia residual, cap 100 e subtração do custo real já existem e sobrevivem a trocas. |
+| 3 | Fórmula universal de contagem | ✅ | Fast necessários, turns e tempo lógico são calculados a partir de energia/custo/ganho/duração. |
+| 4 | Segundo/terceiro Charged com residual | ✅ | EnergySequenceMath e trackers não zeram energia; back-to-back e sequências residuais já são calculados. |
+| 5 | Energia como intervalo | ✅ | EnemyEnergyTracker mantém hipóteses e EnemyEnergyForecast expõe min/likely/max. |
+| 6 | Máquina de hipóteses de ataques | ✅ | Fast/Charged legais, energia e custos impossíveis já eliminam/reduzem hipóteses. |
+| 7 | Previsor de bait por score + Softmax | 🟡 | Há baitPotential/baitProbability heurísticos. Melhorar para score calibrado por features e Softmax somente quando houver amostra/confiança suficientes. |
+| 8 | Aprendizado Bayesiano durante a batalha | 🟡 | Os pesos de hipóteses já são reponderados por cadência/dano/evidência. Falta formalizar likelihoods por fonte e atualização Bayesiana/log-probability auditável. |
+| 9 | Padrão do jogador | 🟡 | Histórico e strategyPatternHint já existem. Falta PlayerPatternModel com BAIT_RATE, OVERFARM_RATE, INSTANT_THROW_RATE, SAC_SWAP_RATE, CMP_RATE, SHIELD_FIRST_RATE e FARM_DOWN_RATE usando suavização Beta-Binomial. |
+| 10 | Detecção de overfarm | ✅ | Energia acima do custo, overflow e múltiplos Charged já são acompanhados. |
+| 11 | Timing ótimo de Charged | 🟡 | TacticalForecastEngine.optimalThrow e FastMovePhaseTracker existem. Falta validar/calibrar melhor contra mecânicas atuais e frames reais. |
+| 12 | Fast inimigo durante Chargeds | 🟡 | Há FastMovePhaseTracker e guards durante Charged. Falta representar explicitamente STARTED/RUNNING/REGISTERED/INTERRUPTED e expectedHitAt. |
+| 13 | Sac Swap matemático | 🟡 | Sac Swap já existe e não recomenda depois que o prompt de Charged começou. Falta expor uma janela `Δ=T_charge-T_switch`/countdown baseada em turnos. |
+| 14 | CMP preditivo | 🟡 | CMP por faixa de Attack/IV já existe e evita falsa certeza. Próximo passo: probabilidade empírica de WIN/TIE/LOSE a partir das combinações legais de IV/level/CP. |
+| 15 | Eventos do motor preditivo | 🟡 | O projeto já é orientado a eventos em várias partes, mas ainda não há um único event stream tipado central para FAST/CHARGE/SHIELD/HP/SWITCH/FAINT/CMP. |
+| 16 | Threat Score | 🟡 | Threat já combina energia, dano, urgência e confiança. Melhorar separando explicitamente P(throw), P(move), DamageRatio e Urgency sem misturar disponibilidade matemática com intenção. |
+| 17 | Previsão de dano sobre HP | 🟡 | DamageForecastEngine + preview no HUD existem. Falta QA físico amplo e intervalos melhores quando IV/level são desconhecidos. |
+| 18 | Separar certeza de previsão | ✅ | PredictionEvidenceClass e campos de confidence já separam matemática/inferência/observação; continuar ampliando a taxonomia sem mostrar porcentagem falsa. |
+| 19 | Núcleo determinístico Kotlin | ✅ | A base já está em Kotlin com EnergyTracker, EnemyEnergyTracker, ChargedMovePredictor, DamageForecastEngine etc. |
+| 20 | Arquitetura completa PBE | 🟡 | Deterministic engine, hypotheses, timing, Sac Swap, damage e decision já existem. Bayesian Predictor e Player Pattern Model ainda não estão formalizados. |
+| 21 | Overlay PBE compacto | 🟡 | HUD já mostra Charged, energia/progresso, dano e recomendações. Falta um modo Advanced coerente com Energia + probabilidades + dano + Sac + Throw sem poluir a tela. |
+| 22 | Banco de golpes versionado/atualizável | 🟡 | PvPoke/Game Master ficam offline e pinados por commit. Falta fechar atualização remota versionada/validada/assinada independente do APK. |
+| 23 | Resposta completa do assistente | 🟡 | O app já sabe responder partes: disponibilidade, dano, Shield, Sac e timing. Falta consolidar em um único pacote de decisão com explicação e confidence. |
+| 24 | Estimador + contador + simulador + predictor + decisão | 🟡 | Estimador/contador/predictor/decision estão avançados; simulador curto e modelo probabilístico calibrado ainda precisam amadurecer. |
+
+## Placar PBE
+
+- ✅ Implementado/essencialmente implementado: **8**
+- 🟡 Parcial/em evolução: **16**
+- ⬜ Não iniciado: **0**
+
+## Melhorias do PBE que mais valem incorporar
+
+### PBE-A — Snapshot preditivo unificado
+
+Criar uma estrutura de leitura, sem substituir os estados atuais, que agregue:
+- turno lógico;
+- energia min/likely/max;
+- Fast phase;
+- HP;
+- shields;
+- moveset posterior;
+- candidatos Charged;
+- evidência;
+- decisão tática.
+
+Objetivo: diminuir divergências entre HUD, histórico, predictor e debug.
+
+### PBE-B — Bayesian Move Hypothesis
+
+Evoluir os pesos já existentes em EnemyEnergyTracker para likelihoods explícitas:
+- `P(cadência | move)`;
+- `P(dano observado | move)`;
+- `P(OCR | move)`;
+- `P(timing do Charged | moveset)`.
+
+Usar log-probabilities para estabilidade numérica e manter ranking/meta somente como prior. Evidência observada deve dominar o prior.
+
+### PBE-C — Player Pattern Model local e suavizado
+
+Adicionar modelo local/opt-in, inicialmente sem ML pesado:
+- bait;
+- overfarm;
+- throw imediato;
+- Sac Swap;
+- CMP;
+- shield-first;
+- farm-down.
+
+Usar Beta-Binomial (por exemplo `alpha=2, beta=2`) para não gerar 0%/100% com poucas observações. Nunca permitir que o padrão comportamental altere energia matemática.
+
+### PBE-D — Fast Phase explícita
+
+Evoluir FastMovePhaseTracker para estados:
+- STARTED;
+- RUNNING;
+- REGISTERED;
+- INTERRUPTED/UNKNOWN.
+
+Guardar `startedAt`, `expectedRegistrationAt` e idade da evidência. Isso melhora optimal throw, Sac Swap, recuperação após frame perdido e mecânicas de simultaneidade.
+
+### PBE-E — Sac Swap Window por turnos
+
+Adicionar forecast:
+`deltaTurns = earliestChargedTurn - earliestSwitchTurn`.
+
+Exibir somente quando confidence for suficiente:
+- PREPARE +2;
+- PREPARE +1;
+- SAC NOW;
+- TOO LATE/INCERTO.
+
+Nunca sugerir Sac depois que o Charged prompt já começou.
+
+### PBE-F — CMP probabilístico por distribuição real
+
+AttackRangeEstimator já percorre combinações legais. Em vez de usar somente min/max, manter histograma/amostras de Attack compatíveis com CP/liga e comparar distribuições:
+- P(WIN);
+- P(TIE);
+- P(LOSE).
+
+Mostrar porcentagens apenas quando a distribuição estiver fundamentada; caso contrário continuar usando WIN/LOSE/UNCERTAIN.
+
+### PBE-G — Threat V2 calibrável
+
+Separar:
+- disponibilidade matemática;
+- probabilidade do movimento;
+- probabilidade de lançar naquela janela;
+- dano relativo ao HP;
+- urgência temporal.
+
+Uma forma inicial compatível com o documento:
+`Threat = P_throw × P_move × DamageRatio × Urgency`.
+
+Manter também o threat determinístico atual como fallback quando `P_throw`/`P_move` não forem confiáveis.
+
+### PBE-H — Métricas de calibração
+
+Para cada previsão registrar:
+- candidato previsto;
+- confidence;
+- janela prevista;
+- resultado observado;
+- erro em turns;
+- disponibilidade correta/incorreta;
+- Brier score/log-loss somente para probabilidades já calibradas;
+- antecedência do alerta.
+
+Isso conecta diretamente PBE aos itens #53 e #71 do checklist principal.
+
+### PBE-I — Replay/event fixtures como laboratório
+
+Usar o futuro replay offline para reproduzir:
+- Fast de 1–5 turns;
+- frame perdido;
+- bait;
+- back-to-back;
+- CMP;
+- Sac Swap;
+- optimal throw;
+- lag;
+- OCR incorreto;
+- troca com energia armazenada.
+
+A engine deve produzir o mesmo snapshot/forecast a cada replay determinístico.
+
+### PBE-J — Overlay Advanced sem poluição
+
+Organizar as informações em prioridade:
+1. KO/Shield;
+2. Charged READY/+N;
+3. dano;
+4. back-to-back;
+5. Sac/Throw quando a janela realmente abrir.
+
+Probabilidades e ranges detalhados ficam no modo Advanced/debug; modo Normal continua compacto.
+
+## Ordem PBE recomendada
+
+1. **PBE-D Fast Phase explícita**
+2. **PBE-A Snapshot preditivo unificado**
+3. **PBE-B Bayesian Move Hypothesis**
+4. **PBE-F CMP probabilístico**
+5. **PBE-E Sac Swap Window**
+6. **PBE-G Threat V2**
+7. **PBE-H Métricas/calibração**
+8. **PBE-I Replay/fixtures**
+9. **PBE-C Player Pattern Model**
+10. **PBE-J Overlay Advanced**
+
+## Regras de segurança matemática do PBE
+
+- Energia determinística nunca deve ser substituída por probabilidade comportamental.
+- Meta/ranking é prior, não fato.
+- Bait provável nunca deve ser mostrado como bait confirmado.
+- Se os dados não suportarem porcentagem calibrada, usar LOW/MEDIUM/HIGH ou POSSIBLE/LIKELY.
+- OCR inconsistente deve baixar confidence ou abrir hipóteses; não destruir silenciosamente um estado matemático coerente.
+- Nenhum modelo probabilístico deve depender de chamada web no hot path da batalha.
+- Replay/telemetria de outros usuários, se usados no futuro, exigem consentimento e privacidade adequados.
