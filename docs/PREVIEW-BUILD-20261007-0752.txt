@@ -1,0 +1,1 @@
+Isolated build trigger for PvPPokeGo 0.5.25 preview. No release branch source changes.
