@@ -952,12 +952,15 @@ class BattleOverlayView(
     private fun shortReserveTitle(value: String): String =
         if (value.length <= 23) value else value.take(22) + "…"
 
-    /** During Pokemon GO's switch chooser, show matchup only for a confirmed card identity. */
+    /**
+     * During Pokémon GO's switch chooser, keep the two confirmed card positions visible
+     * even while matchup confidence is still UNKNOWN. The icon should never disappear
+     * merely because opponent typing/recommendation is still being resolved.
+     */
     private fun drawSwitchChoiceIndicators(canvas: Canvas) {
         val candidates = state.reserves.take(2).mapIndexedNotNull { index, reserve ->
             if (
                 reserveUsableCache.getOrElse(index) { true } &&
-                reserve.identityConfirmed &&
                 reserve.cardMappingConfirmed
             ) index to reserve else null
         }
