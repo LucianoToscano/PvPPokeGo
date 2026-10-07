@@ -85,6 +85,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     @Volatile private var destroyingService = false
     private var lastAccessibilityFrameAtMs = 0L
     private var lastMediaProjectionFrameAtMs = 0L
+    private var lastAnalysisFrameSourceTimestampMs = 0L
     private var lastFreshAnalysisFrameAtMs = 0L
     private var captureStaleNotified = false
     private var screenRecorder: ScreenFrameRecorder? = null
@@ -1301,6 +1302,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 now
                             )
                             if (event != null) {
+                                lastAnalysisFrameSourceTimestampMs
+                                    .takeIf { it > 0L }
+                                    ?.let { sourceTs ->
+                                        e.onPipelineLatencySample(
+                                            (System.currentTimeMillis() - sourceTs).coerceAtLeast(0L)
+                                        )
+                                    }
                                 e.onPlayerHpBarYFraction(event.playerHpBarYFraction)
                                 e.onReserveHpRatios(event.reserve1HpRatio, event.reserve2HpRatio)
                                 val damageObservations = e.onHpObservation(
@@ -1369,7 +1377,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                         event.source,
                                         event.hpRatio,
                                         event.motion,
-                                        damageFraction = event.playerDamageFraction
+                                        damageFraction = event.playerDamageFraction,
+                                        nowMs = now
                                     )
                                     val snapshot = e.uiState()
                                     snapshot.fastMove?.let { move ->
@@ -1875,6 +1884,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 val bitmap = mediaCapture.acquireLatestBitmap()
                 if (bitmap != null) {
                     lastMediaProjectionFrameAtMs = frameTimestamp
+                    lastAnalysisFrameSourceTimestampMs = frameTimestamp
                     lastFreshAnalysisFrameAtMs = nowMs
                     captureStaleNotified = false
                     usingAccessibilityFallback = false
@@ -1889,6 +1899,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         AccessibilityScreenCapture.requestScreenshot(nowMs)
         val fresh = AccessibilityScreenCapture.acquireLatestBitmap(lastAccessibilityFrameAtMs) ?: return null
         lastAccessibilityFrameAtMs = fresh.second
+        lastAnalysisFrameSourceTimestampMs = fresh.second
         lastFreshAnalysisFrameAtMs = nowMs
         captureStaleNotified = false
         engine?.onCaptureHealth(
