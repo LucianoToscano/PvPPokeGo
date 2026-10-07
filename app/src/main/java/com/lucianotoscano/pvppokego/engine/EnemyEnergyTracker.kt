@@ -144,7 +144,12 @@ internal class EnemyEnergyTracker(
         hypotheses = if (valid.isNotEmpty()) {
             valid
         } else {
-            hypotheses.map { it.copy(energy = 0, weight = it.weight * RECOVERY_WEIGHT) }
+            // A real Charged happened, so at least one Fast completion was missed.
+            // Reconstruct the minimum missing events needed to make the observation legal,
+            // and also keep one-extra-Fast overfarm state so recovery does not assume 0 energy.
+            hypotheses.flatMap { h ->
+                recoverAfterMissedFast(h, cost)
+            }
         }
         normalizeAndPrune()
         return hypotheses.isNotEmpty()
@@ -165,7 +170,9 @@ internal class EnemyEnergyTracker(
             hypotheses.forEach { h ->
                 val affordable = costs.filter { it <= h.energy }
                 if (affordable.isEmpty()) {
-                    add(h.copy(energy = 0, weight = h.weight * RECOVERY_WEIGHT))
+                    costs.forEach { cost ->
+                        addAll(recoverAfterMissedFast(h, cost))
+                    }
                 } else {
                     val branchWeight = h.weight / affordable.size.toFloat()
                     affordable.forEach { cost ->
@@ -253,6 +260,30 @@ internal class EnemyEnergyTracker(
                 weight = candidate.weight.coerceAtLeast(MIN_WEIGHT)
             )
         }
+    }
+
+    private fun recoverAfterMissedFast(h: Hypothesis, cost: Int): List<Hypothesis> {
+        val gain = h.fastMove.energyGain.coerceAtLeast(1)
+        val missing = (cost - h.energy).coerceAtLeast(0)
+        val minimumMissed = if (missing == 0) 0 else kotlin.math.ceil(
+            missing.toDouble() / gain.toDouble()
+        ).toInt()
+        fun recovered(extra: Int): Hypothesis {
+            val count = minimumMissed + extra
+            val before = (h.energy + gain * count).coerceAtMost(maxEnergy)
+            return h.copy(
+                energy = (before - cost).coerceAtLeast(0),
+                completedFastMoves = h.completedFastMoves + count,
+                elapsedTurns = h.elapsedTurns + h.fastMove.turns * count,
+                weight = h.weight * RECOVERY_WEIGHT / 2f
+            )
+        }
+        val minimum = recovered(0)
+        val overfarm = recovered(1)
+        return if (
+            overfarm.energy == minimum.energy &&
+            overfarm.completedFastMoves == minimum.completedFastMoves
+        ) listOf(minimum) else listOf(minimum, overfarm)
     }
 
     private fun normalizeAndPrune() {
