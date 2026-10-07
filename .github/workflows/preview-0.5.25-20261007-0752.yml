@@ -1,0 +1,53 @@
+name: Preview PvPPokeGo 0.5.25 snapshot
+
+on:
+  push:
+    branches:
+      - preview/0.5.25-20261007-0752
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact snapshot
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build standard debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace :app:assembleStandardDebug
+
+      - name: Package preview APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preview
+          APK="app/build/outputs/apk/standard/debug/app-standard-debug.apk"
+          test -s "$APK"
+          cp "$APK" preview/PvPPokeGo-0.5.25-PREVIEW.apk
+          unzip -t preview/PvPPokeGo-0.5.25-PREVIEW.apk
+          sha256sum preview/PvPPokeGo-0.5.25-PREVIEW.apk > preview/PvPPokeGo-0.5.25-PREVIEW.apk.sha256
+
+      - name: Upload preview APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.25-PREVIEW
+          path: preview/
+          retention-days: 7
