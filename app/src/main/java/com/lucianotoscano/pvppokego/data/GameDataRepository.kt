@@ -37,7 +37,7 @@ class GameDataRepository(private val context: Context) {
     private val weightedFastCache = ConcurrentHashMap<String, List<WeightedMove>>()
     private val weightedChargedCache = ConcurrentHashMap<String, List<WeightedMove>>()
     private val battleStatsCache = ConcurrentHashMap<String, EstimatedBattleStats?>()
-    private val attackRangeCache = ConcurrentHashMap<String, AttackRangeEstimate?>()
+    private val attackRangeCache = ConcurrentHashMap<String, AttackRangeEstimate>()
     @Volatile var currentLeagueCp: Int = 1500
         private set
 
@@ -394,7 +394,6 @@ class GameDataRepository(private val context: Context) {
         }
 
         if (samples <= 0 || !minAttack.isFinite() || !maxAttack.isFinite() || bestError > 25) {
-            attackRangeCache[key] = null
             return null
         }
         val likely = estimatedBattleStats(raw, target)?.attack
