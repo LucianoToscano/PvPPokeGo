@@ -100,4 +100,17 @@ class EnemyEnergyTrackerTest {
         val best = tracker.hypotheses().maxByOrNull { it.weight }!!
         assertEquals("TWO", best.fastMove.moveId)
     }
+
+    @Test
+    fun observedChargedCanRecoverFromOneMissedFastWithoutAssumingZeroResidual() {
+        val move = fast("F", 10, 2)
+        val tracker = EnemyEnergyTracker()
+        tracker.reset(listOf(WeightedMove(move, 1f)))
+        tracker.observeFastCompletion(3, 30L, 1f) // 30E observed
+        assertTrue(tracker.observeCharged(charged("C45",45)))
+        // At least two Fast completions were missed: 30+20-45=5.
+        // Keep one-extra overfarm state too: 15E.
+        assertEquals(setOf(5, 15), tracker.hypotheses().map { it.energy }.toSet())
+        assertTrue(tracker.energyMax() >= 15)
+    }
 }
