@@ -181,12 +181,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -n "$RELEASE_KEYSTORE_B64" && -n "$RELEASE_KEY_ALIAS" && -n "$RELEASE_STORE_PASSWORD" && -n "$RELEASE_KEY_PASSWORD" ]]; then
-            python3 - <<'PY'
-          import base64, os
-          out = os.path.join(os.environ["RUNNER_TEMP"], "pvppokego-release.jks")
-          with open(out, "wb") as fh:
-              fh.write(base64.b64decode(os.environ["RELEASE_KEYSTORE_B64"]))
-          PY
+            python3 -c 'import base64,os; open(os.path.join(os.environ["RUNNER_TEMP"],"pvppokego-release.jks"),"wb").write(base64.b64decode(os.environ["RELEASE_KEYSTORE_B64"]))'
             test -s "$RUNNER_TEMP/pvppokego-release.jks"
             echo "SIGNING_READY=true" >> "$GITHUB_ENV"
             echo "Permanent release signing: available"
