@@ -29,6 +29,35 @@ class BattleOcrDetector(
 ) : AutoCloseable {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val visualRecognizer = PokemonVisualRecognizer(context.applicationContext)
+    private val reservePortraitLock = Any()
+    private val reservePortraits = arrayOfNulls<Bitmap>(2)
+
+    /**
+     * Live thumbnails from Pokemon GO's native reserve cards.
+     * Presentation-only fallback: identity and matchup still require CP/species/form confidence.
+     */
+    fun copyReservePortraits(): Pair<Bitmap?, Bitmap?> = synchronized(reservePortraitLock) {
+        reservePortraits[0]?.copy(Bitmap.Config.ARGB_8888, false) to
+            reservePortraits[1]?.copy(Bitmap.Config.ARGB_8888, false)
+    }
+
+    private fun cacheReservePortrait(index: Int, source: Bitmap) {
+        if (source.isRecycled || index !in 0..1) return
+        val left = (source.width * 0.08f).toInt().coerceIn(0, source.width - 1)
+        val top = (source.height * 0.24f).toInt().coerceIn(0, source.height - 1)
+        val right = (source.width * 0.92f).toInt().coerceIn(left + 1, source.width)
+        val bottom = (source.height * 0.90f).toInt().coerceIn(top + 1, source.height)
+        val crop = Bitmap.createBitmap(source, left, top, right - left, bottom - top)
+        val thumb = try {
+            Bitmap.createScaledBitmap(crop, RESERVE_THUMB_SIZE, RESERVE_THUMB_SIZE, true)
+        } finally {
+            if (!crop.isRecycled) crop.recycle()
+        }
+        synchronized(reservePortraitLock) {
+            reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            reservePortraits[index] = thumb
+        }
+    }
 
     suspend fun detect(frame: Bitmap): BattleDetection = coroutineScope {
         if (frame.isRecycled) return@coroutineScope BattleDetection(null, null)
@@ -93,7 +122,8 @@ class BattleOcrDetector(
                 ?.toIntOrNull()
                 ?.takeIf { it in 10..10000 }
 
-            suspend fun read(textRoi: Bitmap, portraitRoi: Bitmap): ReserveCardEvidence = coroutineScope {
+            suspend fun read(index: Int, textRoi: Bitmap, portraitRoi: Bitmap): ReserveCardEvidence = coroutineScope {
+                cacheReservePortrait(index, portraitRoi)
                 val cpJob = async { parseCp(recognize(textRoi)) }
                 val visualJob = async { visualRecognizer.matchReserveCard(portraitRoi) }
                 val visual = visualJob.await()
@@ -105,8 +135,8 @@ class BattleOcrDetector(
                 )
             }
 
-            val topJob = async { read(topText, topPortrait) }
-            val bottomJob = async { read(bottomText, bottomPortrait) }
+            val topJob = async { read(0, topText, topPortrait) }
+            val bottomJob = async { read(1, bottomText, bottomPortrait) }
             topJob.await() to bottomJob.await()
         } finally {
             topText.recycle(); bottomText.recycle()
@@ -329,7 +359,15 @@ class BattleOcrDetector(
         return out
     }
 
-    override fun close() = recognizer.close()
+    override fun close() {
+        synchronized(reservePortraitLock) {
+            reservePortraits.indices.forEach { index ->
+                reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+                reservePortraits[index] = null
+            }
+        }
+        recognizer.close()
+    }
 
     private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
         addOnSuccessListener { if (cont.isActive) cont.resume(it) }
@@ -403,5 +441,6 @@ class BattleOcrDetector(
         private const val VISUAL_ACCEPT_CONFIDENCE = 0.76f
         private const val VISUAL_FORM_ACCEPT_CONFIDENCE = 0.86f
         private const val VISUAL_CONFLICT_CONFIDENCE = 0.80f
+        private const val RESERVE_THUMB_SIZE = 96
     }
 }
