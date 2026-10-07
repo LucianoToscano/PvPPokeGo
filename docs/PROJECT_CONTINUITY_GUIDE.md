@@ -419,6 +419,43 @@ PRÓXIMO PASSO:
 - Executar o build Standard em ambiente com acesso ao repositório/dependências e runner funcional; validar os cenários visuais acima antes de encerrar o bug 5.1.
 - Depois retomar replay/fixtures e a ordem PBE já documentada, sem reiniciar pesquisa externa.
 
+### 2026-10-07 — Verificação de continuidade e referências do launcher
+
+Versão: 0.5.26  
+Branch: `release/0.5.26`  
+HEAD verificado antes deste registro: `4b3932d18e9574977f7d5db9eaf1f17aa9273359`  
+PR: #34 (aberto, draft)
+
+OBJETIVO/PROBLEMA:
+- Retomar do Guia Mestre sem reiniciar nem descartar trabalho; conferir pendências de APK Standard, reservas e launcher.
+
+VERIFICAÇÕES:
+- Guia Mestre, checklist 0.5.26 e handoff lidos pelo conector GitHub autenticado.
+- Confirmada branch release/0.5.26 e PR #34 aberto/draft.
+- Conferido `app/src/main/AndroidManifest.xml`: `android:icon=@mipmap/ic_launcher` e `android:roundIcon=@mipmap/ic_launcher_round` declarados.
+- Conferidos `mipmap-anydpi-v26/ic_launcher.xml` e `ic_launcher_round.xml`: ambos apontam para `@drawable/pvppokego_launcher_foreground` e `@color/pvppokego_icon_background`.
+- O registro anterior de reservas (`fd66d553`, 18 PASS / 0 FAIL) permanece referência; nenhuma suíte foi reexecutada nesta verificação.
+
+ALTERAÇÕES:
+- Somente este registro cronológico; nenhuma alteração em código, assets, configuração de build ou checklist.
+
+TESTES:
+- Inspeção estática das referências de Manifest e adaptive icons; nenhum build Android ou teste em aparelho nesta etapa.
+
+RESULTADO:
+- Referências do ícone presentes nos arquivos conferidos, sem comprovação da arte visual efetivamente empacotada/instalada.
+- Não há APK 0.5.26 validado nesta etapa. Bugs 5.1 e 5.2 permanecem PARCIAIS.
+
+STATUS:
+PARCIAL.
+
+PENDÊNCIAS:
+- Validar existência e conteúdo visual do asset final, empacotamento, APK Standard e launcher Samsung.
+- Executar QA real dos cards de reserva e seletor de troca após build.
+
+PRÓXIMO PASSO:
+- Retomar build Standard em ambiente funcional, validar assets/Manifest e testar reservas em aparelho, preservando a implementação atual.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
