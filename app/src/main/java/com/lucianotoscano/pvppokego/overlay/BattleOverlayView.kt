@@ -62,7 +62,10 @@ class BattleOverlayView(
     private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
     private val pokemonIconAtlas = PokemonIconAtlas(context.applicationContext)
+    /** Current native reserve-card crops, indexed by top/bottom card. */
     private val reservePortraits = arrayOfNulls<Bitmap>(2)
+    /** Stable team-selection/card portraits, indexed by original team slot 0..2. */
+    private val ownTeamPortraits = arrayOfNulls<Bitmap>(3)
     private val adviceStabilityGate = AdviceStabilityGate()
     private var stableAdvice: BattleAssistAdvisor.Advice? = null
 
@@ -73,6 +76,19 @@ class BattleOverlayView(
     fun setReservePortraits(first: Bitmap?, second: Bitmap?) {
         replaceReservePortrait(0, first)
         replaceReservePortrait(1, second)
+        promoteMappedReservePortraits()
+        postInvalidate()
+    }
+
+    /**
+     * Team portraits survive native-card reordering and therefore remain usable after a
+     * switch/faint and inside the switch chooser. Null entries do not erase a good cache.
+     */
+    fun setOwnTeamPortraits(portraits: List<Bitmap?>) {
+        portraits.take(3).forEachIndexed { index, portrait ->
+            if (portrait != null && !portrait.isRecycled) replaceOwnTeamPortrait(index, portrait)
+        }
+        promoteMappedReservePortraits()
         postInvalidate()
     }
 
@@ -82,8 +98,15 @@ class BattleOverlayView(
         postInvalidate()
     }
 
+    fun clearPokemonPortraits() {
+        replaceReservePortrait(0, null)
+        replaceReservePortrait(1, null)
+        ownTeamPortraits.indices.forEach { replaceOwnTeamPortrait(it, null) }
+        postInvalidate()
+    }
+
     fun release() {
-        clearReservePortraits()
+        clearPokemonPortraits()
     }
 
     private fun replaceReservePortrait(index: Int, next: Bitmap?) {
@@ -96,12 +119,45 @@ class BattleOverlayView(
         reservePortraits[index] = next?.takeUnless { it.isRecycled }
     }
 
+    private fun replaceOwnTeamPortrait(index: Int, next: Bitmap?) {
+        if (index !in ownTeamPortraits.indices) {
+            next?.let { if (!it.isRecycled) it.recycle() }
+            return
+        }
+        val old = ownTeamPortraits[index]
+        if (old !== next) old?.let { if (!it.isRecycled) it.recycle() }
+        ownTeamPortraits[index] = next?.takeUnless { it.isRecycled }
+    }
+
+    /**
+     * Once CP/species evidence maps a native reserve card to a stable team slot, copy the
+     * live card portrait into that slot. This makes the icon independent from atlas
+     * availability and keeps it after the native card disappears during a switch prompt.
+     */
+    private fun promoteMappedReservePortraits() {
+        state.reserves.take(2).forEachIndexed { cardIndex, reserve ->
+            val teamSlot = reserve.teamSlot ?: return@forEachIndexed
+            if (!reserve.cardMappingConfirmed || teamSlot !in ownTeamPortraits.indices) return@forEachIndexed
+            val source = reservePortraits.getOrNull(cardIndex)
+                ?.takeUnless { it.isRecycled }
+                ?: return@forEachIndexed
+            val existing = ownTeamPortraits[teamSlot]
+            if (existing == null || existing.isRecycled) {
+                replaceOwnTeamPortrait(
+                    teamSlot,
+                    source.copy(Bitmap.Config.ARGB_8888, false)
+                )
+            }
+        }
+    }
+
     fun render(newState: BattleUiState) {
         if (newState.playerName.isNullOrBlank() && newState.opponentName.isNullOrBlank()) {
             adviceStabilityGate.reset()
             stableAdvice = null
         }
         state = newState
+        promoteMappedReservePortraits()
         scaleFactor = settings.scale
         opacityFactor = settings.opacity
         if (!switchChoicePromptVisible) {
@@ -848,8 +904,13 @@ class BattleOverlayView(
         paint.alpha = oldPaintAlpha
 
         if (!drawn) {
-            val portrait = reservePortraits.getOrNull(index)
-            if (portrait != null && !portrait.isRecycled) {
+            val stableTeamPortrait = reserve.teamSlot
+                ?.takeIf { reserve.cardMappingConfirmed && it in ownTeamPortraits.indices }
+                ?.let { ownTeamPortraits[it] }
+                ?.takeUnless { it.isRecycled }
+            val portrait = stableTeamPortrait
+                ?: reservePortraits.getOrNull(index)?.takeUnless { it.isRecycled }
+            if (portrait != null) {
                 val clip = Path().apply { addCircle(centerX, centerY, radius, Path.Direction.CW) }
                 canvas.save()
                 canvas.clipPath(clip)
@@ -902,14 +963,24 @@ class BattleOverlayView(
         }
         if (candidates.isEmpty()) return
 
-        val y = ry(SWITCH_CHOICE_INDICATOR_Y)
+        val indicatorY = ry(SWITCH_CHOICE_INDICATOR_Y)
+        val iconY = ry(SWITCH_CHOICE_ICON_Y)
         candidates.forEach { (slotIndex, reserve) ->
             val x = if (slotIndex == 0) rx(SWITCH_CHOICE_LEFT_X) else rx(SWITCH_CHOICE_RIGHT_X)
-            drawMatchupIndicator(canvas, x, y, reserve.matchup, 16f*u())
+            drawReservePokemonIcon(
+                canvas = canvas,
+                index = slotIndex,
+                reserve = reserve,
+                fallbackName = reserve.name ?: "POKÉMON ${slotIndex + 2}",
+                centerX = x,
+                centerY = iconY,
+                radius = 30f * u()
+            )
+            drawMatchupIndicator(canvas, x, indicatorY, reserve.matchup, 16f*u())
             if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
                 paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
                 paint.textAlign=Paint.Align.CENTER; paint.textSize=10f*u(); paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,x,y+30f*u(),paint); paint.clearShadowLayer()
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,x,indicatorY+30f*u(),paint); paint.clearShadowLayer()
             }
         }
     }
@@ -1064,6 +1135,8 @@ class BattleOverlayView(
         const val RESERVE_SPACING_Y=140f
         const val SWITCH_CHOICE_LEFT_X=282f
         const val SWITCH_CHOICE_RIGHT_X=582f
+        /** Center of the Pokémon portrait over each native switch-choice card. */
+        const val SWITCH_CHOICE_ICON_Y=1322f
         const val SWITCH_CHOICE_INDICATOR_Y=1444f
         const val BATTLE_ASSIST_X=432f
         const val BATTLE_ASSIST_Y=770f
