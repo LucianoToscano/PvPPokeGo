@@ -1626,6 +1626,33 @@ class BattleEngine(private val repo: GameDataRepository) {
             r.copy(recommendation = label)
         }
 
+        ensurePredictiveEnergyInitialized()
+        val enemyStages = stages(activeState)
+        val ownStages = stages(ownActiveState)
+        val predictiveForecast = if (predictiveEnergy.isInitialized) {
+            ChargedMovePredictor.forecast(
+                repo = repo,
+                energyTracker = predictiveEnergy,
+                chargedMoves = weightedEnemyChargedMoves(),
+                attackerId = enemySpeciesId ?: enemyName,
+                attackerCp = enemyCp,
+                defenderId = playerSpeciesId ?: playerName,
+                defenderCp = playerCp,
+                currentHpRatio = lastHpRatio,
+                reaction = reactionWindow,
+                observedDamage = { move ->
+                    incomingDamageTracker.estimate(
+                        currentEnemyDamageKey(),
+                        currentPlayerDamageKey(),
+                        move.moveId,
+                        lastHpRatio
+                    )
+                },
+                attackerAttackStages = enemyStages.attack,
+                defenderDefenseStages = ownStages.defense
+            )
+        } else null
+
         val enemyConf = enemyEnergyConfidence()
         val ownConf = ownEnergyConfidence()
         val enemyCharged1Prediction = if (f != null && charge1 != null) tracker.predict(charge1!!, f, enemyConf) else null
@@ -1633,13 +1660,21 @@ class BattleEngine(private val repo: GameDataRepository) {
         val ownCharged1Prediction = if (of != null && ownCharge1 != null) ownTracker.predict(ownCharge1!!, of, ownConf) else null
         val ownCharged2Prediction = if (of != null && ownCharge2 != null) ownTracker.predict(ownCharge2!!, of, ownConf) else null
         val incomingPreview = if (
-            chargedPendingSinceMs != null &&
             captureHealth != CaptureHealth.STALE &&
             captureHealth != CaptureHealth.PAUSED
         ) {
-            combinedIncomingDamageForecast(
-                listOfNotNull(enemyCharged1Prediction, enemyCharged2Prediction)
-            )
+            if (chargedPendingSinceMs != null) {
+                combinedIncomingDamageForecast(
+                    listOfNotNull(enemyCharged1Prediction, enemyCharged2Prediction)
+                )
+            } else {
+                predictiveForecast?.candidates
+                    ?.firstOrNull {
+                        it.readyPossible ||
+                            it.turnsRemainingMin <= predictiveForecast.reactionTurns
+                    }
+                    ?.damageForecast
+            }
         } else null
         val enemyHistory = enemyStates.all()
             .sortedByDescending { it.lastSeenAtMs }
@@ -1707,6 +1742,11 @@ class BattleEngine(private val repo: GameDataRepository) {
                     else -> 0f
                 }
             } ?: 0f,
+            enemyEnergyForecast = predictiveForecast,
+            enemyAttackStages = enemyStages.attack,
+            enemyDefenseStages = enemyStages.defense,
+            playerAttackStages = ownStages.attack,
+            playerDefenseStages = ownStages.defense,
             incomingFastDamage = incomingDamageTracker.estimate(
                 currentEnemyDamageKey(),
                 currentPlayerDamageKey(),
@@ -1740,6 +1780,20 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Inimigo: ${enemyName ?: "?"} PC ${enemyCp ?: "?"}")
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.minEnergy}-${tracker.maxEnergy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
+                predictiveForecast?.let { pf ->
+                    val next = pf.candidates.firstOrNull()
+                    appendLine(
+                        "Predict=" + pf.energyMin + "-" + pf.energyMax + "E hyp=" + pf.hypothesisCount +
+                            " lead=" + pf.leadTimeMs + "ms/" + pf.reactionTurns + "T next=" +
+                            (next?.move?.name ?: "?") + ":" + (next?.turnsRemainingMin ?: -1) + "T"
+                    )
+                }
+                appendLine(
+                    "Stages E atk=" + enemyStages.attack.min + ".." + enemyStages.attack.max +
+                        " def=" + enemyStages.defense.min + ".." + enemyStages.defense.max +
+                        " | Own atk=" + ownStages.attack.min + ".." + ownStages.attack.max +
+                        " def=" + ownStages.defense.min + ".." + ownStages.defense.max
+                )
                 appendLine("Battle conf=${"%.2f".format(lastBattleConfidence)} HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"}/${lastOpponentHpRatio?.let { "%.3f".format(it) } ?: "?"}")
                 appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }} DEXcards=${reserveCardDexes.joinToString { it?.toString() ?: "?" }} FORMS=${reserveCardSpeciesIds.joinToString { it ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
