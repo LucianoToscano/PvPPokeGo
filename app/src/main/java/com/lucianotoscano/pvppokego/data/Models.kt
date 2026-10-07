@@ -12,6 +12,9 @@ data class MoveDef(
     val energy: Int = 0,
     val cooldown: Int = 500,
     val buffs: List<Int> = emptyList(),
+    /** PvPoke uses these for moves such as Obstruct that affect both sides differently. */
+    val buffsSelf: List<Int> = emptyList(),
+    val buffsOpponent: List<Int> = emptyList(),
     val buffTarget: String? = null,
     /** PvPoke currently stores this value as a JSON string (for example "1" or ".125"). */
     val buffApplyChance: String? = null,
