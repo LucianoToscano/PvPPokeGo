@@ -200,6 +200,24 @@ internal class EnemyEnergyTracker(
     fun energyLikely(): Int = weightedMedianEnergy(hypotheses)
     fun hypothesisCount(): Int = hypotheses.size
 
+    fun likelyFastTurns(): Int {
+        if (hypotheses.isEmpty()) return 2
+        val values = hypotheses.map { it.fastMove.turns.coerceAtLeast(1) to it.weight }
+        val total = values.sumOf { it.second.toDouble() }.toFloat().takeIf { it > 0f } ?: 1f
+        var running = 0f
+        values.sortedBy { it.first }.forEach { (turns, weight) ->
+            running += weight / total
+            if (running >= .5f) return turns
+        }
+        return values.maxByOrNull { it.second }?.first ?: 2
+    }
+
+    fun fastTurnsRange(): IntRange {
+        val min = hypotheses.minOfOrNull { it.fastMove.turns.coerceAtLeast(1) } ?: 2
+        val max = hypotheses.maxOfOrNull { it.fastMove.turns.coerceAtLeast(1) } ?: min
+        return min..max
+    }
+
     fun confidence(): Float {
         if (hypotheses.isEmpty()) return 0f
         val top = hypotheses.maxOf { it.weight }
