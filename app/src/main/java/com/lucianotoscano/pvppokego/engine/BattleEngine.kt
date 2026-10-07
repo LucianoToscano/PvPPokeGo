@@ -121,6 +121,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var opponentShieldsRemaining = 2
     private var captureHealth = CaptureHealth.FRESH
     private var captureStatusText: String? = null
+    private var captureGapStartedAtMs: Long? = null
     private var localStrategyProfile: BattleStrategyProfile? = null
 
     private val incomingDamageTracker = ObservedDamageTracker()
@@ -195,6 +196,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         opponentShieldsRemaining = 2
         captureHealth = CaptureHealth.FRESH
         captureStatusText = null
+        captureGapStartedAtMs = null
         localStrategyProfile = null
         incomingDamageTracker.resetBattle()
         pendingIncomingChargedHpBefore = null
@@ -210,6 +212,26 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     fun onCaptureHealth(health: CaptureHealth, statusText: String? = null) {
+        val now = System.currentTimeMillis()
+        val wasGap = captureHealth == CaptureHealth.STALE || captureHealth == CaptureHealth.PAUSED
+        val isGap = health == CaptureHealth.STALE || health == CaptureHealth.PAUSED
+        if (!wasGap && isGap) {
+            captureGapStartedAtMs = now
+        } else if (wasGap && !isGap) {
+            val gapMs = captureGapStartedAtMs?.let { (now - it).coerceAtLeast(0L) } ?: 0L
+            ensurePredictiveEnergyInitialized()
+            if (predictiveEnergy.isInitialized && gapMs > 0L) {
+                val fastestTurns = predictiveEnergy.fastTurnsRange().first.coerceAtLeast(1)
+                val fastestMs = fastestTurns * EnemyEnergyTracker.TURN_MS.toLong()
+                val possibleMissed = kotlin.math.ceil(gapMs.toDouble() / fastestMs.toDouble())
+                    .toInt()
+                    .coerceIn(0, 5)
+                predictiveEnergy.widenForPossibleMissedFast(possibleMissed)
+                syncLegacyEnemyEnergyFromPredictive()
+                saveActiveState()
+            }
+            captureGapStartedAtMs = null
+        }
         captureHealth = health
         captureStatusText = statusText
     }
@@ -1294,6 +1316,13 @@ class BattleEngine(private val repo: GameDataRepository) {
     private fun observedOwnChargedUsed(move: MoveDef): Boolean {
         ownTracker.onObservedChargedMove(move)
         applyChargedStatEffects(move, actorIsEnemy = false)
+        // During our Charged sequence the opponent may have a Fast Move register ("float").
+        // Preserve both worlds instead of silently assuming zero gained energy.
+        ensurePredictiveEnergyInitialized()
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.widenForPossibleMissedFast(1)
+            syncLegacyEnemyEnergyFromPredictive()
+        }
         val state = ownActiveState
         if (state != null) {
             state.lastChargedMoveId = move.moveId
