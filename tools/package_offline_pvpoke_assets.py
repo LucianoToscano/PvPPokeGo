@@ -2,6 +2,7 @@
 """Package a PvPoke snapshot into app/src/main/assets for offline battle use."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import urllib.request
@@ -24,6 +25,14 @@ def fetch_text(url: str) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "PvPPokeGo-offline-packager/1.0"})
     with urllib.request.urlopen(req, timeout=90) as r:
         return r.read().decode("utf-8")
+
+
+def compact_json_bytes(value) -> bytes:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
 
 
 def extract_cpms(pokemon_js: str) -> list[float]:
@@ -51,24 +60,23 @@ def main() -> int:
     settings = base.get("settings", {})
     max_buff_stages = int(settings.get("maxBuffStages", 4))
     buff_divisor = float(settings.get("buffDivisor", 4))
-    (OUT / "gamemaster.json").write_text(
-        json.dumps({"pokemon": pokemon, "moves": moves}, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
-    )
-    (OUT / "pvpoke_cpms.json").write_text(
-        json.dumps({"format": "PvPPokeGo-pvpoke-cpms", "version": 1, "cpms": cpms}, separators=(",", ":")),
-        encoding="utf-8",
-    )
+    gamemaster_payload = {"pokemon": pokemon, "moves": moves}
+    gamemaster_bytes = compact_json_bytes(gamemaster_payload)
+    (OUT / "gamemaster.json").write_bytes(gamemaster_bytes)
+
+    cpms_payload = {"format": "PvPPokeGo-pvpoke-cpms", "version": 1, "cpms": cpms}
+    cpms_bytes = compact_json_bytes(cpms_payload)
+    (OUT / "pvpoke_cpms.json").write_bytes(cpms_bytes)
 
     ranking_sources = {}
+    ranking_hashes = {}
     for cp in LEAGUES:
         url = f"https://pvpoke.com/data/rankings/all/overall/rankings-{cp}.json"
         ranking = fetch_json(url)
-        (OUT / f"rankings-{cp}.json").write_text(
-            json.dumps(ranking, ensure_ascii=False, separators=(",", ":")),
-            encoding="utf-8",
-        )
+        ranking_bytes = compact_json_bytes(ranking)
+        (OUT / f"rankings-{cp}.json").write_bytes(ranking_bytes)
         ranking_sources[str(cp)] = url
+        ranking_hashes[str(cp)] = sha256_bytes(ranking_bytes)
 
     metadata = {
         "format": "PvPPokeGo-pvpoke-snapshot",
@@ -86,6 +94,11 @@ def main() -> int:
             "cpms": pokemon_js_url,
         },
         "rankingSources": ranking_sources,
+        "sha256": {
+            "gamemaster.json": sha256_bytes(gamemaster_bytes),
+            "pvpoke_cpms.json": sha256_bytes(cpms_bytes),
+            "rankings": ranking_hashes,
+        },
     }
     (OUT / "pvpoke_snapshot.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2),
