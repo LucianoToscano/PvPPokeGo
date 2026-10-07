@@ -2,6 +2,7 @@ package com.lucianotoscano.pvppokego.engine
 
 import com.lucianotoscano.pvppokego.data.DamageConfidence
 import com.lucianotoscano.pvppokego.data.ObservedDamageEstimate
+import java.util.ArrayDeque
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
