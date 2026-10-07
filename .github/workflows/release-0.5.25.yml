@@ -181,7 +181,12 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -n "$RELEASE_KEYSTORE_B64" && -n "$RELEASE_KEY_ALIAS" && -n "$RELEASE_STORE_PASSWORD" && -n "$RELEASE_KEY_PASSWORD" ]]; then
-            printf '%s' "$RELEASE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/pvppokego-release.jks"
+            python3 - <<'PY'
+          import base64, os
+          out = os.path.join(os.environ["RUNNER_TEMP"], "pvppokego-release.jks")
+          with open(out, "wb") as fh:
+              fh.write(base64.b64decode(os.environ["RELEASE_KEYSTORE_B64"]))
+          PY
             test -s "$RUNNER_TEMP/pvppokego-release.jks"
             echo "SIGNING_READY=true" >> "$GITHUB_ENV"
             echo "Permanent release signing: available"
@@ -207,7 +212,7 @@ jobs:
             COMPAT_UNSIGNED="$(find app/build/outputs/apk/recorderCompat/release -name '*unsigned.apk' | head -1)"
             test -s "$STD_UNSIGNED"
             test -s "$COMPAT_UNSIGNED"
-            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | tail -1)"
             test -x "$APKSIGNER"
             "$APKSIGNER" sign               --ks "$RUNNER_TEMP/pvppokego-release.jks"               --ks-key-alias "$RELEASE_KEY_ALIAS"               --ks-pass env:RELEASE_STORE_PASSWORD               --key-pass env:RELEASE_KEY_PASSWORD               --out delivery/PvPPokeGo-0.5.25.apk               "$STD_UNSIGNED"
             "$APKSIGNER" sign               --ks "$RUNNER_TEMP/pvppokego-release.jks"               --ks-key-alias "$RELEASE_KEY_ALIAS"               --ks-pass env:RELEASE_STORE_PASSWORD               --key-pass env:RELEASE_KEY_PASSWORD               --out delivery/PvPPokeGo-0.5.25-recorder-compat.apk               "$COMPAT_UNSIGNED"
@@ -242,6 +247,10 @@ jobs:
           )
           shasum -a 256 delivery/PvPPokeGo-0.5.25-AndroidStudio.zip > delivery/PvPPokeGo-0.5.25-AndroidStudio.zip.sha256
           shasum -a 256 delivery/PvPPokeGo-0.5.25-build.zip > delivery/PvPPokeGo-0.5.25-build.zip.sha256
+          echo "=== SIGNING STATUS ==="
+          cat audit/signing-status.txt
+          echo "=== SHA-256 ==="
+          cat delivery/*.sha256
           ls -lh delivery
 
       - name: Upload complete delivery
