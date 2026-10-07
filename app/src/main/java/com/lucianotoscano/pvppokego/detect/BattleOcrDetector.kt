@@ -66,16 +66,9 @@ class BattleOcrDetector(
 
     private fun cacheReservePortrait(index: Int, source: Bitmap) {
         if (source.isRecycled || index !in 0..1) return
-        val left = (source.width * 0.08f).toInt().coerceIn(0, source.width - 1)
-        val top = (source.height * 0.24f).toInt().coerceIn(0, source.height - 1)
-        val right = (source.width * 0.92f).toInt().coerceIn(left + 1, source.width)
-        val bottom = (source.height * 0.90f).toInt().coerceIn(top + 1, source.height)
-        val crop = Bitmap.createBitmap(source, left, top, right - left, bottom - top)
-        val thumb = try {
-            Bitmap.createScaledBitmap(crop, RESERVE_THUMB_SIZE, RESERVE_THUMB_SIZE, true)
-        } finally {
-            if (!crop.isRecycled) crop.recycle()
-        }
+        // The caller already supplies a portrait-only ROI. Cropping it a second time was
+        // cutting off tall/wide Pokémon and could leave an almost empty thumbnail.
+        val thumb = Bitmap.createScaledBitmap(source, RESERVE_THUMB_SIZE, RESERVE_THUMB_SIZE, true)
         synchronized(reservePortraitLock) {
             reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
             reservePortraits[index] = thumb
@@ -474,7 +467,7 @@ class BattleOcrDetector(
         private const val VISUAL_ACCEPT_CONFIDENCE = 0.76f
         private const val VISUAL_FORM_ACCEPT_CONFIDENCE = 0.86f
         private const val VISUAL_CONFLICT_CONFIDENCE = 0.80f
-        private const val RESERVE_THUMB_SIZE = 96
+        private const val RESERVE_THUMB_SIZE = 112
         private const val TEAM_THUMB_SIZE = 128
         private const val TEAM_PORTRAIT_MIN_CONFIDENCE = 0.70f
     }
