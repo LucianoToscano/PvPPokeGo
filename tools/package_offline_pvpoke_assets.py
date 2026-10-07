@@ -13,6 +13,7 @@ OUT = Path("app/src/main/assets")
 REF = "f627e89e53c0c7b903fff097df7a0ad0ac95decc"
 RAW = f"https://raw.githubusercontent.com/pvpoke/pvpoke/{REF}/src/data"
 RAW_JS = f"https://raw.githubusercontent.com/pvpoke/pvpoke/{REF}/src/js"
+RAW_ROOT = f"https://raw.githubusercontent.com/pvpoke/pvpoke/{REF}"
 PVP_TURN_MS = 500
 LEAGUES = (1500, 2500, 10000)
 
@@ -55,8 +56,10 @@ def main() -> int:
     pokemon = fetch_json(f"{RAW}/gamemaster/pokemon.json")
     pokemon_js_url = f"{RAW_JS}/pokemon/Pokemon.js"
     base_url = f"{RAW}/gamemaster/base.json"
+    license_url = f"{RAW_ROOT}/LICENSE"
     cpms = extract_cpms(fetch_text(pokemon_js_url))
     base = fetch_json(base_url)
+    pvpoke_license = fetch_text(license_url)
     settings = base.get("settings", {})
     max_buff_stages = int(settings.get("maxBuffStages", 4))
     buff_divisor = float(settings.get("buffDivisor", 4))
@@ -67,6 +70,8 @@ def main() -> int:
     cpms_payload = {"format": "PvPPokeGo-pvpoke-cpms", "version": 1, "cpms": cpms}
     cpms_bytes = compact_json_bytes(cpms_payload)
     (OUT / "pvpoke_cpms.json").write_bytes(cpms_bytes)
+    license_bytes = pvpoke_license.encode("utf-8")
+    (OUT / "pvpoke_LICENSE.txt").write_bytes(license_bytes)
 
     ranking_sources = {}
     ranking_hashes = {}
@@ -92,11 +97,13 @@ def main() -> int:
             "pokemon": f"{RAW}/gamemaster/pokemon.json",
             "base": base_url,
             "cpms": pokemon_js_url,
+            "license": license_url,
         },
         "rankingSources": ranking_sources,
         "sha256": {
             "gamemaster.json": sha256_bytes(gamemaster_bytes),
             "pvpoke_cpms.json": sha256_bytes(cpms_bytes),
+            "pvpoke_LICENSE.txt": sha256_bytes(license_bytes),
             "rankings": ranking_hashes,
         },
     }
