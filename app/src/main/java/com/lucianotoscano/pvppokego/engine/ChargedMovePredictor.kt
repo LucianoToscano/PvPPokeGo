@@ -83,6 +83,8 @@ internal object ChargedMovePredictor {
         val leadTimeMs = reaction.leadTimeMs()
         val attacker = repo.pokemon(attackerId)
         val defender = repo.pokemon(defenderId)
+        val attackerStats = attacker?.let { repo.estimatedBattleStats(it.speciesId, attackerCp) }
+        val defenderStats = defender?.let { repo.estimatedBattleStats(it.speciesId, defenderCp) }
 
         val candidates = chargedMoves.mapNotNull { weightedMove ->
             val move = weightedMove.move
@@ -111,21 +113,30 @@ internal object ChargedMovePredictor {
                 defenderDefenseStages = defenderDefenseStages
             )
 
-            val fastDptValues = hypotheses.mapNotNull { h ->
-                if (attacker == null || defender == null) return@mapNotNull null
-                val aStats = repo.estimatedBattleStats(attacker.speciesId, attackerCp) ?: return@mapNotNull null
-                val dStats = repo.estimatedBattleStats(defender.speciesId, defenderCp) ?: return@mapNotNull null
+            val fastPressure = hypotheses.mapNotNull { h ->
+                if (attacker == null || defender == null || attackerStats == null || defenderStats == null) {
+                    return@mapNotNull null
+                }
                 val pct = DamageForecastEngine.modelDamagePercent(
                     attacker = attacker,
-                    attackerStats = aStats,
+                    attackerStats = attackerStats,
                     defender = defender,
-                    defenderStats = dStats,
+                    defenderStats = defenderStats,
                     move = h.fastMove,
                     attackerAttackStage = attackerAttackStages,
                     defenderDefenseStage = defenderDefenseStages
                 ) ?: return@mapNotNull null
-                pct / h.fastMove.turns.coerceAtLeast(1).toFloat()
+                val moveTurns = h.fastMove.turns.coerceAtLeast(1)
+                val dpt = pct / moveTurns.toFloat()
+                val missing = (cost - h.energy).coerceAtLeast(0)
+                val fastNeeded = if (missing == 0) 0 else {
+                    ceil(missing.toDouble() / h.fastMove.energyGain.coerceAtLeast(1).toDouble()).toInt()
+                }
+                val turnsUntilReady = fastNeeded * moveTurns
+                Pair(dpt, dpt * turnsUntilReady.toFloat())
             }
+            val fastDptValues = fastPressure.map { it.first }
+            val fastDamageUntilReady = fastPressure.map { it.second }
             val eptValues = hypotheses.map {
                 it.fastMove.energyGain.toFloat() / it.fastMove.turns.coerceAtLeast(1).toFloat()
             }
@@ -134,6 +145,14 @@ internal object ChargedMovePredictor {
             val likelyKo = damage != null &&
                 currentHpPercent != null &&
                 damage.averagePercent >= currentHpPercent - 1f
+            val mayKoBeforeCharged = currentHpPercent != null &&
+                (fastDamageUntilReady.maxOrNull() ?: 0f) >= currentHpPercent
+            val baitPotential = chargedMoves.any { other ->
+                val otherCost = other.move.chargedCost
+                other.move.moveId != move.moveId &&
+                    otherCost >= cost + 10 &&
+                    other.move.power >= move.power * 1.20
+            }
 
             val prior = weightedMove.weight.coerceIn(.01f, 1f)
             val mathematicalConfidence = energyTracker.confidence()
@@ -152,6 +171,12 @@ internal object ChargedMovePredictor {
                     damagePressure.coerceIn(0f, 1f) * .32f +
                     mathematicalConfidence * .18f +
                     prior * .08f
+                ).coerceIn(0f, 1f)
+            val spamBonus = ((55 - cost).coerceAtLeast(0) / 30f).coerceIn(0f, .35f)
+            val shieldPressure = (
+                threat * .72f +
+                    spamBonus * .18f +
+                    (if (baitPotential) .10f else 0f)
                 ).coerceIn(0f, 1f)
 
             val evidenceClass = when {
@@ -185,6 +210,11 @@ internal object ChargedMovePredictor {
                 dptMax = fastDptValues.maxOrNull(),
                 dpeMin = damage?.minPercent?.div(cost.toFloat()),
                 dpeMax = damage?.maxPercent?.div(cost.toFloat()),
+                fastDamageUntilReadyMin = fastDamageUntilReady.minOrNull(),
+                fastDamageUntilReadyMax = fastDamageUntilReady.maxOrNull(),
+                mayKoBeforeCharged = mayKoBeforeCharged,
+                baitPotential = baitPotential,
+                shieldPressureScore = shieldPressure,
                 damageForecast = damage,
                 likelyKo = likelyKo,
                 threatScore = threat
