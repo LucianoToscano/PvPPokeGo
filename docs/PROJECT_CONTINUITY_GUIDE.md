@@ -546,6 +546,33 @@ PRÓXIMO PASSO:
 - Último run `37702558022` não gerou artefatos (0), com job `113069219336` em failure e `steps=null`.
 - Nenhum APK renomeado, publicado ou entregue indevidamente.
 
+
+### 2026-10-07 — Diagnóstico confirmado: faturamento/limites bloqueiam Actions
+
+Versão: 0.5.26  
+Branch: `release/0.5.26`  
+Status: BLOQUEADO (infraestrutura/conta GitHub; não é falha de compilação demonstrada)
+
+EVIDÊNCIA:
+- Usuário enviou captura do workflow `PvPPokeGo 0.5.26`, execução #58, aba Anotações.
+- Erro explícito exibido pelo GitHub: "O serviço não foi iniciado porque houve falhas nos pagamentos recentes da sua conta ou porque seu limite de gastos precisa ser aumentado. Verifique a seção 'Faturamento e planos' nas suas configurações."
+- O aviso separado de migração futura de `ubuntu-latest` para Ubuntu 26 não é a causa apontada para esta falha.
+- Isso explica as falhas de jobs sem steps/log; o runner foi bloqueado antes de executar código. Ainda não se sabe se o motivo específico é pagamento pendente ou orçamento/limite de Actions.
+
+ALTERAÇÕES:
+- Somente documentação do diagnóstico. Código e recursos do aplicativo preservados.
+- É necessário que o proprietário da conta verifique GitHub > Settings > Billing & licensing / Budgets and alerts e regularize o impedimento; autorização ao assistente não concede capacidade para alterar pagamentos ou limites da conta.
+
+TESTES:
+- Anotação analisada visualmente; nenhum novo Gradle/assemble executado.
+
+RESULTADO:
+- Bloqueio de conta/limite identificado na anotação do GitHub; não adianta repetir build até haver liberação do runner.
+- APK Standard 0.5.26 permanece NÃO GERADO; nenhum arquivo anterior deve ser renomeado como novo.
+
+PRÓXIMO PASSO:
+- Após o GitHub indicar faturamento/budget normalizado, reexecutar o workflow de build Standard, verificar execução real de steps, testes, manifest, ícones, assinatura e SHA-256, e só então entregar o APK.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
