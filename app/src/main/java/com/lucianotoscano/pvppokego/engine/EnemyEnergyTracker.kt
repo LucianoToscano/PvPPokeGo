@@ -108,6 +108,29 @@ internal class EnemyEnergyTracker(
         return true
     }
 
+    fun manualFastDelta(delta: Int, confirmedMove: MoveDef? = null) {
+        if (delta == 0 || hypotheses.isEmpty()) return
+        confirmedMove?.let(::confirmFastMove)
+        hypotheses = hypotheses.map { h ->
+            val gain = h.fastMove.energyGain.coerceAtLeast(0) * kotlin.math.abs(delta)
+            val turns = h.fastMove.turns * kotlin.math.abs(delta)
+            if (delta > 0) {
+                h.copy(
+                    energy = (h.energy + gain).coerceAtMost(maxEnergy),
+                    completedFastMoves = h.completedFastMoves + delta,
+                    elapsedTurns = h.elapsedTurns + turns
+                )
+            } else {
+                h.copy(
+                    energy = (h.energy - gain).coerceAtLeast(0),
+                    completedFastMoves = (h.completedFastMoves + delta).coerceAtLeast(0),
+                    elapsedTurns = (h.elapsedTurns - turns).coerceAtLeast(0)
+                )
+            }
+        }
+        normalizeAndPrune()
+    }
+
     /**
      * Exact Charged identification removes impossible states and subtracts the cost only
      * from states that could legally pay it. If all hypotheses fail, preserve a degraded
