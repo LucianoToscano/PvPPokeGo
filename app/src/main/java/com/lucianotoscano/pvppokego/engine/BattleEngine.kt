@@ -632,14 +632,17 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onReserveCardCps(topCp: Int?, bottomCp: Int?) =
         onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
 
-    fun needsReserveCardScan(): Boolean =
-        ReserveScanPolicy.shouldScan(
+    fun needsReserveCardScan(): Boolean {
+        val confirmedCards = resolvedOwnReserves().filter { it.confirmed }.map { it.cardIndex }.toSet()
+        return ReserveScanPolicy.shouldScan(
             hasActivePlayer = !playerName.isNullOrBlank(),
             knownTeamSize = ownTeamSlots.size,
             cardCps = reserveCardCps.toList(),
             cardDexes = reserveCardDexes.toList(),
-            cardSpeciesIds = reserveCardSpeciesIds.toList()
+            cardSpeciesIds = reserveCardSpeciesIds.toList(),
+            cardMappingConfirmed = (0..1).map { it in confirmedCards }
         )
+    }
 
     private fun clearReserveCardIdentity() {
         reserveCardHpRatios.fill(null)
@@ -2358,3 +2361,4 @@ class BattleEngine(private val repo: GameDataRepository) {
         private val ACTION_VERBS = listOf("usou", "used", "utilizou")
     }
 }
+

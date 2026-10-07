@@ -977,7 +977,9 @@ class BattleOverlayView(
 
         if (!drawn) {
             val stableTeamPortrait = reserve.teamSlot
-                ?.takeIf { reserve.cardMappingConfirmed && it in ownTeamPortraits.indices }
+                // This portrait belongs to the stable team slot, just like the atlas
+                // identity above; it does not require a confirmed native-card position.
+                ?.takeIf { it in ownTeamPortraits.indices }
                 ?.let { ownTeamPortraits[it] }
                 ?.takeUnless { it.isRecycled }
             val portrait = stableTeamPortrait
@@ -1219,3 +1221,4 @@ class BattleOverlayView(
         const val ENEMY_HISTORY_Y=650f
     }
 }
+
