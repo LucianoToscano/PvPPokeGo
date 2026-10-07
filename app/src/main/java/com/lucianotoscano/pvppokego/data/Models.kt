@@ -321,6 +321,8 @@ enum class CaptureHealth { FRESH, STALE, PAUSED, COMPATIBILITY }
 data class BattleUiState(
     val playerName: String? = null,
     val playerCp: Int? = null,
+    /** Exact current player types resolved from speciesId/form when available. */
+    val playerTypes: List<String> = emptyList(),
     val opponentName: String? = null,
     val opponentCp: Int? = null,
     val opponentTypes: List<String> = emptyList(),
@@ -349,9 +351,11 @@ data class BattleUiState(
     val opponentHpRatio: Float? = null,
     /** Actual screen Y fraction for the player HP bar when visually detected. */
     val playerHpBarYFraction: Float? = null,
-    /** Remaining Protect Shields. Starts at two and only decrements on confident evidence. */
+    /** Remaining Protect Shields when known. Mid-battle starts keep the value explicitly uncertain. */
     val ownShieldsRemaining: Int = 2,
     val opponentShieldsRemaining: Int = 2,
+    val ownShieldsKnown: Boolean = true,
+    val opponentShieldsKnown: Boolean = true,
     /** Best current incoming Charged-Attack forecast for the translucent HP preview. */
     val incomingDamagePreview: DamageForecast? = null,
     val captureHealth: CaptureHealth = CaptureHealth.FRESH,
