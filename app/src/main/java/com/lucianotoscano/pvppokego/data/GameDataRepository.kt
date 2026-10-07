@@ -36,6 +36,7 @@ class GameDataRepository(private val context: Context) {
     private val legalChargedCache = ConcurrentHashMap<String, List<MoveDef>>()
     private val weightedFastCache = ConcurrentHashMap<String, List<WeightedMove>>()
     private val weightedChargedCache = ConcurrentHashMap<String, List<WeightedMove>>()
+    private val battleStatsCache = ConcurrentHashMap<String, EstimatedBattleStats?>()
     @Volatile var currentLeagueCp: Int = 1500
         private set
 
@@ -45,6 +46,7 @@ class GameDataRepository(private val context: Context) {
         legalChargedCache.clear()
         weightedFastCache.clear()
         weightedChargedCache.clear()
+        battleStatsCache.clear()
         val gmText = runCatching {
             context.assets.open("gamemaster.json").bufferedReader().use { it.readText() }
         }.getOrElse {
@@ -284,7 +286,10 @@ class GameDataRepository(private val context: Context) {
     }
 
     fun estimatedBattleStats(nameOrSpeciesId: String?, observedCp: Int? = null): EstimatedBattleStats? {
-        val def = pokemon(nameOrSpeciesId) ?: return null
+        val raw = nameOrSpeciesId ?: return null
+        val cacheKey = normalizeName(raw) + "|" + (observedCp ?: 0) + "|" + currentLeagueCp
+        if (battleStatsCache.containsKey(cacheKey)) return battleStatsCache[cacheKey]
+        val def = pokemon(raw) ?: return null
         val base = def.baseStats
         if (base.atk <= 0 || base.def <= 0 || base.hp <= 0 || cpMultipliers.isEmpty()) return null
 
@@ -333,7 +338,7 @@ class GameDataRepository(private val context: Context) {
             defIv = defIv,
             hpIv = hpIv,
             cp = cpAt(cpm)
-        )
+        ).also { battleStatsCache[cacheKey] = it }
     }
 
     fun localizedMoveName(move: MoveDef): String = moveNamesPtBr[normalizeId(move.moveId)] ?: move.name
