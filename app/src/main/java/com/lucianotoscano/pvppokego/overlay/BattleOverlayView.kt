@@ -982,8 +982,13 @@ class BattleOverlayView(
                 ?.takeIf { it in ownTeamPortraits.indices }
                 ?.let { ownTeamPortraits[it] }
                 ?.takeUnless { it.isRecycled }
-            val portrait = stableTeamPortrait
-                ?: reservePortraits.getOrNull(index)?.takeUnless { it.isRecycled }
+            // A native crop belongs to a card position, not automatically to the
+            // reserve's species/team slot. Switches may reorder native cards.
+            // Never show another Pokémon's portrait while matching is ambiguous.
+            val mappedCardPortrait = if (reserve.cardMappingConfirmed) {
+                reservePortraits.getOrNull(index)?.takeUnless { it.isRecycled }
+            } else null
+            val portrait = stableTeamPortrait ?: mappedCardPortrait
             if (portrait != null) {
                 val clip = Path().apply { addCircle(centerX, centerY, radius, Path.Direction.CW) }
                 canvas.save()
