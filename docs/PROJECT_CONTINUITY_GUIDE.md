@@ -491,6 +491,54 @@ PENDÊNCIAS:
 PRÓXIMO PASSO:
 - Diagnosticar o pipeline de build com runner efetivamente iniciado; testar reservas/trocas e ícone no APK gerado.
 
+### 2026-10-07 — Compatibilidade de ícones do launcher e nova tentativa de APK
+
+Versão: 0.5.26  
+Branch: `release/0.5.26`  
+Commits:
+- `5b939efb4bddf8303952001ca248ba03c45a64eb` — fallback legacy `ic_launcher`;
+- `b3605eeab9829f308de98319f1024d742dab562a` — fallback legacy `ic_launcher_round`;
+- `7fe575e689c681778ab391bcf1b906bac9b242eb` — invariantes de build para ambos os recursos.
+
+OBJETIVO/PROBLEMA:
+- Corrigir a ausência de recursos de launcher para Android pré-API 26 e tentar gerar APK Standard da versão real.
+
+ALTERAÇÕES:
+- Confirmada no GitHub a arte oficial `drawable-nodpi/pvppokego_launcher.png` (Poké Ball com setas vermelha/laranja e azul/ciano).
+- Confirmado que os dois adaptive icons (`mipmap-anydpi-v26`) apontam para o foreground oficial.
+- Criados `app/src/main/res/mipmap-anydpi/ic_launcher.xml` e `ic_launcher_round.xml`, ambos usando a arte oficial nos Androids anteriores ao API 26.
+- `.github/workflows/release-0.5.26.yml` agora verifica a existência e referência dos dois fallbacks legacy além dos adaptive icons.
+- Nenhum código de batalha ou função existente removido.
+
+ARQUIVOS PRINCIPAIS:
+- `app/src/main/res/mipmap-anydpi/ic_launcher.xml`
+- `app/src/main/res/mipmap-anydpi/ic_launcher_round.xml`
+- `.github/workflows/release-0.5.26.yml`
+
+TESTES:
+- Inspeção estática da arte original, Manifest, foreground e recursos adaptive/legacy.
+- Reexecutado o run `37701971801`: job `113068723701` falhou sem steps.
+- Run `37702512658`: job `113069070074` falhou com `steps=null`.
+- Run `37702558022`: job `113069219336` falhou com `steps=null`.
+- Nenhuma compilação, teste Gradle ou validação em celular ocorreu: o GitHub não atribuiu runner efetivamente executável; ambiente local sem Android SDK/Gradle e sem acesso DNS aos repositórios de dependências.
+
+RESULTADO:
+- Recurso ausente de launcher legacy corrigido no código; ainda depende de APK real para validar em dispositivo.
+- Não foi criado APK 0.5.26 nesta etapa; não há evidência de erro de compilação do novo código.
+- A falha pré-execução pode envolver cobrança/limites ou indisponibilidade da execução hospedada; verificar a anotação exibida pelo GitHub Actions e as configurações da conta antes de diagnosticar como causa confirmada.
+
+STATUS:
+PARCIAL / BLOQUEADO (build).
+
+PENDÊNCIAS:
+- Desbloquear GitHub-hosted runner (verificação da conta `LucianoToscano`: Settings > Billing & licensing > Actions/budgets/limites e anotação do workflow).
+- Rodar `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, validar APK, ícone adaptativo e legado, assinatura e SHA-256.
+- Validar no Samsung os ícones do launcher e os retratos dos Pokémon de reserva.
+
+PRÓXIMO PASSO:
+- Com runner funcional, deixar o workflow Standard concluir e baixar o artefato efetivamente produzido; registrar checksum, teste e link na documentação.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
