@@ -1,5 +1,10 @@
 # CHECKLIST — PvPPokeGo 0.5.26
 
+> Guia Mestre canônico de continuidade e registro:
+> https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.26/docs/PROJECT_CONTINUITY_GUIDE.md
+>
+> Toda mudança marcada neste checklist também deve ser registrada no Guia Mestre.
+
 Atualizado em: 2026-10-07  
 Branch: `release/0.5.26`  
 Head de referência: `356f35cf11008921f500ad8fffdcfb891dc344fc`  
