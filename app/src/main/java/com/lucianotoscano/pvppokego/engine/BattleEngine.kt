@@ -16,6 +16,7 @@ import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.ReserveCardEvidence
 import com.lucianotoscano.pvppokego.data.ReserveState
 import com.lucianotoscano.pvppokego.data.TeamPokemonStatus
+import com.lucianotoscano.pvppokego.data.StatStageRange
 import java.text.Normalizer
 
 /**
@@ -1449,6 +1450,69 @@ class BattleEngine(private val repo: GameDataRepository) {
         (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
             ?.let(repo::possibleChargedMoves)
             .orEmpty()
+
+    private fun legalEnemyFastMoves() =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::weightedFastMoves)
+            .orEmpty()
+
+    private fun legalEnemyChargedMoves(): List<MoveDef> =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::legalChargedMoves)
+            .orEmpty()
+
+    private fun weightedEnemyChargedMoves() =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::weightedChargedMoves)
+            .orEmpty()
+
+    private fun ensurePredictiveEnergyInitialized() {
+        if (predictiveEnergy.isInitialized) return
+        val candidates = legalEnemyFastMoves()
+        if (candidates.isEmpty()) return
+        predictiveEnergy.reset(candidates, activeState?.predictiveEnergySnapshot)
+        if (activeState?.fastMoveManual == true || candidates.size <= 1) {
+            fast?.let(predictiveEnergy::confirmFastMove)
+        }
+        syncLegacyEnemyEnergyFromPredictive()
+    }
+
+    private fun stages(state: BattlePokemonState?): StatStageTracker.Stages =
+        StatStageTracker.Stages(
+            attack = StatStageRange(
+                state?.attackStageMin ?: 0,
+                state?.attackStageMax ?: 0
+            ).normalized(),
+            defense = StatStageRange(
+                state?.defenseStageMin ?: 0,
+                state?.defenseStageMax ?: 0
+            ).normalized()
+        )
+
+    private fun writeStages(state: BattlePokemonState?, value: StatStageTracker.Stages) {
+        state ?: return
+        val attack = value.attack.normalized()
+        val defense = value.defense.normalized()
+        state.attackStageMin = attack.min
+        state.attackStageMax = attack.max
+        state.defenseStageMin = defense.min
+        state.defenseStageMax = defense.max
+    }
+
+    private fun applyChargedStatEffects(move: MoveDef, actorIsEnemy: Boolean) {
+        if (move.buffs.size < 2 || move.buffChance <= 0f) return
+        val enemy = stages(activeState)
+        val own = stages(ownActiveState)
+        if (actorIsEnemy) {
+            val result = StatStageTracker.applyMove(move, self = enemy, opponent = own)
+            writeStages(activeState, result.self)
+            writeStages(ownActiveState, result.opponent)
+        } else {
+            val result = StatStageTracker.applyMove(move, self = own, opponent = enemy)
+            writeStages(ownActiveState, result.self)
+            writeStages(activeState, result.opponent)
+        }
+    }
 
     private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {
         val remaining = readyAtMs - nowMs
