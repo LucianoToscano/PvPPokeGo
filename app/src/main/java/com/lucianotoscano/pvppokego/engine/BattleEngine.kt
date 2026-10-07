@@ -517,11 +517,6 @@ class BattleEngine(private val repo: GameDataRepository) {
             val confidence = evidence.visualConfidence ?: return
             if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
 
-            val matchingMembers = ownTeamSlots.filter { slot ->
-                slot.speciesId.equals(speciesId, ignoreCase = true)
-            }
-            if (matchingMembers.size != 1) return
-
             if (reserveSpeciesCandidate[index].equals(speciesId, ignoreCase = true)) {
                 reserveSpeciesStreak[index]++
             } else {
@@ -541,11 +536,6 @@ class BattleEngine(private val repo: GameDataRepository) {
             val dex = evidence.visualDex ?: return
             val confidence = evidence.visualConfidence ?: return
             if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
-
-            val matchingMembers = ownTeamSlots.filter { slot ->
-                (slot.dex ?: slotDefinition(slot)?.dex?.takeIf { it > 0 }) == dex
-            }
-            if (matchingMembers.size != 1) return
 
             if (reserveDexCandidate[index] == dex) {
                 reserveDexStreak[index]++
@@ -621,15 +611,14 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onReserveCardCps(topCp: Int?, bottomCp: Int?) =
         onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
 
-    fun needsReserveCardScan(): Boolean {
-        if (playerName.isNullOrBlank()) return false
-        if (ownTeamSlots.size < 3) return true
-        return reserveCardCps.indices.any { index ->
-            reserveCardCps[index] == null &&
-                reserveCardSpeciesIds[index] == null &&
-                reserveCardDexes[index] == null
-        }
-    }
+    fun needsReserveCardScan(): Boolean =
+        ReserveScanPolicy.shouldScan(
+            hasActivePlayer = !playerName.isNullOrBlank(),
+            knownTeamSize = ownTeamSlots.size,
+            cardCps = reserveCardCps.toList(),
+            cardDexes = reserveCardDexes.toList(),
+            cardSpeciesIds = reserveCardSpeciesIds.toList()
+        )
 
     private fun clearReserveCardIdentity() {
         reserveCardHpRatios.fill(null)
@@ -1567,9 +1556,28 @@ class BattleEngine(private val repo: GameDataRepository) {
         val f = fast
         val of = ownFast
 
-        val rawReserves = resolvedOwnReserves()
-            .take(2)
-            .mapIndexed { index, resolved ->
+        val resolvedByCard = resolvedOwnReserves().associateBy { it.cardIndex }
+        val rawReserves = (0..1).map { cardIndex ->
+            val resolved = resolvedByCard[cardIndex]
+            if (resolved == null) {
+                ReserveState(
+                    name = null,
+                    speciesId = null,
+                    cp = reserveCardCps.getOrNull(cardIndex),
+                    types = emptyList(),
+                    matchup = MatchupState.UNKNOWN,
+                    visible = reserveSlotVisible.getOrNull(cardIndex) != false,
+                    score = 0.0,
+                    teamSlot = null,
+                    identityKey = null,
+                    cardCp = reserveCardCps.getOrNull(cardIndex),
+                    identityConfirmed = false,
+                    cardMappingConfirmed = false,
+                    identitySource = "unresolved",
+                    hpRatio = reserveCardHpRatios.getOrNull(cardIndex),
+                    status = TeamPokemonStatus.UNKNOWN
+                )
+            } else {
                 val slot = resolved.slot
                 val def = slotDefinition(slot)
                 val name = def?.speciesName ?: slot.name
@@ -1598,31 +1606,30 @@ class BattleEngine(private val repo: GameDataRepository) {
                     enemyTypes = eTypes,
                     cardMappingConfirmed = resolved.confirmed
                 )
+                val hp = if (resolved.confirmed) {
+                    reserveCardHpRatios.getOrNull(cardIndex) ?: saved?.lastHpRatio
+                } else {
+                    saved?.lastHpRatio
+                }
                 val score = if (identityReady) {
                     reserveScore(
                         name = name,
                         cp = cp,
                         speciesId = stableSpeciesId,
                         myTypes = types,
-                        enemyTypes = eTypes
+                        enemyTypes = eTypes,
+                        hpRatio = hp
                     )
-                } else {
-                    0.0
-                }
+                } else 0.0
                 ReserveState(
                     name = name,
                     speciesId = stableSpeciesId,
                     cp = cp,
                     types = types,
                     matchup = if (identityReady) ReserveMatchupPolicy.classifyScore(score) else MatchupState.UNKNOWN,
-                    // Visibility belongs to a physical native card. Until that card is
-                    // mapped, do not mark a known team member dead just because the
-                    // opposite card temporarily disappeared.
                     visible = if (resolved.confirmed) {
-                        reserveSlotVisible.getOrNull(resolved.cardIndex) != false
-                    } else {
-                        true
-                    },
+                        reserveSlotVisible.getOrNull(cardIndex) != false
+                    } else true,
                     score = score,
                     teamSlot = slot.slot,
                     identityKey = identity,
@@ -1636,23 +1643,16 @@ class BattleEngine(private val repo: GameDataRepository) {
                     fastMoveKnowledge = moveKnowledge(saved, 0, reserveFast),
                     chargedMove1Knowledge = moveKnowledge(saved, 1, reserveC1),
                     chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2),
-                    hpRatio = if (resolved.confirmed) {
-                        reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: saved?.lastHpRatio
-                    } else {
-                        saved?.lastHpRatio
-                    },
+                    hpRatio = hp,
                     status = when {
                         saved?.fainted == true -> TeamPokemonStatus.FAINTED
-                        resolved.confirmed &&
-                            reserveSlotVisible.getOrNull(resolved.cardIndex) == false ->
-                            TeamPokemonStatus.FAINTED
-                        resolved.confirmed &&
-                            (reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: 1f) <= .01f ->
-                            TeamPokemonStatus.FAINTED
+                        resolved.confirmed && reserveSlotVisible.getOrNull(cardIndex) == false -> TeamPokemonStatus.FAINTED
+                        hp != null && hp <= .01f -> TeamPokemonStatus.FAINTED
                         else -> TeamPokemonStatus.RESERVE
                     }
                 )
             }
+        }
         val bestVisibleScore = rawReserves
             .filter { it.visible && it.identityConfirmed }
             .maxOfOrNull { it.score }
@@ -1920,9 +1920,11 @@ class BattleEngine(private val repo: GameDataRepository) {
         cp: Int?,
         speciesId: String?,
         myTypes: List<String>,
-        enemyTypes: List<String>
+        enemyTypes: List<String>,
+        hpRatio: Float?
     ): Double {
         if (myTypes.isEmpty() || enemyTypes.isEmpty()) return 0.0
+        if (hpRatio != null && hpRatio <= .01f) return -10.0
 
         val saved = ownStates.find(ownIdentityKey(name, cp, speciesId))
         val ownRankingKey = saved?.speciesId ?: speciesId ?: name
@@ -1939,17 +1941,56 @@ class BattleEngine(private val repo: GameDataRepository) {
         )
         val myMoves = listOfNotNull(resolvedFast, resolvedC1, resolvedC2)
 
+        val liveEnemyMoves = listOfNotNull(
+            fast?.let { it to moveKnowledge(activeState, 0, it) },
+            charge1?.let { it to moveKnowledge(activeState, 1, it) },
+            charge2?.let { it to moveKnowledge(activeState, 2, it) }
+        )
+        val trustedEnemyMoves = liveEnemyMoves.filter {
+            it.second == MoveKnowledgeConfidence.CONFIRMED ||
+                it.second == MoveKnowledgeConfidence.MANUAL
+        }.map { it.first }
+
         val enemyRankingKey = activeState?.speciesId ?: enemySpeciesId ?: enemyName
         val enemyLikely = enemyRankingKey?.let(repo::likelyMoveset)
-        val enemyMoves = listOfNotNull(enemyLikely?.first, enemyLikely?.second, enemyLikely?.third)
+        val inferredEnemyMoves = listOfNotNull(enemyLikely?.first, enemyLikely?.second, enemyLikely?.third)
         val offense = myMoves.maxOfOrNull { TypeChart.multiplier(it.type, enemyTypes) } ?: 1.0
-        val danger = enemyMoves.maxOfOrNull { TypeChart.multiplier(it.type, myTypes) } ?: 1.0
+        val trustedDanger = trustedEnemyMoves.maxOfOrNull { TypeChart.multiplier(it.type, myTypes) }
+        val inferredDanger = inferredEnemyMoves.maxOfOrNull { TypeChart.multiplier(it.type, myTypes) } ?: 1.0
+        val danger = trustedDanger?.let { maxOf(it, 1.0 + (inferredDanger - 1.0) * .35) } ?: inferredDanger
+
         val typeBase = when (classify(myTypes, enemyTypes)) {
             MatchupState.FAVORABLE -> .35
             MatchupState.UNFAVORABLE -> -.35
             else -> 0.0
         }
-        return typeBase + (offense - 1.0) * .75 - (danger - 1.0) * .65
+        val hpAdjustment = hpRatio?.let { (it.coerceIn(0f, 1f) - .5f) * .34 } ?: 0f
+        val cheapestCharge = listOfNotNull(resolvedC1, resolvedC2)
+            .map { it.chargedCost }
+            .filter { it > 0 }
+            .minOrNull()
+        val storedEnergy = saved?.estimatedEnergy ?: 0
+        val energyAdjustment = when {
+            cheapestCharge != null && storedEnergy >= cheapestCharge -> .16
+            storedEnergy >= 70 -> .07
+            else -> 0.0
+        }
+        val shieldAdjustment =
+            (if (opponentShieldsRemaining == 0 && offense > 1.0) .06 else 0.0) -
+                (if (ownShieldsRemaining == 0 && danger > 1.0) .08 else 0.0)
+        val finishingAdjustment = if (
+            (lastOpponentHpRatio ?: 1f) <= .22f &&
+            resolvedFast != null &&
+            TypeChart.multiplier(resolvedFast.type, enemyTypes) > 1.0
+        ) .08 else 0.0
+
+        return typeBase +
+            (offense - 1.0) * .75 -
+            (danger - 1.0) * .65 +
+            hpAdjustment +
+            energyAdjustment +
+            shieldAdjustment +
+            finishingAdjustment
     }
 
     private data class ResolvedOwnReserve(
@@ -1987,9 +2028,9 @@ class BattleEngine(private val repo: GameDataRepository) {
             cardCps = reserveCardCps.toList(),
             cardDexes = reserveCardDexes.toList(),
             cardSpeciesIds = reserveCardSpeciesIds.toList()
-        ).mapIndexedNotNull { cardIndex, match ->
+        ).mapNotNull { match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
-                ResolvedOwnReserve(slot, cardIndex, match.cardCp, match.confirmed, match.source)
+                ResolvedOwnReserve(slot, match.cardIndex, match.cardCp, match.confirmed, match.source)
             }
         }
     }
