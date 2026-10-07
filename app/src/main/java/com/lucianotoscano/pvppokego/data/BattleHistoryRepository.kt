@@ -537,13 +537,15 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         shields: Int? = null,
         confidence: String? = null,
         nowMs: Long = System.currentTimeMillis(),
-        source: String = "engine"
+        source: String = "engine",
+        extraDetails: Map<String, String> = emptyMap()
     ) {
         val details = buildMap {
             hpRatio?.let { put("hpPercent", (it.coerceIn(0f, 1f) * 100f).toInt().toString()) }
             energyMin?.let { put("energyMin", it.toString()) }
             energyMax?.let { put("energyMax", it.toString()) }
             shields?.let { put("shields", it.toString()) }
+            putAll(extraDetails)
         }
         if (details.isEmpty()) return
         addEvent(actor, "ESTADO", "Estado da batalha", 1, nowMs, pokemon, confidence, source, null, details)
