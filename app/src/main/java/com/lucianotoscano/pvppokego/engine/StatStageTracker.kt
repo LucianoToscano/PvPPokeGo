@@ -29,6 +29,25 @@ internal object StatStageTracker {
 
         val targetSelf = move.buffTarget.equals("self", ignoreCase = true)
         val targetOpponent = move.buffTarget.equals("opponent", ignoreCase = true)
+        val targetBoth = move.buffTarget.equals("both", ignoreCase = true)
+
+        if (targetBoth) {
+            val selfBuffs = move.buffsSelf.ifEmpty { move.buffs }
+            val opponentBuffs = move.buffsOpponent.ifEmpty { move.buffs }
+            return Result(
+                self = Stages(
+                    attack = applyDelta(self.attack, selfBuffs.getOrElse(0) { 0 }, chance),
+                    defense = applyDelta(self.defense, selfBuffs.getOrElse(1) { 0 }, chance)
+                ),
+                opponent = Stages(
+                    attack = applyDelta(opponent.attack, opponentBuffs.getOrElse(0) { 0 }, chance),
+                    defense = applyDelta(opponent.defense, opponentBuffs.getOrElse(1) { 0 }, chance)
+                ),
+                deterministic = chance >= .999f,
+                chance = chance
+            )
+        }
+
         if (!targetSelf && !targetOpponent) {
             return Result(self, opponent, deterministic = false, chance = chance)
         }
