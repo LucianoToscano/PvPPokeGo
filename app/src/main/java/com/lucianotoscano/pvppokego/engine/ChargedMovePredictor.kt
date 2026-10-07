@@ -1,0 +1,190 @@
+package com.lucianotoscano.pvppokego.engine
+
+import com.lucianotoscano.pvppokego.data.ChargedThreatForecast
+import com.lucianotoscano.pvppokego.data.DamageForecast
+import com.lucianotoscano.pvppokego.data.EnemyEnergyForecast
+import com.lucianotoscano.pvppokego.data.GameDataRepository
+import com.lucianotoscano.pvppokego.data.MoveDef
+import com.lucianotoscano.pvppokego.data.ObservedDamageEstimate
+import com.lucianotoscano.pvppokego.data.PredictionEvidenceClass
+import com.lucianotoscano.pvppokego.data.StatStageRange
+import com.lucianotoscano.pvppokego.data.WeightedMove
+import kotlin.math.ceil
+
+/**
+ * Pure predictive layer: energy hypotheses -> per-Charged threat windows.
+ * It never mutates battle state and never sends input to Pokémon GO.
+ */
+internal object ChargedMovePredictor {
+    fun forecast(
+        repo: GameDataRepository,
+        energyTracker: EnemyEnergyTracker,
+        chargedMoves: List<WeightedMove>,
+        attackerId: String?,
+        attackerCp: Int?,
+        defenderId: String?,
+        defenderCp: Int?,
+        currentHpRatio: Float?,
+        reaction: ReactionWindowEstimator,
+        observedDamage: (MoveDef) -> ObservedDamageEstimate?,
+        attackerAttackStages: StatStageRange = StatStageRange(),
+        defenderDefenseStages: StatStageRange = StatStageRange()
+    ): EnemyEnergyForecast? {
+        val hypotheses = energyTracker.hypotheses()
+        if (hypotheses.isEmpty() || chargedMoves.isEmpty()) return null
+
+        val reactionTurns = reaction.reactionTurns()
+        val leadTimeMs = reaction.leadTimeMs()
+        val attacker = repo.pokemon(attackerId)
+        val defender = repo.pokemon(defenderId)
+
+        val candidates = chargedMoves.mapNotNull { weightedMove ->
+            val move = weightedMove.move
+            val cost = move.chargedCost.takeIf { it > 0 } ?: return@mapNotNull null
+            val perHypothesis = hypotheses.map { h ->
+                val missing = (cost - h.energy).coerceAtLeast(0)
+                val fastNeeded = if (missing == 0) 0 else {
+                    ceil(missing.toDouble() / h.fastMove.energyGain.coerceAtLeast(1).toDouble()).toInt()
+                }
+                val turns = fastNeeded * h.fastMove.turns
+                Triple(h, fastNeeded, turns)
+            }
+            val fastValues = perHypothesis.map { it.second to it.first.weight }
+            val turnValues = perHypothesis.map { it.third to it.first.weight }
+            val fastMin = fastValues.minOf { it.first }
+            val fastMax = fastValues.maxOf { it.first }
+            val fastLikely = weightedMedian(fastValues)
+            val turnsMin = turnValues.minOf { it.first }
+            val turnsMax = turnValues.maxOf { it.first }
+            val turnsLikely = weightedMedian(turnValues)
+            val readyPossible = hypotheses.any { it.energy >= cost }
+            val readyCertain = hypotheses.all { it.energy >= cost }
+            val doubleReadyPossible = cost * 2 <= 100 && hypotheses.any { it.energy >= cost * 2 }
+
+            val damage = DamageForecastEngine.forecast(
+                repo = repo,
+                attackerId = attackerId,
+                attackerCp = attackerCp,
+                defenderId = defenderId,
+                defenderCp = defenderCp,
+                move = move,
+                observed = observedDamage(move),
+                currentHpRatio = currentHpRatio,
+                attackerAttackStages = attackerAttackStages,
+                defenderDefenseStages = defenderDefenseStages
+            )
+
+            val fastDptValues = hypotheses.mapNotNull { h ->
+                if (attacker == null || defender == null) return@mapNotNull null
+                val aStats = repo.estimatedBattleStats(attacker.speciesId, attackerCp) ?: return@mapNotNull null
+                val dStats = repo.estimatedBattleStats(defender.speciesId, defenderCp) ?: return@mapNotNull null
+                val pct = DamageForecastEngine.modelDamagePercent(
+                    attacker = attacker,
+                    attackerStats = aStats,
+                    defender = defender,
+                    defenderStats = dStats,
+                    move = h.fastMove,
+                    attackerAttackStage = attackerAttackStages,
+                    defenderDefenseStage = defenderDefenseStages
+                ) ?: return@mapNotNull null
+                pct / h.fastMove.turns.coerceAtLeast(1).toFloat()
+            }
+            val eptValues = hypotheses.map {
+                it.fastMove.energyGain.toFloat() / it.fastMove.turns.coerceAtLeast(1).toFloat()
+            }
+
+            val currentHpPercent = currentHpRatio?.times(100f)
+            val likelyKo = damage != null &&
+                currentHpPercent != null &&
+                damage.averagePercent >= currentHpPercent - 1f
+
+            val prior = weightedMove.weight.coerceIn(.01f, 1f)
+            val mathematicalConfidence = energyTracker.confidence()
+            val urgency = when {
+                readyCertain -> 1f
+                readyPossible -> .92f
+                turnsMin <= reactionTurns -> .82f
+                turnsLikely <= reactionTurns + 2 -> .68f
+                else -> .45f
+            }
+            val damagePressure = damage?.let {
+                (it.averagePercent / (currentHpPercent ?: 100f).coerceAtLeast(10f)).coerceIn(0f, 1.4f)
+            } ?: .35f
+            val threat = (
+                urgency * .42f +
+                    damagePressure.coerceIn(0f, 1f) * .32f +
+                    mathematicalConfidence * .18f +
+                    prior * .08f
+                ).coerceIn(0f, 1f)
+
+            val evidenceClass = when {
+                hypotheses.size == 1 && readyCertain -> PredictionEvidenceClass.MATHEMATICALLY_POSSIBLE
+                prior >= .60f && mathematicalConfidence >= .70f -> PredictionEvidenceClass.ESTIMATE
+                else -> PredictionEvidenceClass.MATHEMATICALLY_POSSIBLE
+            }
+
+            ChargedThreatForecast(
+                move = move,
+                energyCost = cost,
+                currentEnergyMin = energyTracker.energyMin(),
+                currentEnergyMax = energyTracker.energyMax(),
+                fastMovesRemainingMin = fastMin,
+                fastMovesRemainingLikely = fastLikely,
+                fastMovesRemainingMax = fastMax,
+                turnsRemainingMin = turnsMin,
+                turnsRemainingLikely = turnsLikely,
+                turnsRemainingMax = turnsMax,
+                earliestTimeMs = turnsMin * EnemyEnergyTracker.TURN_MS.toLong(),
+                likelyTimeMs = turnsLikely * EnemyEnergyTracker.TURN_MS.toLong(),
+                prepareInTurns = (turnsMin - reactionTurns).coerceAtLeast(0),
+                readyPossible = readyPossible,
+                readyCertain = readyCertain,
+                doubleReadyPossible = doubleReadyPossible,
+                confidence = (mathematicalConfidence * .78f + prior * .22f).coerceIn(0f, 1f),
+                evidenceClass = evidenceClass,
+                eptMin = eptValues.minOrNull() ?: 0f,
+                eptMax = eptValues.maxOrNull() ?: 0f,
+                dptMin = fastDptValues.minOrNull(),
+                dptMax = fastDptValues.maxOrNull(),
+                dpeMin = damage?.minPercent?.div(cost.toFloat()),
+                dpeMax = damage?.maxPercent?.div(cost.toFloat()),
+                damageForecast = damage,
+                likelyKo = likelyKo,
+                threatScore = threat
+            )
+        }.sortedWith(
+            compareByDescending<ChargedThreatForecast> { it.readyCertain }
+                .thenByDescending { it.readyPossible }
+                .thenBy { it.turnsRemainingMin }
+                .thenByDescending { it.threatScore }
+        )
+
+        if (candidates.isEmpty()) return null
+        return EnemyEnergyForecast(
+            energyMin = energyTracker.energyMin(),
+            energyLikely = energyTracker.energyLikely(),
+            energyMax = energyTracker.energyMax(),
+            hypothesisCount = energyTracker.hypothesisCount(),
+            fastMoveNames = hypotheses
+                .sortedByDescending { it.weight }
+                .map { repo.localizedMoveName(it.fastMove) }
+                .distinct()
+                .take(3),
+            candidates = candidates,
+            leadTimeMs = leadTimeMs,
+            reactionTurns = reactionTurns,
+            confidence = energyTracker.confidence()
+        )
+    }
+
+    private fun weightedMedian(values: List<Pair<Int, Float>>): Int {
+        if (values.isEmpty()) return 0
+        val total = values.sumOf { it.second.toDouble() }.toFloat().takeIf { it > 0f } ?: 1f
+        var running = 0f
+        values.sortedBy { it.first }.forEach { (value, weight) ->
+            running += weight / total
+            if (running >= .5f) return value
+        }
+        return values.maxByOrNull { it.second }?.first ?: 0
+    }
+}
