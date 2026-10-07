@@ -251,10 +251,6 @@ data class ChargedThreatForecast(
     val readyPossible: Boolean,
     val readyCertain: Boolean,
     val doubleReadyPossible: Boolean,
-    /** Repeated same-Charged Fast counts from the likely residual-energy state, e.g. 5,4,5,4. */
-    val fastCountSequenceLikely: List<Int> = emptyList(),
-    /** Heuristic probability that this cheaper move is the bait among currently affordable options. */
-    val baitProbability: Float = 0f,
     val confidence: Float,
     val evidenceClass: PredictionEvidenceClass,
     val eptMin: Float,
@@ -271,7 +267,11 @@ data class ChargedThreatForecast(
     val shieldPressureScore: Float = 0f,
     val damageForecast: DamageForecast? = null,
     val likelyKo: Boolean = false,
-    val threatScore: Float = 0f
+    val threatScore: Float = 0f,
+    /** Repeated same-Charged Fast counts from the likely residual-energy state, e.g. 5,4,5,4. */
+    val fastCountSequenceLikely: List<Int> = emptyList(),
+    /** Heuristic probability that this cheaper move is the bait among currently affordable options. */
+    val baitProbability: Float = 0f
 )
 
 data class EnemyEnergyForecast(
