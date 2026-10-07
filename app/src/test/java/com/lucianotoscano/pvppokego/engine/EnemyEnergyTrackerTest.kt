@@ -156,4 +156,31 @@ class EnemyEnergyTrackerTest {
         assertTrue(projected.maxByOrNull { it.weight }!!.energy >= 30)
     }
 
+
+    @Test
+    fun impossibleChargedRecoveryLowersConsistencyAndRecordsAnomaly() {
+        val move = fast("F", 10, 2)
+        val tracker = EnemyEnergyTracker()
+        tracker.reset(listOf(WeightedMove(move, 1f)))
+        tracker.observeFastCompletion(2, 90L, 1f) // 20E
+        val before = tracker.consistencyScore()
+        assertTrue(tracker.observeCharged(charged("C50", 50)))
+        assertTrue(tracker.consistencyScore() < before)
+        assertEquals(1, tracker.anomalyCount())
+    }
+
+    @Test
+    fun consistencySurvivesSnapshotRestore() {
+        val move = fast("F", 10, 2)
+        val tracker = EnemyEnergyTracker()
+        tracker.reset(listOf(WeightedMove(move, 1f)))
+        tracker.observeFastCompletion(1, 100L, .95f, observedIntervalMs = 4_000L)
+        val snapshot = tracker.snapshot()
+
+        val restored = EnemyEnergyTracker()
+        restored.reset(listOf(WeightedMove(move, 1f)), snapshot)
+        assertEquals(snapshot.anomalyCount, restored.anomalyCount())
+        assertEquals(snapshot.consistencyScore, restored.consistencyScore(), .0001f)
+    }
+
 }
