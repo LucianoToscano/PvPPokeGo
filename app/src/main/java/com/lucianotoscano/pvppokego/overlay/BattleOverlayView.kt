@@ -701,12 +701,29 @@ class BattleOverlayView(
         canvas.drawRect(cx-radius,cy-radius,cx+radius,cy+radius,paint)
         if (settings.showEnergyProgress) {
             val progress=prediction.progress.coerceIn(0f,1f)
+            val primaryColor=typeColor(prediction.move.type)
             val fillTop=cy+radius-2f*radius*progress
-            paint.color=hudColor(typeColor(prediction.move.type),.92f)
+            paint.color=hudColor(primaryColor,.92f)
             canvas.drawRect(cx-radius,fillTop,cx+radius,cy+radius,paint)
             if (progress>.02f && progress<.98f) {
                 paint.color=hudColor(Color.WHITE,.62f)
                 canvas.drawRect(cx-radius,fillTop-1.1f*u(),cx+radius,fillTop+1.1f*u(),paint)
+            }
+
+            // One full Charged stays visible; a darker second layer shows overfarm
+            // toward another copy, up to Pokemon GO's 100-energy cap.
+            if (prediction.ready && prediction.overflowProgress > .01f) {
+                val overflow=prediction.overflowProgress.coerceIn(0f,1f)
+                val overflowTop=cy+radius-2f*radius*overflow
+                val dark=Color.rgb(
+                    (Color.red(primaryColor)*.48f).toInt().coerceIn(0,255),
+                    (Color.green(primaryColor)*.48f).toInt().coerceIn(0,255),
+                    (Color.blue(primaryColor)*.48f).toInt().coerceIn(0,255)
+                )
+                paint.color=hudColor(dark,.96f)
+                canvas.drawRect(cx-radius,overflowTop,cx+radius,cy+radius,paint)
+                paint.color=hudColor(Color.WHITE,.72f)
+                canvas.drawRect(cx-radius,overflowTop-1.1f*u(),cx+radius,overflowTop+1.1f*u(),paint)
             }
         } else {
             paint.color=hudColor(typeColor(prediction.move.type),.90f)
