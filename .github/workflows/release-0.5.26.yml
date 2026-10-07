@@ -40,6 +40,10 @@ jobs:
           grep -q 'android:roundIcon="@mipmap/ic_launcher_round"' app/src/main/AndroidManifest.xml
           test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          test -s app/src/main/res/mipmap-anydpi/ic_launcher.xml
+          test -s app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
+          grep -q '@drawable/pvppokego_launcher' app/src/main/res/mipmap-anydpi/ic_launcher.xml
+          grep -q '@drawable/pvppokego_launcher' app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
           grep -q '@drawable/pvppokego_launcher' app/src/main/res/drawable/pvppokego_launcher_foreground.xml
           test -s app/src/main/res/drawable-nodpi/pvppokego_launcher.png
 
