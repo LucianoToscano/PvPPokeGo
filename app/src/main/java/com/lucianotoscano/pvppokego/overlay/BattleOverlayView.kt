@@ -320,7 +320,6 @@ class BattleOverlayView(
         val forecast = state.incomingDamagePreview ?: return
         val hp = state.playerHpRatio?.coerceIn(0f, 1f) ?: return
         val yFraction = state.playerHpBarYFraction?.takeIf { it in 0f..1f } ?: return
-        if (!state.chargedIncoming) return
         if (
             state.captureHealth == com.lucianotoscano.pvppokego.data.CaptureHealth.STALE ||
             state.captureHealth == com.lucianotoscano.pvppokego.data.CaptureHealth.PAUSED
@@ -341,8 +340,9 @@ class BattleOverlayView(
         val bestX = left + fullWidth * bestRemaining
         val worstX = left + fullWidth * worstRemaining
 
+        val predictiveOnly = !state.chargedIncoming
         paint.style = Paint.Style.FILL
-        paint.color = hudColor(Color.rgb(238, 70, 64), .34f)
+        paint.color = hudColor(Color.rgb(238, 70, 64), if (predictiveOnly) .22f else .34f)
         canvas.drawRoundRect(RectF(worstX, y, currentX, y + barHeight), 2.5f*u(), 2.5f*u(), paint)
         paint.color = hudColor(Color.rgb(255, 184, 58), .55f)
         canvas.drawRect(bestX - 1.2f*u(), y - 1f*u(), bestX + 1.2f*u(), y + barHeight + 1f*u(), paint)
@@ -357,8 +357,9 @@ class BattleOverlayView(
                 com.lucianotoscano.pvppokego.data.DamageForecastConfidence.OBSERVED_ESTIMATED -> "OBS~"
                 com.lucianotoscano.pvppokego.data.DamageForecastConfidence.MODEL -> "MODELO"
             }
+            val phase = if (predictiveOnly) "PREVIEW" else "IMPACTO"
             val shields = if (state.ownShieldsRemaining > 0) "ESC " + state.ownShieldsRemaining else "SEM ESCUDO"
-            val label = shields + " • -" + "%.0f".format(forecast.minPercent) + "-" +
+            val label = phase + " • " + shields + " • -" + "%.0f".format(forecast.minPercent) + "-" +
                 "%.0f".format(forecast.maxPercent) + "% • →" + "%.0f".format(remainMin) + "-" +
                 "%.0f".format(remainMax) + "% • " + source
             paint.color = hudColor(Color.WHITE, .96f)
@@ -423,56 +424,108 @@ class BattleOverlayView(
         }
         if (settings.showHudText) {
             val predictive = state.enemyEnergyForecast
-            val fallback = state.charged1 ?: state.charged2
-            val energyText = when {
-                predictive != null && predictive.energyMin != predictive.energyMax ->
-                    "⚡ " + predictive.energyMin + "-" + predictive.energyMax + " E • " + predictive.hypothesisCount + " hipóteses"
-                predictive != null ->
-                    "⚡ " + predictive.energyLikely + " E • " + "%.0f".format(predictive.confidence * 100f) + "% modelo"
-                fallback != null -> when (fallback.confidence) {
-                    EnergyConfidence.CONFIRMED -> "ENERGIA ${fallback.currentEnergy} • CONFIRMADA"
-                    EnergyConfidence.ESTIMATED -> "ENERGIA ~${fallback.currentEnergy} • ESTIMADA"
-                    EnergyConfidence.RANGE -> "ENERGIA ${fallback.minEnergy}-${fallback.maxEnergy} • FAIXA"
+            if (predictive != null) {
+                val energyText = if (predictive.energyMin == predictive.energyMax) {
+                    "⚡ " + predictive.energyLikely + " E"
+                } else {
+                    "⚡ " + predictive.energyMin + "-" + predictive.energyMax + " E"
                 }
-                else -> null
-            }
-            if (energyText != null) {
+                val fastHypothesis = if (predictive.fastMoveNames.size > 1) {
+                    " • " + predictive.fastMoveNames.size + " FAST possíveis"
+                } else ""
                 paint.color=hudColor(Color.WHITE,.84f)
                 paint.textAlign=Paint.Align.CENTER
-                paint.textSize=9.5f*u()*bs
+                paint.textSize=9.4f*u()*bs
                 paint.typeface=Typeface.DEFAULT_BOLD
                 paint.setShadowLayer(2f,0f,1f,Color.BLACK)
-                canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint)
-                paint.clearShadowLayer()
-            }
-            predictive?.candidates?.take(2)?.forEachIndexed { index, threat ->
-                val status = when {
-                    threat.readyCertain -> "READY"
-                    threat.readyPossible -> "READY?"
-                    threat.fastMovesRemainingMin == threat.fastMovesRemainingMax ->
-                        "+" + threat.fastMovesRemainingMin + " FAST"
-                    else -> "+" + threat.fastMovesRemainingMin + "-" + threat.fastMovesRemainingMax + " FAST"
-                }
-                val danger = threat.readyPossible || threat.turnsRemainingMin <= predictive.reactionTurns
-                val timeText = if (threat.readyPossible) "" else {
-                    " • ~" + "%.1f".format(threat.likelyTimeMs / 1000f) + "s"
-                }
-                paint.color = hudColor(
-                    if (danger) Color.rgb(245, 175, 52) else Color.WHITE,
-                    if (danger) .96f else .80f
-                )
-                paint.textSize=8.9f*u()*bs
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK)
                 canvas.drawText(
-                    shortMoveName(threat.move.name) + "  " + status + timeText,
+                    energyText + fastHypothesis,
                     centerX,
-                    chargedY + chargedRadius + (69f + index * 14f) * u() * bs,
+                    chargedY+chargedRadius+53f*u()*bs,
                     paint
                 )
                 paint.clearShadowLayer()
+                drawPredictiveThreatRows(
+                    canvas,
+                    centerX,
+                    chargedY+chargedRadius+69f*u()*bs,
+                    bs,
+                    predictive
+                )
+            } else {
+                val p = state.charged1 ?: state.charged2
+                if (p != null) {
+                    val energyText = when (p.confidence) {
+                        EnergyConfidence.CONFIRMED -> "ENERGIA " + p.currentEnergy + " • CONFIRMADA"
+                        EnergyConfidence.ESTIMATED -> "ENERGIA ~" + p.currentEnergy + " • ESTIMADA"
+                        EnergyConfidence.RANGE -> "ENERGIA " + p.minEnergy + "-" + p.maxEnergy + " • FAIXA"
+                    }
+                    paint.color=hudColor(Color.WHITE,.82f)
+                    paint.textAlign=Paint.Align.CENTER
+                    paint.textSize=9.5f*u()*bs
+                    paint.typeface=Typeface.DEFAULT_BOLD
+                    paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+                    canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint)
+                    paint.clearShadowLayer()
+                }
             }
         }
-        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 138f*u()*bs, 146f*u()*bs)
+        drawEditSelection(
+            canvas,
+            BLOCK_ENEMY_MOVES,
+            centerX,
+            (fastY+chargedY)/2f + 11f*u()*bs,
+            142f*u()*bs,
+            148f*u()*bs
+        )
+    }
+
+    private fun drawPredictiveThreatRows(
+        canvas: Canvas,
+        centerX: Float,
+        firstY: Float,
+        bs: Float,
+        forecast: com.lucianotoscano.pvppokego.data.EnemyEnergyForecast
+    ) {
+        val candidates = forecast.candidates
+            .sortedWith(
+                compareByDescending<com.lucianotoscano.pvppokego.data.ChargedThreatForecast> { it.readyCertain }
+                    .thenByDescending { it.readyPossible }
+                    .thenBy { it.turnsRemainingMin }
+                    .thenByDescending { it.threatScore }
+            )
+            .take(2)
+        candidates.forEachIndexed { index, candidate ->
+            val status = when {
+                candidate.readyCertain && candidate.likelyKo -> "DANGER"
+                candidate.readyCertain -> "READY"
+                candidate.readyPossible -> "READY?"
+                candidate.turnsRemainingMin <= forecast.reactionTurns -> "PREPARE"
+                else -> "+" + candidate.fastMovesRemainingLikely + " FAST"
+            }
+            val time = when {
+                candidate.readyPossible -> "agora"
+                candidate.likelyTimeMs <= 0L -> "agora"
+                else -> "~" + "%.1f".format(candidate.likelyTimeMs / 1000f) + "s"
+            }
+            val confidence = (candidate.confidence * 100f).toInt().coerceIn(0, 100)
+            val line = shortMoveName(candidate.move.name) + "  " + status + " • " + time + " • " + confidence + "%"
+            paint.color = hudColor(
+                when {
+                    candidate.readyCertain && candidate.likelyKo -> Color.rgb(244, 72, 68)
+                    candidate.readyPossible -> Color.rgb(244, 112, 64)
+                    candidate.turnsRemainingMin <= forecast.reactionTurns -> Color.rgb(245, 175, 52)
+                    else -> Color.WHITE
+                },
+                .94f
+            )
+            paint.textAlign = Paint.Align.CENTER
+            paint.textSize = 9.2f*u()*bs
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.setShadowLayer(3f,0f,1.1f,Color.BLACK)
+            canvas.drawText(line, centerX, firstY + index * 15f*u()*bs, paint)
+            paint.clearShadowLayer()
+        }
     }
 
     private fun drawObservedDamageBadge(
