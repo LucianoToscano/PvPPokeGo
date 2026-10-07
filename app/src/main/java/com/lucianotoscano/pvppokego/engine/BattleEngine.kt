@@ -1263,9 +1263,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun chargedUsed(move: MoveDef): Boolean {
         ensurePredictiveEnergyInitialized()
         val ok = if (predictiveEnergy.isInitialized) {
-            predictiveEnergy.observeCharged(move)
-            syncLegacyEnemyEnergyFromPredictive()
-            true
+            predictiveEnergy.observeCharged(move).also { accepted ->
+                if (accepted) syncLegacyEnemyEnergyFromPredictive()
+            }
         } else {
             tracker.onChargedMove(move)
         }
