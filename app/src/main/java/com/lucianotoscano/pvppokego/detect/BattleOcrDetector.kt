@@ -31,14 +31,37 @@ class BattleOcrDetector(
     private val visualRecognizer = PokemonVisualRecognizer(context.applicationContext)
     private val reservePortraitLock = Any()
     private val reservePortraits = arrayOfNulls<Bitmap>(2)
+    /** Stable portraits captured from the three Pokémon on the team-selection screen. */
+    private val ownTeamPortraits = arrayOfNulls<Bitmap>(3)
 
     /**
      * Live thumbnails from Pokemon GO's native reserve cards.
      * Presentation-only fallback: identity and matchup still require CP/species/form confidence.
      */
     fun copyReservePortraits(): Pair<Bitmap?, Bitmap?> = synchronized(reservePortraitLock) {
-        reservePortraits[0]?.copy(Bitmap.Config.ARGB_8888, false) to
-            reservePortraits[1]?.copy(Bitmap.Config.ARGB_8888, false)
+        reservePortraits[0]?.takeUnless { it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false) to
+            reservePortraits[1]?.takeUnless { it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false)
+    }
+
+    /**
+     * Copies portraits in original team-slot order (0, 1, 2). These thumbnails are
+     * presentation-only; they never change OCR/species confidence.
+     */
+    fun copyOwnTeamPortraits(): List<Bitmap?> = synchronized(reservePortraitLock) {
+        ownTeamPortraits.map { portrait ->
+            portrait?.takeUnless { it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false)
+        }
+    }
+
+    fun clearCachedPortraits() = synchronized(reservePortraitLock) {
+        reservePortraits.indices.forEach { index ->
+            reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            reservePortraits[index] = null
+        }
+        ownTeamPortraits.indices.forEach { index ->
+            ownTeamPortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            ownTeamPortraits[index] = null
+        }
     }
 
     private fun cacheReservePortrait(index: Int, source: Bitmap) {
@@ -56,6 +79,15 @@ class BattleOcrDetector(
         synchronized(reservePortraitLock) {
             reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
             reservePortraits[index] = thumb
+        }
+    }
+
+    private fun cacheOwnTeamPortrait(index: Int, source: Bitmap) {
+        if (source.isRecycled || index !in 0..2) return
+        val thumb = Bitmap.createScaledBitmap(source, TEAM_THUMB_SIZE, TEAM_THUMB_SIZE, true)
+        synchronized(reservePortraitLock) {
+            ownTeamPortraits[index]?.let { if (!it.isRecycled) it.recycle() }
+            ownTeamPortraits[index] = thumb
         }
     }
 
@@ -174,7 +206,13 @@ class BattleOcrDetector(
                 async {
                     val ocrJob = async { recognizeTeamSlotEvidence(textRois[index]) }
                     val visualJob = async { visualRecognizer.match(portraitRois[index]) }
-                    fuseTeamSlotEvidence(ocrJob.await(), visualJob.await())
+                    val detected = fuseTeamSlotEvidence(ocrJob.await(), visualJob.await())
+                    // Cache only when this column produced real identity evidence. This prevents
+                    // empty transition/battle frames from replacing a good team portrait.
+                    if (detected != null && detected.confidence >= TEAM_PORTRAIT_MIN_CONFIDENCE) {
+                        cacheOwnTeamPortrait(index, portraitRois[index])
+                    }
+                    detected
                 }
             }
             jobs.mapNotNull { it.await() }
@@ -360,12 +398,7 @@ class BattleOcrDetector(
     }
 
     override fun close() {
-        synchronized(reservePortraitLock) {
-            reservePortraits.indices.forEach { index ->
-                reservePortraits[index]?.let { if (!it.isRecycled) it.recycle() }
-                reservePortraits[index] = null
-            }
-        }
+        clearCachedPortraits()
         recognizer.close()
     }
 
@@ -442,5 +475,7 @@ class BattleOcrDetector(
         private const val VISUAL_FORM_ACCEPT_CONFIDENCE = 0.86f
         private const val VISUAL_CONFLICT_CONFIDENCE = 0.80f
         private const val RESERVE_THUMB_SIZE = 96
+        private const val TEAM_THUMB_SIZE = 128
+        private const val TEAM_PORTRAIT_MIN_CONFIDENCE = 0.70f
     }
 }
