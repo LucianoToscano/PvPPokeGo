@@ -181,7 +181,7 @@ object BattleAssistAdvisor {
                 val insideReactionWindow = threat.turnsRemainingMin <= forecast.reactionTurns
                 val nearWindow = threat.fastMovesRemainingMin <= 2 ||
                     threat.turnsRemainingMin <= forecast.reactionTurns + 2
-                if (insideReactionWindow || nearWindow) {
+                if (insideReactionWindow || (nearWindow && ownCharged.none { it.ready })) {
                     val fastText = if (threat.fastMovesRemainingMin == threat.fastMovesRemainingMax) {
                         threat.fastMovesRemainingMin.toString() + " Fast"
                     } else {
