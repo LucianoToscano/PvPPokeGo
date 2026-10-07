@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,7 +80,7 @@ jobs:
           cp app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk artifact/PvPPokeGo-0.5.25-recorder-compat-QA-debug.apk
           unzip -t artifact/PvPPokeGo-0.5.25-QA-debug.apk
           unzip -t artifact/PvPPokeGo-0.5.25-recorder-compat-QA-debug.apk
-          sha256sum artifact/*.apk | tee artifact/SHA256SUMS.txt
+          shasum -a 256 artifact/*.apk | tee artifact/SHA256SUMS.txt
 
       - name: Upload QA artifacts
         uses: actions/upload-artifact@v4
