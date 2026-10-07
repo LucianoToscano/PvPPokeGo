@@ -441,13 +441,6 @@ data class BattleUiState(
     val strategyPatternConfidence: Float = 0f,
     /** Predictive enemy-energy model. Null until the enemy identity/movepool is usable. */
     val enemyEnergyForecast: EnemyEnergyForecast? = null,
-    /** Range-based CMP, honest when hidden IVs overlap. */
-    val cmpForecast: CmpForecast? = null,
-    /** Formal shield decision derived from the same threat/damage ranges shown on HUD. */
-    val shieldDecision: ShieldDecisionForecast? = null,
-    val optimalThrow: OptimalThrowForecast? = null,
-    val farmDown: FarmDownForecast? = null,
-    val sacSwap: SacSwapForecast? = null,
     val enemyAttackStages: StatStageRange = StatStageRange(),
     val enemyDefenseStages: StatStageRange = StatStageRange(),
     val playerAttackStages: StatStageRange = StatStageRange(),
@@ -460,5 +453,12 @@ data class BattleUiState(
     val battleConfidence: Float = 0f,
     /** Compact per-enemy memory for optional history display. */
     val enemyHistory: List<String> = emptyList(),
-    val debugText: String? = null
+    val debugText: String? = null,
+    /** Range-based CMP, honest when hidden IVs overlap. Appended for constructor compatibility. */
+    val cmpForecast: CmpForecast? = null,
+    /** Formal shield decision derived from the same threat/damage ranges shown on HUD. */
+    val shieldDecision: ShieldDecisionForecast? = null,
+    val optimalThrow: OptimalThrowForecast? = null,
+    val farmDown: FarmDownForecast? = null,
+    val sacSwap: SacSwapForecast? = null
 )
