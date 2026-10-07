@@ -1183,15 +1183,44 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             confidence = ownEnergy?.confidence?.let(::energyConfidenceLabel),
             nowMs = nowMs
         )
+        val predictive = ui.enemyEnergyForecast
+        val topThreat = predictive?.candidates?.firstOrNull()
         historyRecorder.recordState(
             actor = "INIMIGO",
             pokemon = ui.opponentName,
             hpRatio = engine?.latestOpponentHpRatio(),
-            energyMin = enemyEnergy?.minEnergy,
-            energyMax = enemyEnergy?.maxEnergy,
+            energyMin = predictive?.energyMin ?: enemyEnergy?.minEnergy,
+            energyMax = predictive?.energyMax ?: enemyEnergy?.maxEnergy,
             shields = ui.opponentShieldsRemaining,
-            confidence = enemyEnergy?.confidence?.let(::energyConfidenceLabel),
-            nowMs = nowMs
+            confidence = if (predictive != null) {
+                "PREVISÃO " + "%.0f".format(predictive.confidence * 100f) + "%"
+            } else {
+                enemyEnergy?.confidence?.let(::energyConfidenceLabel)
+            },
+            nowMs = nowMs,
+            extraDetails = buildMap {
+                predictive?.let {
+                    put("hypotheses", it.hypothesisCount.toString())
+                    put("reactionTurns", it.reactionTurns.toString())
+                    put("leadTimeMs", it.leadTimeMs.toString())
+                }
+                topThreat?.let {
+                    put("nextCharged", gameRepo.localizedMoveName(it.move))
+                    put("turnsMin", it.turnsRemainingMin.toString())
+                    put("turnsLikely", it.turnsRemainingLikely.toString())
+                    put("turnsMax", it.turnsRemainingMax.toString())
+                    put("fastMin", it.fastMovesRemainingMin.toString())
+                    put("fastLikely", it.fastMovesRemainingLikely.toString())
+                    put("fastMax", it.fastMovesRemainingMax.toString())
+                    put("threat", "%.3f".format(it.threatScore))
+                    put("confidence", "%.3f".format(it.confidence))
+                    put("readyPossible", it.readyPossible.toString())
+                    put("readyCertain", it.readyCertain.toString())
+                    put("baitPotential", it.baitPotential.toString())
+                    put("shieldPressure", "%.3f".format(it.shieldPressureScore))
+                    put("mayKoBeforeCharged", it.mayKoBeforeCharged.toString())
+                }
+            }
         )
     }
 
