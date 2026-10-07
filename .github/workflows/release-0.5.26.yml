@@ -148,15 +148,13 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Unit tests and debug builds
+      - name: Unit tests and standard debug build
         shell: bash
         run: |
           set -euo pipefail
           gradle --no-daemon --stacktrace \
             :app:testStandardDebugUnitTest \
-            :app:testRecorderCompatDebugUnitTest \
-            :app:assembleStandardDebug \
-            :app:assembleRecorderCompatDebug
+            :app:assembleStandardDebug
 
       - name: Verify merged manifests
         shell: bash
@@ -169,21 +167,14 @@ jobs:
           grep -q 'android:foregroundServiceType="mediaProjection"' "$STD_MANIFEST"
           cp "$STD_MANIFEST" audit/AndroidManifest-standardDebug.xml
 
-          COMPAT_MANIFEST="$(find app/build/intermediates/merged_manifests/recorderCompatDebug -name AndroidManifest.xml | head -1)"
-          test -n "$COMPAT_MANIFEST"
-          grep -q 'PvPPokeGoAccessibilityCaptureService' "$COMPAT_MANIFEST"
-          grep -q 'FOREGROUND_SERVICE_SPECIAL_USE\|specialUse\|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$COMPAT_MANIFEST"
-          cp "$COMPAT_MANIFEST" audit/AndroidManifest-recorderCompatDebug.xml
 
       - name: Verify debug APK integrity
         shell: bash
         run: |
           set -euo pipefail
           STD=app/build/outputs/apk/standard/debug/app-standard-debug.apk
-          COMPAT=app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk
           test -s "$STD"
-          test -s "$COMPAT"
-          for APK in "$STD" "$COMPAT"; do
+          for APK in "$STD"; do
             unzip -t "$APK"
             unzip -l "$APK" | grep -q 'pvppokego_launcher.png'
             unzip -l "$APK" | grep -q 'gamemaster.json'
@@ -197,7 +188,6 @@ jobs:
             echo "Accessibility implementation leaked into standard APK"
             exit 1
           fi
-          unzip -p "$COMPAT" classes.dex | strings | grep -q 'PvPPokeGoAccessibilityCaptureService'
 
       - name: Detect permanent signing availability
         shell: bash
@@ -213,14 +203,13 @@ jobs:
             echo "Permanent release signing: NOT configured; delivery will be QA/debug only"
           fi
 
-      - name: Build unsigned release variants
+      - name: Build unsigned standard release
         if: env.SIGNING_READY == 'true'
         shell: bash
         run: |
           set -euo pipefail
           gradle --no-daemon --stacktrace \
-            :app:assembleStandardRelease \
-            :app:assembleRecorderCompatRelease
+            :app:assembleStandardRelease
 
       - name: Package and sign delivery
         shell: bash
@@ -235,22 +224,10 @@ jobs:
             "$APKSIGNER" sign               --ks "$RUNNER_TEMP/pvppokego-release.jks"               --ks-key-alias "$RELEASE_KEY_ALIAS"               --ks-pass env:RELEASE_STORE_PASSWORD               --key-pass env:RELEASE_KEY_PASSWORD               --out delivery/PvPPokeGo-0.5.26.apk               "$STD_UNSIGNED"
             "$APKSIGNER" verify --verbose --print-certs delivery/PvPPokeGo-0.5.26.apk | tee audit/signing-standard.txt
 
-            COMPAT_UNSIGNED="$(find app/build/outputs/apk/recorderCompat/release -name '*unsigned.apk' | head -1)"
-            test -s "$COMPAT_UNSIGNED"
-            "$APKSIGNER" sign \
-              --ks "$RUNNER_TEMP/pvppokego-release.jks" \
-              --ks-key-alias "$RELEASE_KEY_ALIAS" \
-              --ks-pass env:RELEASE_STORE_PASSWORD \
-              --key-pass env:RELEASE_KEY_PASSWORD \
-              --out delivery/PvPPokeGo-0.5.26-recorder-compat.apk \
-              "$COMPAT_UNSIGNED"
-            "$APKSIGNER" verify --verbose --print-certs delivery/PvPPokeGo-0.5.26-recorder-compat.apk | tee audit/signing-recorder-compat.txt
             echo "SIGNED_RELEASE=true" > audit/signing-status.txt
           else
             cp app/build/outputs/apk/standard/debug/app-standard-debug.apk \
               delivery/PvPPokeGo-0.5.26-QA-debug.apk
-            cp app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk \
-              delivery/PvPPokeGo-0.5.26-recorder-compat-QA-debug.apk
             echo "SIGNED_RELEASE=false" > audit/signing-status.txt
             echo "GitHub Secrets for the permanent keystore were not configured." >> audit/signing-status.txt
           fi
@@ -296,7 +273,6 @@ jobs:
           path: |
             delivery/*0.5.26.apk
             delivery/*0.5.26-QA-debug.apk
-            delivery/*recorder-compat*.apk
             delivery/*.apk.sha256
           if-no-files-found: ignore
           retention-days: 30
