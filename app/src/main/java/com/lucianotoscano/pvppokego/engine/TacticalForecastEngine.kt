@@ -20,10 +20,10 @@ internal object TacticalForecastEngine {
         val hpPercent = enemyHpRatio?.times(100f)?.takeIf { it > 0f } ?: return null
         val hits = ceil(hpPercent / damage).toInt().coerceAtLeast(1)
         val turns = hits * ownFastTurns.coerceAtLeast(1)
+        val fastKoRisk = enemyForecast?.candidates?.any { it.mayKoBeforeCharged } == true
         val threatTurns = enemyForecast?.candidates
-            ?.filterNot { it.mayKoBeforeCharged }
             ?.minOfOrNull { if (it.readyPossible) 0 else it.turnsRemainingMin }
-        val safe = threatTurns == null || turns < threatTurns
+        val safe = !fastKoRisk && (threatTurns == null || turns < threatTurns)
         val confidence = (
             .45f +
                 (enemyForecast?.consistencyScore ?: .55f) * .25f +
@@ -94,7 +94,10 @@ internal object TacticalForecastEngine {
         }.filter { (_, eff) -> eff <= currentEff * .82 }
         if (candidates.isEmpty()) return null
         val chosen = candidates
-            .sortedWith(compareBy<Pair<ReserveState, Double>> { it.second }.thenBy { it.first.score })
+            .sortedWith(
+                compareBy<Pair<ReserveState, Double>> { it.second }
+                    .thenByDescending { it.first.score }
+            )
             .first()
         return SacSwapForecast(
             targetName = chosen.first.name ?: return null,
