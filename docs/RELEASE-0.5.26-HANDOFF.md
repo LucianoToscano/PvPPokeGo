@@ -62,8 +62,26 @@ Além da suíte já existente, a 0.5.26 adiciona testes para:
 - `ShieldDecisionEngine`;
 - `TacticalForecastEngine`.
 
-Um harness JVM local executado durante desenvolvimento destes cinco módulos concluiu 12 testes com 0 falhas. Isso não substitui o build/test Android via Gradle.
+Um harness JVM local executado durante desenvolvimento destes módulos concluiu **14 testes com 0 falhas**. O `BattleAssistAdvisor.kt` atualizado também foi compilado isoladamente com `kotlinc` + stubs mínimos de Android/repositório para validar sintaxe e tipos: **PASS**. Isso não substitui o build/test Android via Gradle.
 
 ## Regra de entrega
 
 Só chamar um arquivo de APK 0.5.26 se ele vier do código 0.5.26 compilado e passar pelos checks acima. Nunca renomear APK antigo.
+
+
+## Estado real da geração do APK
+
+Na consolidação final desta branch, o código chegou ao commit `c78ed58bc2f85f51856540e26f7ff2d07c82974f`.
+
+Validação disponível:
+- harness JVM puro: **14 PASS / 0 FAIL**;
+- compilação isolada de `BattleAssistAdvisor.kt`: **PASS**;
+- PR #34 permanece draft e mergeável.
+
+Bloqueio de infraestrutura:
+- GitHub Actions `macos-latest` e `ubuntu-latest` encerraram antes de qualquer step;
+- exemplo mais recente: run `37667290085`, job `112949660883`, `steps = null`, sem log de execução disponível;
+- ambiente local atual não possui Android SDK, Gradle, aapt2, apksigner ou zipalign;
+- DNS para os hosts necessários ao bootstrap do Gradle/Android SDK está indisponível neste runtime.
+
+Consequência: **nenhum APK 0.5.26 foi gerado nem renomeado artificialmente**. A entrega só deve avançar para APK quando um runner Android/Gradle realmente executar os comandos de build e validação.
