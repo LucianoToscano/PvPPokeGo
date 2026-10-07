@@ -16,6 +16,7 @@ import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.SettingsRepository
+import com.lucianotoscano.pvppokego.engine.AdviceStabilityGate
 import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
 import com.lucianotoscano.pvppokego.engine.TypeChart
 import kotlin.math.ceil
@@ -60,8 +61,14 @@ class BattleOverlayView(
     private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
     private val pokemonIconAtlas = PokemonIconAtlas(context.applicationContext)
+    private val adviceStabilityGate = AdviceStabilityGate()
+    private var stableAdvice: BattleAssistAdvisor.Advice? = null
 
     fun render(newState: BattleUiState) {
+        if (newState.playerName.isNullOrBlank() && newState.opponentName.isNullOrBlank()) {
+            adviceStabilityGate.reset()
+            stableAdvice = null
+        }
         state = newState
         scaleFactor = settings.scale
         opacityFactor = settings.opacity
@@ -851,9 +858,23 @@ class BattleOverlayView(
         }
     }
 
+    private fun stableBattleAdvice(nowMs: Long = System.currentTimeMillis()): BattleAssistAdvisor.Advice? {
+        val candidate = BattleAssistAdvisor.advise(state, gameRepo)
+        val key = candidate?.let {
+            AdviceStabilityGate.Key(it.title, it.detail, it.priority)
+        }
+        val accepted = adviceStabilityGate.update(key, nowMs)
+        if (accepted == null) {
+            stableAdvice = null
+        } else if (candidate != null && accepted == key) {
+            stableAdvice = candidate
+        }
+        return stableAdvice
+    }
+
     private fun drawBattleAssist(canvas: Canvas) {
         if (switchChoicePromptVisible) return
-        val advice = BattleAssistAdvisor.advise(state, gameRepo) ?: return
+        val advice = stableBattleAdvice() ?: return
         val (refCx, refCy) = pos(BLOCK_BATTLE_ASSIST, BATTLE_ASSIST_X, BATTLE_ASSIST_Y)
         val cx = rx(refCx)
         val cy = ry(refCy)
