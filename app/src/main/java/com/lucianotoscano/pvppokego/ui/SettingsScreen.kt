@@ -325,6 +325,12 @@ fun SettingsScreen(
                     progress = it
                     repository.showEnergyProgress = it
                 }
+                Text(
+                    "A previsão inimiga usa turns de 0,5 s, energia residual e hipóteses de Fast Move. " +
+                        "Quando há incerteza, mostra faixa/READY? em vez de inventar um valor exato.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Toggle("HP e previsão de dano sem escudo", hpAssist) {
                     hpAssist = it
                     repository.showHpAssist = it
