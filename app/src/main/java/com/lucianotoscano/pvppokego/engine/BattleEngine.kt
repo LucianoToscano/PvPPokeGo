@@ -56,6 +56,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val enemyCpTracker = StableCpTracker()
 
     private var tracker = EnergyTracker()
+    private val predictiveEnergy = EnemyEnergyTracker()
+    private val reactionWindow = ReactionWindowEstimator()
+    private var lastEnemyFastEventAtMs = 0L
     private var activeState: BattlePokemonState? = null
     private var fast: MoveDef? = null
     private var charge1: MoveDef? = null
@@ -147,6 +150,8 @@ class BattleEngine(private val repo: GameDataRepository) {
         playerCpTracker.reset()
         enemyCpTracker.reset()
         tracker.reset()
+        predictiveEnergy.clear()
+        lastEnemyFastEventAtMs = 0L
         ownTracker.reset()
         activeState = null
         ownActiveState = null
@@ -206,6 +211,10 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onCaptureHealth(health: CaptureHealth, statusText: String? = null) {
         captureHealth = health
         captureStatusText = statusText
+    }
+
+    fun onPipelineLatencySample(latencyMs: Long) {
+        reactionWindow.recordPipelineLatency(latencyMs)
     }
     fun onLocalStrategyProfile(profile: BattleStrategyProfile?) {
         localStrategyProfile = profile?.takeIf {
