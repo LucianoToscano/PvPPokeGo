@@ -456,6 +456,41 @@ PENDÊNCIAS:
 PRÓXIMO PASSO:
 - Retomar build Standard em ambiente funcional, validar assets/Manifest e testar reservas em aparelho, preservando a implementação atual.
 
+### 2026-10-07 — Fallback de ícone condicionado à correspondência do card
+
+Versão: 0.5.26  
+Branch: `release/0.5.26`  
+Commit de código: `8dbf9f47e1f35a4b9ff8dc5f1da6141cdafda8bb`
+
+OBJETIVO/PROBLEMA:
+- Impedir que o retrato recortado de outro Pokémon apareça no HUD ao reordenar os cards de reserva durante troca/continuidade.
+
+ALTERAÇÕES:
+- `BattleOverlayView.drawReservePokemonIcon`: atlas exato/Dex segue prioritário; retrato estável do slot segue disponível; crop temporário indexado pelo card só aparece quando `cardMappingConfirmed` é verdadeiro.
+- A política de identificação e o armazenamento de energia não foram alterados.
+
+ARQUIVOS PRINCIPAIS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt`
+
+TESTES:
+- Inspeção estática do trecho antes da mudança; substituição de trecho exato efetuada no GitHub.
+- Build Android e testes de interface física NÃO executados. O run anterior `37701733198` falhou com `steps=null`, antes do runner executar comandos.
+- Sem APK produzido; ambiente desta sessão não tem checkout completo autenticado, Android SDK ou Gradle acessíveis; clone HTTPS não resolve `github.com`.
+
+RESULTADO:
+- Fallback de crop nativo agora exige mapeamento confirmado, evitando um ícone de espécie errada quando o card ainda é ambíguo.
+- Não resolve sozinho placeholders onde espécie e retrato permanecem desconhecidos; validação em aparelho continua obrigatória.
+
+STATUS:
+PARCIAL.
+
+PENDÊNCIAS:
+- Corrigir/validar os casos reais de `?`/`IDENTIFICANDO` em reservas e seletor; validar arte oficial instalada no launcher Samsung.
+- Executar build Standard com runner/SDK operacional; conferir Manifest, recursos, assinatura e SHA-256 antes de entregar APK 0.5.26.
+
+PRÓXIMO PASSO:
+- Diagnosticar o pipeline de build com runner efetivamente iniciado; testar reservas/trocas e ícone no APK gerado.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
