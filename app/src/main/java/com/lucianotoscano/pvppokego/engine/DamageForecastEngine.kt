@@ -114,6 +114,11 @@ internal object DamageForecastEngine {
         if (move.power <= 0 || attackerStats.attack <= 0.0 || defenderStats.defense <= 0.0 || defenderStats.hp <= 0) {
             return null
         }
+        if (move.damageMethod.equals("percentMaxHP", ignoreCase = true)) {
+            val damage = floor((move.power / 100.0) * defenderStats.hp.toDouble()).toInt() + 1
+            return (damage.toFloat() / defenderStats.hp.toFloat() * 100f).coerceIn(0f, 100f)
+        }
+
         val stab = if (attacker.types.any { it.equals(move.type, ignoreCase = true) }) STAB else 1.0
         val effectiveness = TypeChart.multiplier(move.type, defender.types)
         val attackStage = attackerAttackStage.normalized().min
