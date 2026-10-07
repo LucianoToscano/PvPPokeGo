@@ -2,6 +2,7 @@ package com.lucianotoscano.pvppokego.engine
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class BattleStateStoreTest {
@@ -64,5 +65,26 @@ class BattleStateStoreTest {
         assertEquals(31, enriched.minEnergy)
         assertEquals(47, enriched.maxEnergy)
         assertEquals(4, enriched.fastMoveCount)
+    }
+
+    @Test
+    fun predictiveSnapshotSurvivesSwitchStateReuseButNewBattleClearsIt() {
+        val store = BattleStateStore()
+        val first = store.getOrCreate("enemy:lanturn", "Lanturn", "lanturn")
+        first.predictiveEnergySnapshot = com.lucianotoscano.pvppokego.data.EnemyEnergySnapshot(
+            hypotheses = listOf(
+                com.lucianotoscano.pvppokego.data.EnemyEnergyHypothesisSnapshot(
+                    fastMoveId = "SPARK", energy = 36, completedFastMoves = 4, elapsedTurns = 8, weight = 1f
+                )
+            )
+        )
+        val returned = store.getOrCreate("enemy:lanturn", "Lanturn", "lanturn")
+        assertEquals(36, returned.predictiveEnergySnapshot?.hypotheses?.single()?.energy)
+
+        store.clearBattle()
+        assertNull(store.find("enemy:lanturn"))
+        val nextBattle = store.getOrCreate("enemy:lanturn", "Lanturn", "lanturn")
+        assertNull(nextBattle.predictiveEnergySnapshot)
+        assertEquals(0, nextBattle.estimatedEnergy)
     }
 }
