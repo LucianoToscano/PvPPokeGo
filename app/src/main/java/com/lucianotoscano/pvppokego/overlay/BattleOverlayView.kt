@@ -396,10 +396,20 @@ class BattleOverlayView(
                 com.lucianotoscano.pvppokego.data.DamageForecastConfidence.MODEL -> "MODELO"
             }
             val phase = if (predictiveOnly) "PREVIEW" else "IMPACTO"
-            val shields = if (state.ownShieldsRemaining > 0) "ESC " + state.ownShieldsRemaining else "SEM ESCUDO"
-            val label = phase + " • " + shields + " • -" + "%.0f".format(forecast.minPercent) + "-" +
-                "%.0f".format(forecast.maxPercent) + "% • →" + "%.0f".format(remainMin) + "-" +
-                "%.0f".format(remainMax) + "% • " + source
+            val noShield = "SEM ESC -" + "%.0f".format(forecast.minPercent) + "-" +
+                "%.0f".format(forecast.maxPercent) + "% →" + "%.0f".format(remainMin) + "-" +
+                "%.0f".format(remainMax) + "%"
+            val withShield = when {
+                !state.ownShieldsKnown -> "COM ESC se disponível"
+                state.ownShieldsRemaining > 0 -> "COM ESC protegido"
+                else -> "COM ESC indisponível"
+            }
+            val ko = when {
+                remainMax <= 0.5f -> " • KO PROVÁVEL"
+                remainMin <= 0.5f -> " • KO POSSÍVEL"
+                else -> ""
+            }
+            val label = phase + " • " + noShield + " • " + withShield + ko + " • " + source
             paint.color = hudColor(Color.WHITE, .96f)
             paint.textAlign = Paint.Align.LEFT
             paint.textSize = 8.8f*u()
