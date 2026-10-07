@@ -2,6 +2,8 @@
 
 ## 0.5.25
 
+- Corrigida a exibição dos ícones/retratos dos Pokémon de reserva: cache estável por slot da equipe, fallback pelos cards nativos e ícones mantidos também na tela de troca; o recorte duplicado que podia deixar miniaturas quase vazias foi removido.
+
 - Nesta etapa, a validação/build foi reduzida ao APK `standard`; gravação interna e Recorder Compat permanecem no código, sem remoção, mas ficam para uma etapa posterior conforme decisão do projeto.
 - Adicionada configuração de assinatura permanente também no Gradle/Android Studio via `keystore.properties` local ou variáveis `PVPPG_*`; o repositório continua sem armazenar a chave privada.
 - Adicionados scripts reproduzíveis para `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug` e verificação da integridade/assets do APK.
