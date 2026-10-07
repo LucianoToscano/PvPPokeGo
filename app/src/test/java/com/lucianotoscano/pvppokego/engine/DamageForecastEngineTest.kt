@@ -4,6 +4,7 @@ import com.lucianotoscano.pvppokego.data.EstimatedBattleStats
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.PokemonBaseStats
 import com.lucianotoscano.pvppokego.data.PokemonDef
+import com.lucianotoscano.pvppokego.data.StatStageRange
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -47,5 +48,37 @@ class DamageForecastEngineTest {
         )!!
         assertTrue(superEffective > resisted)
         assertTrue(superEffective > 0f)
+    }
+
+    @Test
+    fun positiveAttackStageRaisesDamageAndDefenseStageLowersIt() {
+        val neutral = DamageForecastEngine.modelDamagePercent(
+            fireAttacker, statsA, grassDefender, statsD, fireMove
+        )!!
+        val boosted = DamageForecastEngine.modelDamagePercent(
+            fireAttacker, statsA, grassDefender, statsD, fireMove,
+            attackerAttackStage = StatStageRange(2,2)
+        )!!
+        val defended = DamageForecastEngine.modelDamagePercent(
+            fireAttacker, statsA, grassDefender, statsD, fireMove,
+            defenderDefenseStage = StatStageRange(2,2)
+        )!!
+        assertTrue(boosted > neutral)
+        assertTrue(defended < neutral)
+    }
+
+    @Test
+    fun shadowAttackerRaisesDamageAndShadowDefenderTakesMoreDamage() {
+        val neutral = DamageForecastEngine.modelDamagePercent(
+            fireAttacker, statsA, grassDefender, statsD, fireMove
+        )!!
+        val shadowAttacker = DamageForecastEngine.modelDamagePercent(
+            fireAttacker.copy(tags = listOf("shadow")), statsA, grassDefender, statsD, fireMove
+        )!!
+        val shadowDefender = DamageForecastEngine.modelDamagePercent(
+            fireAttacker, statsA, grassDefender.copy(tags = listOf("shadow")), statsD, fireMove
+        )!!
+        assertTrue(shadowAttacker > neutral)
+        assertTrue(shadowDefender > neutral)
     }
 }
