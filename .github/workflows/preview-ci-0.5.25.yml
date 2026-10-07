@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout preview merge
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -29,27 +27,47 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Build standard debug APK
+        id: build
         shell: bash
         run: |
-          set -euo pipefail
-          gradle --no-daemon --stacktrace :app:assembleStandardDebug
-
-      - name: Package preview APK
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
+          set +e
           mkdir -p preview
-          APK="app/build/outputs/apk/standard/debug/app-standard-debug.apk"
-          test -s "$APK"
-          cp "$APK" preview/PvPPokeGo-0.5.25-PREVIEW.apk
-          unzip -t preview/PvPPokeGo-0.5.25-PREVIEW.apk
-          sha256sum preview/PvPPokeGo-0.5.25-PREVIEW.apk > preview/PvPPokeGo-0.5.25-PREVIEW.apk.sha256
+          {
+            echo "=== repository ==="
+            git rev-parse HEAD
+            echo "=== java ==="
+            java -version
+            echo "=== gradle ==="
+            gradle --version
+            echo "=== build ==="
+            gradle --no-daemon --stacktrace :app:assembleStandardDebug
+          } 2>&1 | tee preview/build-log.txt
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
 
-      - name: Upload preview APK
-        if: success()
+      - name: Collect preview APK if built
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/standard/debug/app-standard-debug.apk"
+          if [ -s "$APK" ]; then
+            cp "$APK" preview/PvPPokeGo-0.5.25-PREVIEW.apk
+            unzip -t preview/PvPPokeGo-0.5.25-PREVIEW.apk | tee preview/unzip-test.txt
+            sha256sum preview/PvPPokeGo-0.5.25-PREVIEW.apk > preview/PvPPokeGo-0.5.25-PREVIEW.apk.sha256
+          else
+            echo "APK not produced" > preview/apk-status.txt
+          fi
+
+      - name: Upload preview diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PvPPokeGo-0.5.25-PREVIEW
+          name: PvPPokeGo-0.5.25-PREVIEW-diagnostics
           path: preview/
           retention-days: 7
+
+      - name: Fail if build failed
+        if: steps.build.outputs.exit_code != '0'
+        run: exit 1
