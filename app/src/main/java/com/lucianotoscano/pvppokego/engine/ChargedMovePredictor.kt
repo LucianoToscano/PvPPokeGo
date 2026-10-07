@@ -89,7 +89,7 @@ internal object ChargedMovePredictor {
         val candidates = chargedMoves.mapNotNull { weightedMove ->
             val move = weightedMove.move
             val cost = move.chargedCost.takeIf { it > 0 } ?: return@mapNotNull null
-            val window = energyWindow(hypotheses, cost) ?: return@mapNotNull
+            val window = energyWindow(hypotheses, cost) ?: return@mapNotNull null
             val fastMin = window.fastMovesMin
             val fastMax = window.fastMovesMax
             val fastLikely = window.fastMovesLikely
