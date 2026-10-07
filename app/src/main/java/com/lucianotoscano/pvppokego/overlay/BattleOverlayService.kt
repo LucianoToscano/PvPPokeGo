@@ -46,6 +46,7 @@ import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.detect.BattleFrameEventDetector
 import com.lucianotoscano.pvppokego.detect.BattleOcrDetector
 import com.lucianotoscano.pvppokego.detect.BattlePresenceTracker
+import com.lucianotoscano.pvppokego.engine.AdviceStabilityGate
 import com.lucianotoscano.pvppokego.engine.BattleAssistAdvisor
 import com.lucianotoscano.pvppokego.engine.BattleContinuityPolicy
 import com.lucianotoscano.pvppokego.engine.BattleCorrespondenceTracker
@@ -96,6 +97,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private var scanJob: Job? = null
     private var currentLeagueCp: Int = 1500
     private var lastRecordedAdviceKey: String? = null
+    private val historyAdviceGate = AdviceStabilityGate()
+    private var stableHistoryAdvice: BattleAssistAdvisor.Advice? = null
     private var lastReserveDiagnosticKey: String? = null
 
     private var fastTouch: View? = null
@@ -1152,6 +1155,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
     private fun clearBattleContextAfterConfirmedEnd() {
         lastRecordedAdviceKey = null
+        historyAdviceGate.reset()
+        stableHistoryAdvice = null
         lastReserveDiagnosticKey = null
         lastHistoryStateAtMs = 0L
         engine?.resetBattle()
@@ -1757,14 +1762,32 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     private fun recordUiDiagnostics(ui: BattleUiState, nowMs: Long = System.currentTimeMillis()) {
         if (!battleActive) {
             lastRecordedAdviceKey = null
+            historyAdviceGate.reset()
+            stableHistoryAdvice = null
             lastReserveDiagnosticKey = null
             return
         }
 
-        BattleAssistAdvisor.advise(ui, gameRepo)?.let { advice ->
+        val candidateAdvice = BattleAssistAdvisor.advise(ui, gameRepo)
+        val candidateKey = candidateAdvice?.let {
+            AdviceStabilityGate.Key(it.title, it.detail, it.priority)
+        }
+        val acceptedKey = historyAdviceGate.update(candidateKey, nowMs)
+        if (acceptedKey == null) {
+            stableHistoryAdvice = null
+        } else if (candidateAdvice != null && acceptedKey == candidateKey) {
+            stableHistoryAdvice = candidateAdvice
+        }
+        stableHistoryAdvice?.let { advice ->
             val key = "${advice.title}|${advice.detail}"
             if (key != lastRecordedAdviceKey) {
-                historyRecorder.recordDecision(advice.title, advice.detail, nowMs)
+                val previous = lastRecordedAdviceKey?.substringBefore('|')
+                val reason = if (previous == null) {
+                    advice.detail
+                } else {
+                    "Mudou de $previous para ${advice.title}: ${advice.detail}"
+                }
+                historyRecorder.recordDecision(advice.title, reason, nowMs)
                 lastRecordedAdviceKey = key
             }
         }
@@ -1844,6 +1867,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
     override fun onResetTapped() {
         historyRecorder.finish()
         lastRecordedAdviceKey = null
+        historyAdviceGate.reset()
+        stableHistoryAdvice = null
         lastReserveDiagnosticKey = null
         engine?.resetBattle()
         frameDetector?.reset()
