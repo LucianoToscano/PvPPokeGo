@@ -187,6 +187,12 @@ data class ChargedThreatForecast(
     val dptMax: Float? = null,
     val dpeMin: Float? = null,
     val dpeMax: Float? = null,
+    /** Fast-Move HP pressure accumulated before this Charged can become available. */
+    val fastDamageUntilReadyMin: Float? = null,
+    val fastDamageUntilReadyMax: Float? = null,
+    val mayKoBeforeCharged: Boolean = false,
+    val baitPotential: Boolean = false,
+    val shieldPressureScore: Float = 0f,
     val damageForecast: DamageForecast? = null,
     val likelyKo: Boolean = false,
     val threatScore: Float = 0f
