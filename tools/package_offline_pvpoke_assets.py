@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 OUT = Path("app/src/main/assets")
-REF = "master"
+REF = "f627e89e53c0c7b903fff097df7a0ad0ac95decc"
 RAW = f"https://raw.githubusercontent.com/pvpoke/pvpoke/{REF}/src/data"
 RAW_JS = f"https://raw.githubusercontent.com/pvpoke/pvpoke/{REF}/src/js"
+PVP_TURN_MS = 500
 LEAGUES = (1500, 2500, 10000)
 
 def fetch_json(url: str):
@@ -44,7 +45,12 @@ def main() -> int:
     moves = fetch_json(f"{RAW}/gamemaster/moves.json")
     pokemon = fetch_json(f"{RAW}/gamemaster/pokemon.json")
     pokemon_js_url = f"{RAW_JS}/pokemon/Pokemon.js"
+    base_url = f"{RAW}/gamemaster/base.json"
     cpms = extract_cpms(fetch_text(pokemon_js_url))
+    base = fetch_json(base_url)
+    settings = base.get("settings", {})
+    max_buff_stages = int(settings.get("maxBuffStages", 4))
+    buff_divisor = float(settings.get("buffDivisor", 4))
     (OUT / "gamemaster.json").write_text(
         json.dumps({"pokemon": pokemon, "moves": moves}, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
@@ -68,9 +74,15 @@ def main() -> int:
         "format": "PvPPokeGo-pvpoke-snapshot",
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "pvpokeRef": REF,
+        "turnDurationMs": PVP_TURN_MS,
+        "settings": {
+            "maxBuffStages": max_buff_stages,
+            "buffDivisor": buff_divisor,
+        },
         "gamemasterSources": {
             "moves": f"{RAW}/gamemaster/moves.json",
             "pokemon": f"{RAW}/gamemaster/pokemon.json",
+            "base": base_url,
             "cpms": pokemon_js_url,
         },
         "rankingSources": ranking_sources,
