@@ -126,4 +126,27 @@ class ReserveCardMatcherTest {
         assertEquals(listOf("image-form", "image-form"), result.map { it.source })
     }
 
+    @Test
+    fun oneKnownReserveCanStillMatchSecondNativeCard() {
+        val partialTeam = listOf(
+            ReserveCardMatcher.Member(0, "Houndoom", 1499, 229, "houndoom"),
+            ReserveCardMatcher.Member(1, "Cradily", 1494, 346, "cradily")
+        )
+
+        val result = ReserveCardMatcher.resolve(
+            team = partialTeam,
+            activeName = "Houndoom",
+            activeCp = 1499,
+            cardCps = listOf(1485, 1494),
+            cardDexes = listOf(null, 346),
+            cardSpeciesIds = listOf(null, "cradily")
+        )
+
+        assertEquals(1, result.size)
+        assertEquals("Cradily", result.single().member.name)
+        assertEquals(1, result.single().cardIndex)
+        assertTrue(result.single().confirmed)
+    }
+
+
 }
