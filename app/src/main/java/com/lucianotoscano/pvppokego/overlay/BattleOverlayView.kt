@@ -538,13 +538,23 @@ class BattleOverlayView(
                 val fastHypothesis = if (predictive.fastMoveNames.size > 1) {
                     " • " + predictive.fastMoveNames.size + " FAST possíveis"
                 } else ""
+                val phaseText = predictive.fastPhase?.takeIf { it.confidence >= .45f }?.let {
+                    " • Fase " + it.phaseTurn + "/" + it.moveTurns
+                }.orEmpty()
+                val qualityText = " • C" + (predictive.consistencyScore * 100f).toInt().coerceIn(0, 100) + "%"
+                val cmpText = when (state.cmpForecast?.outcome) {
+                    com.lucianotoscano.pvppokego.data.CmpOutcome.WIN -> " • CMP+"
+                    com.lucianotoscano.pvppokego.data.CmpOutcome.LOSE -> " • CMP-"
+                    com.lucianotoscano.pvppokego.data.CmpOutcome.UNCERTAIN -> " • CMP?"
+                    else -> ""
+                }
                 paint.color=hudColor(Color.WHITE,.84f)
                 paint.textAlign=Paint.Align.CENTER
                 paint.textSize=9.4f*u()*bs
                 paint.typeface=Typeface.DEFAULT_BOLD
                 paint.setShadowLayer(2f,0f,1f,Color.BLACK)
                 canvas.drawText(
-                    energyText + fastHypothesis,
+                    energyText + fastHypothesis + phaseText + qualityText + cmpText,
                     centerX,
                     chargedY+chargedRadius+53f*u()*bs,
                     paint
@@ -614,7 +624,16 @@ class BattleOverlayView(
                 else -> "~" + "%.1f".format(candidate.likelyTimeMs / 1000f) + "s"
             }
             val confidence = (candidate.confidence * 100f).toInt().coerceIn(0, 100)
-            val line = shortMoveName(candidate.move.name) + "  " + status + " • " + time + " • " + confidence + "%"
+            val sequence = candidate.fastCountSequenceLikely
+                .takeIf { it.isNotEmpty() }
+                ?.let { " • " + it.joinToString("-") }
+                .orEmpty()
+            val bait = candidate.baitProbability
+                .takeIf { it >= .20f }
+                ?.let { " • bait " + "%.0f".format(it * 100f) + "%" }
+                .orEmpty()
+            val line = shortMoveName(candidate.move.name) + "  " + status + " • " + time +
+                sequence + bait + " • " + confidence + "%"
             paint.color = hudColor(
                 when {
                     candidate.readyCertain && candidate.likelyKo -> Color.rgb(244, 72, 68)
@@ -669,19 +688,56 @@ class BattleOverlayView(
     }
 
     private fun drawShieldAdvice(canvas: Canvas) {
-        val playerTypes = currentPlayerTypes()
-        if (playerTypes.isEmpty()) return
-        val all = listOfNotNull(state.charged1, state.charged2)
-        if (all.isEmpty()) return
-        val plausible = all.filter { it.ready || it.progress >= .72f }.ifEmpty { all }
-        val threat = plausible.maxByOrNull { p -> p.move.power.toDouble() * TypeChart.multiplier(p.move.type, playerTypes) } ?: return
-        val eff = TypeChart.multiplier(threat.move.type, playerTypes)
-        val threatScore = threat.move.power.toDouble() * eff
-        val advice = when {
-            eff >= 1.5 || threatScore >= 100.0 -> ShieldAdvice("USAR ESCUDO", "${shortMoveName(threat.move.name)} • ${if (eff > 1.01) "SUPEREFICAZ • " else ""}DANO ALTO", Color.rgb(232,61,72))
-            eff <= .65 && threatScore < 70.0 -> ShieldAdvice("PODE NÃO USAR", "${shortMoveName(threat.move.name)} • POUCO EFICAZ • DANO BAIXO", Color.rgb(46,188,105))
-            threatScore >= 70.0 -> ShieldAdvice("ESCUDO OPCIONAL", "${shortMoveName(threat.move.name)} • DANO MÉDIO", Color.rgb(245,175,52))
-            else -> ShieldAdvice("PODE NÃO USAR", "${shortMoveName(threat.move.name)} • DANO BAIXO", Color.rgb(46,188,105))
+        val formal = state.shieldDecision
+        val advice = if (formal != null) {
+            val title = when (formal.action) {
+                com.lucianotoscano.pvppokego.data.ShieldAction.SHIELD -> "USAR ESCUDO"
+                com.lucianotoscano.pvppokego.data.ShieldAction.HOLD ->
+                    if (state.ownShieldsKnown && state.ownShieldsRemaining <= 0) "SEM ESCUDOS" else "PODE NÃO USAR"
+                com.lucianotoscano.pvppokego.data.ShieldAction.OPTIONAL -> "ESCUDO OPCIONAL"
+                com.lucianotoscano.pvppokego.data.ShieldAction.UNKNOWN -> "ANALISANDO"
+            }
+            val color = when (formal.action) {
+                com.lucianotoscano.pvppokego.data.ShieldAction.SHIELD -> Color.rgb(232,61,72)
+                com.lucianotoscano.pvppokego.data.ShieldAction.HOLD -> Color.rgb(46,188,105)
+                com.lucianotoscano.pvppokego.data.ShieldAction.OPTIONAL -> Color.rgb(245,175,52)
+                com.lucianotoscano.pvppokego.data.ShieldAction.UNKNOWN -> Color.rgb(128,136,146)
+            }
+            val bait = formal.baitProbability.takeIf { it >= .20f }
+                ?.let { " • bait ~" + "%.0f".format(it * 100f) + "%" }
+                .orEmpty()
+            ShieldAdvice(
+                title,
+                listOfNotNull(formal.moveName?.let(::shortMoveName), formal.reason.takeIf { it.isNotBlank() })
+                    .joinToString(" • ") + bait,
+                color
+            )
+        } else {
+            val playerTypes = currentPlayerTypes()
+            if (playerTypes.isEmpty()) return
+            val all = listOfNotNull(state.charged1, state.charged2)
+            if (all.isEmpty()) return
+            val plausible = all.filter { it.ready || it.progress >= .72f }.ifEmpty { all }
+            val threat = plausible.maxByOrNull { p ->
+                p.move.power.toDouble() * TypeChart.multiplier(p.move.type, playerTypes)
+            } ?: return
+            val eff = TypeChart.multiplier(threat.move.type, playerTypes)
+            val threatScore = threat.move.power.toDouble() * eff
+            when {
+                eff >= 1.5 || threatScore >= 100.0 -> ShieldAdvice(
+                    "USAR ESCUDO", shortMoveName(threat.move.name) + " • " +
+                        (if (eff > 1.01) "SUPEREFICAZ • " else "") + "DANO ALTO", Color.rgb(232,61,72)
+                )
+                eff <= .65 && threatScore < 70.0 -> ShieldAdvice(
+                    "PODE NÃO USAR", shortMoveName(threat.move.name) + " • POUCO EFICAZ • DANO BAIXO", Color.rgb(46,188,105)
+                )
+                threatScore >= 70.0 -> ShieldAdvice(
+                    "ESCUDO OPCIONAL", shortMoveName(threat.move.name) + " • DANO MÉDIO", Color.rgb(245,175,52)
+                )
+                else -> ShieldAdvice(
+                    "PODE NÃO USAR", shortMoveName(threat.move.name) + " • DANO BAIXO", Color.rgb(46,188,105)
+                )
+            }
         }
         val (centerRefX, fastRefY) = pos(BLOCK_ENEMY_MOVES, ENEMY_MOVE_CENTER_X, ENEMY_MOVE_FAST_Y)
         val centerX=rx(centerRefX); val centerY=ry(fastRefY+237f); val halfW=142f*u(); val halfH=31f*u()
@@ -692,7 +748,6 @@ class BattleOverlayView(
         canvas.drawText(advice.title,centerX,centerY-4f*u(),paint)
         paint.color=hudColor(Color.WHITE); paint.textSize=10.5f*u(); canvas.drawText(advice.detail,centerX,centerY+16f*u(),paint); paint.clearShadowLayer()
     }
-
     private fun drawCharged(canvas: Canvas,cx: Float,cy: Float,radius: Float,prediction: ChargedPrediction) {
         val circle=Path().apply { addCircle(cx,cy,radius,Path.Direction.CW) }
         canvas.save(); canvas.clipPath(circle)
