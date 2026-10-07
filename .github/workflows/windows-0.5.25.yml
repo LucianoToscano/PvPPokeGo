@@ -94,7 +94,7 @@ jobs:
           New-Item -ItemType Directory -Force delivery | Out-Null
           Copy-Item app/build/outputs/apk/standard/debug/app-standard-debug.apk delivery/PvPPokeGo-0.5.25-QA-debug.apk
           Copy-Item app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk delivery/PvPPokeGo-0.5.25-recorder-compat-QA-debug.apk
-          python - <<'PY'
+          @'
           import zipfile, pathlib
           for p in pathlib.Path("delivery").glob("*.apk"):
               with zipfile.ZipFile(p) as z:
@@ -104,7 +104,7 @@ jobs:
                   for required in ("assets/gamemaster.json","assets/pvpoke_snapshot.json","assets/pokemon_visual_fingerprints.json","assets/pokemon_icon_atlas.png","assets/pokemon_icon_atlas.json"):
                       if required not in names: raise SystemExit(f"{p}: missing {required}")
                   print(p, "ZIP OK", len(names), "entries")
-          PY
+          '@ | python -
           Get-ChildItem delivery/*.apk | ForEach-Object {
             $hash=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)" | Set-Content "$($_.FullName).sha256"
