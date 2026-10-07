@@ -56,7 +56,7 @@ internal class ObservedDamageTracker {
             if (abs(perHit - median) > tolerance) return false
         }
 
-        queue.addLast(perHit)
+        queue.add(perHit)
         while (queue.size > MAX_SAMPLES_PER_KEY) queue.removeFirst()
         return true
     }
