@@ -422,18 +422,57 @@ class BattleOverlayView(
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
         if (settings.showHudText) {
-            val p = state.charged1 ?: state.charged2
-            if (p != null) {
-                val energyText = when (p.confidence) {
-                    EnergyConfidence.CONFIRMED -> "ENERGIA ${p.currentEnergy} • CONFIRMADA"
-                    EnergyConfidence.ESTIMATED -> "ENERGIA ~${p.currentEnergy} • ESTIMADA"
-                    EnergyConfidence.RANGE -> "ENERGIA ${p.minEnergy}-${p.maxEnergy} • FAIXA"
+            val predictive = state.enemyEnergyForecast
+            val fallback = state.charged1 ?: state.charged2
+            val energyText = when {
+                predictive != null && predictive.energyMin != predictive.energyMax ->
+                    "⚡ " + predictive.energyMin + "-" + predictive.energyMax + " E • " + predictive.hypothesisCount + " hipóteses"
+                predictive != null ->
+                    "⚡ " + predictive.energyLikely + " E • " + "%.0f".format(predictive.confidence * 100f) + "% modelo"
+                fallback != null -> when (fallback.confidence) {
+                    EnergyConfidence.CONFIRMED -> "ENERGIA ${fallback.currentEnergy} • CONFIRMADA"
+                    EnergyConfidence.ESTIMATED -> "ENERGIA ~${fallback.currentEnergy} • ESTIMADA"
+                    EnergyConfidence.RANGE -> "ENERGIA ${fallback.minEnergy}-${fallback.maxEnergy} • FAIXA"
                 }
-                paint.color=hudColor(Color.WHITE,.82f); paint.textAlign=Paint.Align.CENTER; paint.textSize=9.5f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint); paint.clearShadowLayer()
+                else -> null
+            }
+            if (energyText != null) {
+                paint.color=hudColor(Color.WHITE,.84f)
+                paint.textAlign=Paint.Align.CENTER
+                paint.textSize=9.5f*u()*bs
+                paint.typeface=Typeface.DEFAULT_BOLD
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+                canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint)
+                paint.clearShadowLayer()
+            }
+            predictive?.candidates?.take(2)?.forEachIndexed { index, threat ->
+                val status = when {
+                    threat.readyCertain -> "READY"
+                    threat.readyPossible -> "READY?"
+                    threat.fastMovesRemainingMin == threat.fastMovesRemainingMax ->
+                        "+" + threat.fastMovesRemainingMin + " FAST"
+                    else -> "+" + threat.fastMovesRemainingMin + "-" + threat.fastMovesRemainingMax + " FAST"
+                }
+                val danger = threat.readyPossible || threat.turnsRemainingMin <= predictive.reactionTurns
+                val timeText = if (threat.readyPossible) "" else {
+                    " • ~" + "%.1f".format(threat.likelyTimeMs / 1000f) + "s"
+                }
+                paint.color = hudColor(
+                    if (danger) Color.rgb(245, 175, 52) else Color.WHITE,
+                    if (danger) .96f else .80f
+                )
+                paint.textSize=8.9f*u()*bs
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+                canvas.drawText(
+                    shortMoveName(threat.move.name) + "  " + status + timeText,
+                    centerX,
+                    chargedY + chargedRadius + (69f + index * 14f) * u() * bs,
+                    paint
+                )
+                paint.clearShadowLayer()
             }
         }
-        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 138f*u()*bs, 122f*u()*bs)
+        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 138f*u()*bs, 146f*u()*bs)
     }
 
     private fun drawObservedDamageBadge(
