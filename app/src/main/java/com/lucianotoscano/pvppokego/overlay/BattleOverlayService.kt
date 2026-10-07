@@ -1142,6 +1142,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
 
         if (!hadSession && hasSession && startedMidBattleEvidence) {
             historyRecorder.markStartedMidBattle()
+            engine?.onStartedMidBattle()
         }
 
         if (hadSession && !hasSession) {
@@ -1179,7 +1180,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             hpRatio = engine?.latestPlayerHpRatio(),
             energyMin = ownEnergy?.minEnergy,
             energyMax = ownEnergy?.maxEnergy,
-            shields = ui.ownShieldsRemaining,
+            shields = ui.ownShieldsRemaining.takeIf { ui.ownShieldsKnown },
             confidence = ownEnergy?.confidence?.let(::energyConfidenceLabel),
             nowMs = nowMs
         )
@@ -1191,7 +1192,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             hpRatio = engine?.latestOpponentHpRatio(),
             energyMin = predictive?.energyMin ?: enemyEnergy?.minEnergy,
             energyMax = predictive?.energyMax ?: enemyEnergy?.maxEnergy,
-            shields = ui.opponentShieldsRemaining,
+            shields = ui.opponentShieldsRemaining.takeIf { ui.opponentShieldsKnown },
             confidence = if (predictive != null) {
                 "PREVISÃO " + "%.0f".format(predictive.confidence * 100f) + "%"
             } else {
@@ -1366,9 +1367,11 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                             historyRecorder.recordShield(
                                                 actor = defenderActor,
                                                 againstMove = localizedMove,
-                                                remaining = observation.shieldsRemaining ?: 0,
+                                                remaining = observation.shieldsRemaining,
                                                 nowMs = now,
-                                                pokemon = targetPokemon
+                                                pokemon = targetPokemon,
+                                                confidence = "INFERIDO_ALTO",
+                                                source = "barra de HP estável pós-Charged"
                                             )
                                         } else {
                                             historyRecorder.recordDamageObservation(
@@ -1948,11 +1951,21 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
             runCatching { screenRecorder?.stop() }
         }
 
-        // Standard builds have no screenshot fallback. Match the stable 0.5.19
-        // behavior and finish cleanly if Android revokes MediaProjection instead
-        // of keeping a no-capture SPECIAL_USE service alive.
+        // Standard builds intentionally have no Accessibility/specialUse fallback.
+        // Preserve the in-memory battle context and history checkpoint instead of
+        // silently ending the battle when another app revokes MediaProjection.
         if (!BuildConfig.RECORDER_COMPAT) {
-            withContext(Dispatchers.Main) { stopSelf() }
+            usingAccessibilityFallback = false
+            engine?.onCaptureHealth(
+                CaptureHealth.PAUSED,
+                "Captura interrompida • reabra o PvPPokeGo para autorizar a tela novamente"
+            )
+            withContext(Dispatchers.Main) {
+                refreshForegroundNotification(
+                    "Captura pausada • contexto preservado • reautorize a captura"
+                )
+                redraw()
+            }
             return
         }
 
