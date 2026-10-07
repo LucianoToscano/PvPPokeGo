@@ -187,7 +187,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 lastNativeTopCardY = null
                 lastBattleEvidenceAtMs = 0L
                 switchChoicePromptUntilMs = 0L
-                overlayView?.clearReservePortraits()
+                detector?.clearCachedPortraits()
+                overlayView?.clearPokemonPortraits()
                 dismissMoveMenu()
                 redraw()
                 return START_STICKY
@@ -1169,7 +1170,8 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         lastNativeTopCardY = null
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
-        overlayView?.clearReservePortraits()
+        detector?.clearCachedPortraits()
+        overlayView?.clearPokemonPortraits()
         dismissMoveMenu()
     }
 
@@ -1464,7 +1466,13 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 val portraits = detector?.copyReservePortraits()
                                 if (portraits != null) {
                                     withContext(Dispatchers.Main) {
-                                        overlayView?.setReservePortraits(portraits.first, portraits.second)
+                                        val view = overlayView
+                                        if (view != null) {
+                                            view.setReservePortraits(portraits.first, portraits.second)
+                                        } else {
+                                            portraits.first?.let { if (!it.isRecycled) it.recycle() }
+                                            portraits.second?.let { if (!it.isRecycled) it.recycle() }
+                                        }
                                     }
                                 }
                             }
@@ -1677,6 +1685,19 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS
                         ) {
                             val team = detector?.detectOwnTeam(frame).orEmpty()
+                            if (team.isNotEmpty()) {
+                                val teamPortraits = detector?.copyOwnTeamPortraits().orEmpty()
+                                withContext(Dispatchers.Main) {
+                                    val view = overlayView
+                                    if (view != null) {
+                                        view.setOwnTeamPortraits(teamPortraits)
+                                    } else {
+                                        teamPortraits.forEach { portrait ->
+                                            portrait?.let { if (!it.isRecycled) it.recycle() }
+                                        }
+                                    }
+                                }
+                            }
                             if (
                                 historyRecorder.hasActiveSession() &&
                                 BattleContinuityPolicy.confirmedTeamSelectionBoundary(
@@ -1885,7 +1906,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         battleActive = false
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
-        overlayView?.clearReservePortraits()
+        overlayView?.clearPokemonPortraits()
         dismissMoveMenu()
         redraw()
     }
