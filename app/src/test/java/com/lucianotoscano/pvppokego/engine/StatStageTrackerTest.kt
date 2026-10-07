@@ -84,4 +84,23 @@ class StatStageTrackerTest {
         assertEquals(2.0, DamageForecastEngine.statStageMultiplier(4), .00001)
         assertEquals(.5, DamageForecastEngine.statStageMultiplier(-4), .00001)
     }
+
+    @Test
+    fun dualTargetMoveAppliesDifferentSelfAndOpponentStages() {
+        val obstruct = MoveDef(
+            moveId = "OBSTRUCT",
+            name = "Obstruct",
+            energy = 40,
+            buffs = listOf(0,1),
+            buffsSelf = listOf(0,1),
+            buffsOpponent = listOf(0,-1),
+            buffTarget = "both",
+            buffApplyChance = "1"
+        )
+        val result = StatStageTracker.applyMove(
+            obstruct, StatStageTracker.Stages(), StatStageTracker.Stages()
+        )
+        assertEquals(1, result.self.defense.min)
+        assertEquals(-1, result.opponent.defense.min)
+    }
 }
