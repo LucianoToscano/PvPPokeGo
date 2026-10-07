@@ -49,7 +49,7 @@ object BattleAssistAdvisor {
             )
         }
 
-        state.sacSwap?.takeIf { it.confidence >= .68f }?.let { sac ->
+        state.sacSwap?.takeIf { !state.chargedIncoming && it.confidence >= .68f }?.let { sac ->
             return Advice(
                 "SAC SWAP → " + shortName(sac.targetName),
                 sac.reason + " • " + "%.0f".format(sac.confidence * 100f) + "%",
