@@ -187,6 +187,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                 lastNativeTopCardY = null
                 lastBattleEvidenceAtMs = 0L
                 switchChoicePromptUntilMs = 0L
+                overlayView?.clearReservePortraits()
                 dismissMoveMenu()
                 redraw()
                 return START_STICKY
@@ -1168,6 +1169,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         lastNativeTopCardY = null
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
+        overlayView?.clearReservePortraits()
         dismissMoveMenu()
     }
 
@@ -1459,6 +1461,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                         ) {
                             detector?.detectReserveEvidence(frame)?.let { (topCard, bottomCard) ->
                                 e.onReserveCardEvidence(topCard, bottomCard)
+                                val portraits = detector?.copyReservePortraits()
+                                if (portraits != null) {
+                                    withContext(Dispatchers.Main) {
+                                        overlayView?.setReservePortraits(portraits.first, portraits.second)
+                                    }
+                                }
                             }
                             lastReserveOcrAt = now
                         }
@@ -1877,6 +1885,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         battleActive = false
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
+        overlayView?.clearReservePortraits()
         dismissMoveMenu()
         redraw()
     }
@@ -2120,6 +2129,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         quickMenu = null
         removeEditTouchLayer()
         removeFreeDragZones()
+        overlayView?.release()
         runCatching { overlayView?.let { windowManager?.removeView(it) } }
         runCatching { fastTouch?.let { windowManager?.removeView(it) } }
         runCatching { charged1Touch?.let { windowManager?.removeView(it) } }
