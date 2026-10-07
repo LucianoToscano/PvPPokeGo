@@ -49,27 +49,23 @@ jobs:
           test -s app/src/main/assets/pokemon_icon_atlas.png
           test -s app/src/main/assets/pokemon_icon_atlas.json
 
-      - name: Test and build both variants
+      - name: Test and build standard variant
         shell: bash
         run: |
           set -euo pipefail
           gradle --no-daemon --stacktrace \
             :app:testStandardDebugUnitTest \
-            :app:testRecorderCompatDebugUnitTest \
-            :app:assembleStandardDebug \
-            :app:assembleRecorderCompatDebug
+            :app:assembleStandardDebug
 
       - name: Verify manifests
         shell: bash
         run: |
           set -euo pipefail
           STD_MANIFEST="$(find app/build/intermediates/merged_manifests/standardDebug -name AndroidManifest.xml | head -1)"
-          COMPAT_MANIFEST="$(find app/build/intermediates/merged_manifests/recorderCompatDebug -name AndroidManifest.xml | head -1)"
           test -n "$STD_MANIFEST"
-          test -n "$COMPAT_MANIFEST"
           ! grep -q 'PvPPokeGoAccessibilityCaptureService' "$STD_MANIFEST"
           ! grep -q 'FOREGROUND_SERVICE_SPECIAL_USE\|specialUse\|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$STD_MANIFEST"
-          grep -q 'PvPPokeGoAccessibilityCaptureService' "$COMPAT_MANIFEST"
+          grep -q 'android:foregroundServiceType="mediaProjection"' "$STD_MANIFEST"
 
       - name: Package QA artifacts
         shell: bash
@@ -77,9 +73,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifact
           cp app/build/outputs/apk/standard/debug/app-standard-debug.apk artifact/PvPPokeGo-0.5.25-QA-debug.apk
-          cp app/build/outputs/apk/recorderCompat/debug/app-recorderCompat-debug.apk artifact/PvPPokeGo-0.5.25-recorder-compat-QA-debug.apk
           unzip -t artifact/PvPPokeGo-0.5.25-QA-debug.apk
-          unzip -t artifact/PvPPokeGo-0.5.25-recorder-compat-QA-debug.apk
           shasum -a 256 artifact/*.apk | tee artifact/SHA256SUMS.txt
 
       - name: Upload QA artifacts
