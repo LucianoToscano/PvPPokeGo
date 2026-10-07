@@ -20,7 +20,7 @@ internal class ReactionWindowEstimator(
 
     fun recordPipelineLatency(latencyMs: Long) {
         if (latencyMs !in 0L..10_000L) return
-        pipelineSamples.addLast(latencyMs)
+        pipelineSamples.add(latencyMs)
         while (pipelineSamples.size > maxSamples) pipelineSamples.removeFirst()
     }
 
