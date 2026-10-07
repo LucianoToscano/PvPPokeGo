@@ -1685,19 +1685,12 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                             now - lastTeamOcrAt >= TEAM_OCR_INTERVAL_MS
                         ) {
                             val team = detector?.detectOwnTeam(frame).orEmpty()
-                            if (team.isNotEmpty()) {
-                                val teamPortraits = detector?.copyOwnTeamPortraits().orEmpty()
-                                withContext(Dispatchers.Main) {
-                                    val view = overlayView
-                                    if (view != null) {
-                                        view.setOwnTeamPortraits(teamPortraits)
-                                    } else {
-                                        teamPortraits.forEach { portrait ->
-                                            portrait?.let { if (!it.isRecycled) it.recycle() }
-                                        }
-                                    }
-                                }
-                            }
+                            // Copy before clearBattleContextAfterConfirmedEnd(): that method clears
+                            // detector caches from the previous battle, but these copies belong to
+                            // the newly detected team-selection screen and must survive it.
+                            val detectedTeamPortraits = if (team.isNotEmpty()) {
+                                detector?.copyOwnTeamPortraits().orEmpty()
+                            } else emptyList()
                             if (
                                 historyRecorder.hasActiveSession() &&
                                 BattleContinuityPolicy.confirmedTeamSelectionBoundary(
@@ -1714,6 +1707,18 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
                                 engine?.onOwnTeamDetected(team)
                             } else if (e.needsOwnTeamScan() && team.isNotEmpty()) {
                                 e.onOwnTeamDetected(team)
+                            }
+                            if (detectedTeamPortraits.any { it != null }) {
+                                withContext(Dispatchers.Main) {
+                                    val view = overlayView
+                                    if (view != null) {
+                                        view.setOwnTeamPortraits(detectedTeamPortraits)
+                                    } else {
+                                        detectedTeamPortraits.forEach { portrait ->
+                                            portrait?.let { if (!it.isRecycled) it.recycle() }
+                                        }
+                                    }
+                                }
                             }
                             lastTeamOcrAt = now
                         }
@@ -1906,6 +1911,7 @@ class BattleOverlayService : Service(), BattleOverlayView.Callbacks {
         battleActive = false
         lastBattleEvidenceAtMs = 0L
         switchChoicePromptUntilMs = 0L
+        detector?.clearCachedPortraits()
         overlayView?.clearPokemonPortraits()
         dismissMoveMenu()
         redraw()
