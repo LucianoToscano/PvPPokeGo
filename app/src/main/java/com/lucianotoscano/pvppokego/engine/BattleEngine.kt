@@ -838,6 +838,10 @@ class BattleEngine(private val repo: GameDataRepository) {
         target.charge2Manual = old.charge2Manual
         target.observedChargedMoveIds.clear()
         target.observedChargedMoveIds.addAll(old.observedChargedMoveIds)
+        target.attackStageMin = old.attackStageMin
+        target.attackStageMax = old.attackStageMax
+        target.defenseStageMin = old.defenseStageMin
+        target.defenseStageMax = old.defenseStageMax
         target.lastHpRatio = old.lastHpRatio
         target.fainted = old.fainted
         target.lastSeenAtMs = old.lastSeenAtMs
@@ -846,6 +850,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun onPlayerChanged(name: String, cp: Int?, speciesId: String? = null) {
         saveOwnActiveState()
+        resetStages(ownActiveState)
         ownChargedCycle.reset()
         pendingIncomingChargedDamage = null
         pendingOutgoingChargedDamage = null
@@ -886,6 +891,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun onEnemyChanged(name: String, speciesId: String? = null) {
         saveActiveState()
+        resetStages(activeState)
         pendingIncomingChargedDamage = null
         pendingOutgoingChargedDamage = null
         pendingIncomingChargedHpBefore = null
@@ -906,9 +912,19 @@ class BattleEngine(private val repo: GameDataRepository) {
             charge1 = c1
             charge2 = c2
         }
-        val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
-        val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
-        tracker.restoreRange(minE, maxE, saved.fastMoveCount)
+        val weightedFast = repo.weightedFastMoves(lookup)
+        predictiveEnergy.reset(weightedFast, saved.predictiveEnergySnapshot)
+        if (saved.fastMoveManual || weightedFast.size <= 1) {
+            fast?.let(predictiveEnergy::confirmFastMove)
+        }
+        if (predictiveEnergy.isInitialized) {
+            syncLegacyEnemyEnergyFromPredictive()
+        } else {
+            val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
+            val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
+            tracker.restoreRange(minE, maxE, saved.fastMoveCount)
+        }
+        lastEnemyFastEventAtMs = 0L
         saveActiveState()
     }
 
@@ -1825,11 +1841,20 @@ class BattleEngine(private val repo: GameDataRepository) {
         state.fastMoveId = fast?.moveId
         state.chargedMove1Id = charge1?.moveId
         state.chargedMove2Id = charge2?.moveId
-        state.fastMoveCount = tracker.fastMoveCount
-        state.estimatedEnergy = tracker.energy
-        state.minEnergy = tracker.minEnergy
-        state.maxEnergy = tracker.maxEnergy
-        state.energyUncertain = tracker.isRange
+        if (predictiveEnergy.isInitialized) {
+            state.predictiveEnergySnapshot = predictiveEnergy.snapshot()
+            state.fastMoveCount = predictiveEnergy.hypotheses().maxOfOrNull { it.completedFastMoves } ?: tracker.fastMoveCount
+            state.estimatedEnergy = predictiveEnergy.energyLikely()
+            state.minEnergy = predictiveEnergy.energyMin()
+            state.maxEnergy = predictiveEnergy.energyMax()
+            state.energyUncertain = state.minEnergy != state.maxEnergy || predictiveEnergy.hypothesisCount() > 1
+        } else {
+            state.fastMoveCount = tracker.fastMoveCount
+            state.estimatedEnergy = tracker.energy
+            state.minEnergy = tracker.minEnergy
+            state.maxEnergy = tracker.maxEnergy
+            state.energyUncertain = tracker.isRange
+        }
         state.lastSeenAtMs = System.currentTimeMillis()
     }
 
@@ -1849,6 +1874,24 @@ class BattleEngine(private val repo: GameDataRepository) {
             if (hp <= .01f) state.fainted = true
         }
         state.lastSeenAtMs = System.currentTimeMillis()
+    }
+
+    private fun resetStages(state: BattlePokemonState?) {
+        state ?: return
+        state.attackStageMin = 0
+        state.attackStageMax = 0
+        state.defenseStageMin = 0
+        state.defenseStageMax = 0
+    }
+
+    private fun syncLegacyEnemyEnergyFromPredictive() {
+        if (!predictiveEnergy.isInitialized) return
+        val count = predictiveEnergy.hypotheses().maxOfOrNull { it.completedFastMoves } ?: 0
+        tracker.restoreRange(
+            predictiveEnergy.energyMin(),
+            predictiveEnergy.energyMax(),
+            count
+        )
     }
 
     private fun normalizedMoveNames(move: MoveDef): Set<String> = buildSet {
