@@ -81,4 +81,15 @@ class DamageForecastEngineTest {
         assertTrue(shadowAttacker > neutral)
         assertTrue(shadowDefender > neutral)
     }
+
+    @Test
+    fun percentMaxHpDamageMethodMatchesPvpokeRule() {
+        val move = fireMove.copy(power = 50, damageMethod = "percentMaxHP")
+        val pct = DamageForecastEngine.modelDamagePercent(
+            fireAttacker, statsA, grassDefender, statsD, move
+        )!!
+        // floor(50% of 150 HP)+1 = 76 => 50.666...%
+        assertTrue(pct > 50f)
+        assertTrue(pct < 51f)
+    }
 }
