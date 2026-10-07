@@ -16,6 +16,52 @@ import kotlin.math.ceil
  * It never mutates battle state and never sends input to Pokémon GO.
  */
 internal object ChargedMovePredictor {
+    data class EnergyWindow(
+        val fastMovesMin: Int,
+        val fastMovesLikely: Int,
+        val fastMovesMax: Int,
+        val turnsMin: Int,
+        val turnsLikely: Int,
+        val turnsMax: Int,
+        val readyPossible: Boolean,
+        val readyCertain: Boolean,
+        val doubleReadyPossible: Boolean
+    )
+
+    /**
+     * Pure turn/energy math used by the live predictor and deterministic JVM tests.
+     * The input hypotheses already encode uncertainty about the enemy Fast Move.
+     */
+    internal fun energyWindow(
+        hypotheses: List<EnemyEnergyTracker.Hypothesis>,
+        energyCost: Int
+    ): EnergyWindow? {
+        if (hypotheses.isEmpty() || energyCost <= 0) return null
+        val perHypothesis = hypotheses.map { h ->
+            val missing = (energyCost - h.energy).coerceAtLeast(0)
+            val gain = h.fastMove.energyGain.coerceAtLeast(1)
+            val fastNeeded = if (missing == 0) 0 else {
+                ceil(missing.toDouble() / gain.toDouble()).toInt()
+            }
+            val turns = fastNeeded * h.fastMove.turns.coerceAtLeast(1)
+            Triple(h, fastNeeded, turns)
+        }
+        val fastValues = perHypothesis.map { it.second to it.first.weight }
+        val turnValues = perHypothesis.map { it.third to it.first.weight }
+        return EnergyWindow(
+            fastMovesMin = fastValues.minOf { it.first },
+            fastMovesLikely = weightedMedian(fastValues),
+            fastMovesMax = fastValues.maxOf { it.first },
+            turnsMin = turnValues.minOf { it.first },
+            turnsLikely = weightedMedian(turnValues),
+            turnsMax = turnValues.maxOf { it.first },
+            readyPossible = hypotheses.any { it.energy >= energyCost },
+            readyCertain = hypotheses.all { it.energy >= energyCost },
+            doubleReadyPossible = energyCost * 2 <= 100 &&
+                hypotheses.any { it.energy >= energyCost * 2 }
+        )
+    }
+
     fun forecast(
         repo: GameDataRepository,
         energyTracker: EnemyEnergyTracker,
@@ -41,25 +87,16 @@ internal object ChargedMovePredictor {
         val candidates = chargedMoves.mapNotNull { weightedMove ->
             val move = weightedMove.move
             val cost = move.chargedCost.takeIf { it > 0 } ?: return@mapNotNull null
-            val perHypothesis = hypotheses.map { h ->
-                val missing = (cost - h.energy).coerceAtLeast(0)
-                val fastNeeded = if (missing == 0) 0 else {
-                    ceil(missing.toDouble() / h.fastMove.energyGain.coerceAtLeast(1).toDouble()).toInt()
-                }
-                val turns = fastNeeded * h.fastMove.turns
-                Triple(h, fastNeeded, turns)
-            }
-            val fastValues = perHypothesis.map { it.second to it.first.weight }
-            val turnValues = perHypothesis.map { it.third to it.first.weight }
-            val fastMin = fastValues.minOf { it.first }
-            val fastMax = fastValues.maxOf { it.first }
-            val fastLikely = weightedMedian(fastValues)
-            val turnsMin = turnValues.minOf { it.first }
-            val turnsMax = turnValues.maxOf { it.first }
-            val turnsLikely = weightedMedian(turnValues)
-            val readyPossible = hypotheses.any { it.energy >= cost }
-            val readyCertain = hypotheses.all { it.energy >= cost }
-            val doubleReadyPossible = cost * 2 <= 100 && hypotheses.any { it.energy >= cost * 2 }
+            val window = energyWindow(hypotheses, cost) ?: return@mapNotNull
+            val fastMin = window.fastMovesMin
+            val fastMax = window.fastMovesMax
+            val fastLikely = window.fastMovesLikely
+            val turnsMin = window.turnsMin
+            val turnsMax = window.turnsMax
+            val turnsLikely = window.turnsLikely
+            val readyPossible = window.readyPossible
+            val readyCertain = window.readyCertain
+            val doubleReadyPossible = window.doubleReadyPossible
 
             val damage = DamageForecastEngine.forecast(
                 repo = repo,
