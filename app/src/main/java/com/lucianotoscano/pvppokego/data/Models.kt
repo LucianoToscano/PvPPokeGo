@@ -10,11 +10,19 @@ data class MoveDef(
     val power: Int = 0,
     val energyGain: Int = 0,
     val energy: Int = 0,
-    val cooldown: Int = 500
+    val cooldown: Int = 500,
+    val buffs: List<Int> = emptyList(),
+    val buffTarget: String? = null,
+    /** PvPoke currently stores this value as a JSON string (for example "1" or ".125"). */
+    val buffApplyChance: String? = null,
+    val damageMethod: String? = null,
+    val archetype: String? = null,
+    val isMegaMove: Boolean = false
 ) {
     val turns: Int get() = (cooldown / 500).coerceAtLeast(1)
     val isFast: Boolean get() = energyGain > 0
     val chargedCost: Int get() = if (energy < 0) -energy else energy
+    val buffChance: Float get() = buffApplyChance?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 0f
 }
 
 @Serializable
@@ -35,7 +43,10 @@ data class PokemonDef(
     val baseStats: PokemonBaseStats = PokemonBaseStats(),
     /** PvPoke default IV combinations, e.g. cp1500 -> [level, atkIV, defIV, hpIV]. */
     val defaultIVs: Map<String, List<Double>> = emptyMap(),
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    /** Complete legal pools from the bundled PvPoke Game Master. */
+    val fastMoves: List<String> = emptyList(),
+    val chargedMoves: List<String> = emptyList()
 )
 
 data class EstimatedBattleStats(
@@ -113,6 +124,80 @@ data class DamageForecast(
     val confidence: DamageForecastConfidence
 )
 
+data class StatStageRange(
+    val min: Int = 0,
+    val max: Int = 0
+) {
+    fun normalized(): StatStageRange {
+        val a = min.coerceIn(-4, 4)
+        val b = max.coerceIn(-4, 4)
+        return if (a <= b) copy(min = a, max = b) else copy(min = b, max = a)
+    }
+}
+
+data class EnemyEnergyHypothesisSnapshot(
+    val fastMoveId: String,
+    val energy: Int,
+    val completedFastMoves: Int,
+    val elapsedTurns: Int,
+    val weight: Float
+)
+
+data class EnemyEnergySnapshot(
+    val hypotheses: List<EnemyEnergyHypothesisSnapshot> = emptyList(),
+    val observedFastEvents: Int = 0,
+    val lastObservedTurn: Int = 0
+)
+
+enum class PredictionEvidenceClass {
+    OBSERVED_FACT,
+    MATHEMATICALLY_POSSIBLE,
+    ESTIMATE,
+    HEURISTIC
+}
+
+data class ChargedThreatForecast(
+    val move: MoveDef,
+    val energyCost: Int,
+    val currentEnergyMin: Int,
+    val currentEnergyMax: Int,
+    val fastMovesRemainingMin: Int,
+    val fastMovesRemainingLikely: Int,
+    val fastMovesRemainingMax: Int,
+    val turnsRemainingMin: Int,
+    val turnsRemainingLikely: Int,
+    val turnsRemainingMax: Int,
+    val earliestTimeMs: Long,
+    val likelyTimeMs: Long,
+    val prepareInTurns: Int,
+    val readyPossible: Boolean,
+    val readyCertain: Boolean,
+    val doubleReadyPossible: Boolean,
+    val confidence: Float,
+    val evidenceClass: PredictionEvidenceClass,
+    val eptMin: Float,
+    val eptMax: Float,
+    val dptMin: Float? = null,
+    val dptMax: Float? = null,
+    val dpeMin: Float? = null,
+    val dpeMax: Float? = null,
+    val damageForecast: DamageForecast? = null,
+    val likelyKo: Boolean = false,
+    val threatScore: Float = 0f
+)
+
+data class EnemyEnergyForecast(
+    val energyMin: Int,
+    val energyLikely: Int,
+    val energyMax: Int,
+    val hypothesisCount: Int,
+    val fastMoveNames: List<String>,
+    val candidates: List<ChargedThreatForecast>,
+    val leadTimeMs: Long,
+    val reactionTurns: Int,
+    val confidence: Float
+)
+
 data class ObservedDamageEstimate(
     val averagePercent: Float,
     val minPercent: Float,
@@ -183,6 +268,12 @@ data class BattlePokemonState(
     var charge1Manual: Boolean = false,
     var charge2Manual: Boolean = false,
     var observedChargedMoveIds: MutableSet<String> = linkedSetOf(),
+    /** Full predictive energy hypotheses preserved through switches. */
+    var predictiveEnergySnapshot: EnemyEnergySnapshot? = null,
+    var attackStageMin: Int = 0,
+    var attackStageMax: Int = 0,
+    var defenseStageMin: Int = 0,
+    var defenseStageMax: Int = 0,
     /** Last trustworthy visible HP estimate for this exact Pokémon. */
     var lastHpRatio: Float? = null,
     var fainted: Boolean = false,
@@ -253,6 +344,12 @@ data class BattleUiState(
     /** Local-only history pattern, never stronger than current battle evidence. */
     val strategyPatternHint: String? = null,
     val strategyPatternConfidence: Float = 0f,
+    /** Predictive enemy-energy model. Null until the enemy identity/movepool is usable. */
+    val enemyEnergyForecast: EnemyEnergyForecast? = null,
+    val enemyAttackStages: StatStageRange = StatStageRange(),
+    val enemyDefenseStages: StatStageRange = StatStageRange(),
+    val playerAttackStages: StatStageRange = StatStageRange(),
+    val playerDefenseStages: StatStageRange = StatStageRange(),
     /** Damage learned from observations in this battle/matchup. */
     val incomingFastDamage: ObservedDamageEstimate? = null,
     val incomingCharged1Damage: ObservedDamageEstimate? = null,
