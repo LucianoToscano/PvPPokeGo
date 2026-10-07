@@ -88,3 +88,10 @@ Equivalentes com flavors ao pedido `:app:testDebugUnitTest` / `:app:assembleDebu
 Mesmo com CI verde, estes pontos dependem do Samsung real: qualidade OCR/crops nas resoluções do aparelho, estabilidade de MediaProjection ao abrir/fechar o Pokémon GO, Samsung Screen Recorder no Recorder Compat, codec OEM do gravador interno, aparência do adaptive icon no launcher/cache Samsung, posição final dos blocos aprovados e comportamento de recomendações em batalhas reais.
 
 A regra desta linha continua: **MELHORAR E ORGANIZAR, NUNCA EMPOBRECER**.
+
+
+## Decisão atual: gravação adiada
+
+Para fechar o restante da 0.5.25, a gravação interna e o Recorder Compat ficam fora do critério de aceite desta etapa. O código/arquitetura existente é preservado para retomada posterior. A validação atual concentra-se no APK padrão, OCR/identidade, equipe de 3, reservas, energia, Charged/Fast, escudos, continuidade, assistente, histórico, HUD, menu/home, manifests e assinatura.
+
+A configuração Gradle agora aceita uma chave permanente via `keystore.properties` local ou variáveis `PVPPG_*`, sempre fora do Git.
