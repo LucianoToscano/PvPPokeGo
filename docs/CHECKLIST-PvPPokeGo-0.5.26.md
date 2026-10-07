@@ -343,3 +343,12 @@ Commit de código: `fd66d553fc37148c6ab53d96c040b047e01c3bb4` (base `fdd78ab2998
 - Placar 1–80 e PBE inalterados; nenhum item elevado a concluído.
 - Prioridade imediata do Guia Mestre: build Standard e QA real dos ícones de reserva/troca, seguido do ícone oficial instalado. A sequência de novas funcionalidades acima permanece posterior a esses bugs.
 - Registro detalhado e limitações no Guia Mestre, seção 11.
+
+
+## Continuação — launcher com fallback legacy (2026-10-07)
+
+- Item #14: permanece 🟡; fallback do crop indexado ao card agora exige `cardMappingConfirmed` (commit `8dbf9f47`), sem validação física.
+- Problema do launcher: a arte oficial `drawable-nodpi/pvppokego_launcher.png` foi conferida; além dos adaptive icons já existentes (API 26+), foram criados `mipmap-anydpi/ic_launcher.xml` e `ic_launcher_round.xml` para fallback pré-API 26 (commits `5b939efb`, `b3605eea`).
+- Workflow Standard valida os fallbacks (commit `7fe575e6`). Ícone instalado no Samsung ainda **não validado**.
+- GitHub Actions run `37702558022` terminou com `steps=null` antes do build; **não há APK real 0.5.26 gerado**. Não marcar como concluído ou renomear APK antigo.
+- Próximo passo: desbloquear execução de runner, rodar suíte/assemble Standard e QA dos retratos de reserva/ícone, conferindo SHA-256.
