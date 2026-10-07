@@ -84,6 +84,12 @@ data class RankingEntry(
     val score: Double = 0.0
 )
 
+data class WeightedMove(
+    val move: MoveDef,
+    /** Normalized 0..1 prior from PvPoke usage; uniform when ranking usage is unavailable. */
+    val weight: Float
+)
+
 data class DetectedPokemon(
     val name: String,
     val cp: Int?,
