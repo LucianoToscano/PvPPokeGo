@@ -83,4 +83,22 @@ class ChargedMovePredictorTest {
         assertTrue(cheap.fastMovesLikely < expensive.fastMovesLikely)
         assertTrue(cheap.turnsLikely < expensive.turnsLikely)
     }
+
+    @Test
+    fun currentPvpokeMudShotToHydroCannonFixtureIsFiveFastTenTurns() {
+        // PvPoke snapshot f627e89: Mud Shot = 9E/2 turns, Hydro Cannon = 40E.
+        val mudShot = fast("MUD_SHOT", 9, 2)
+        val window = ChargedMovePredictor.energyWindow(listOf(h(mudShot, 0, 1f)), 40)!!
+        assertEquals(5, window.fastMovesLikely)
+        assertEquals(10, window.turnsLikely)
+    }
+
+    @Test
+    fun currentPvpokeIncinerateToFlameChargeFixtureIsThreeFastFifteenTurns() {
+        // PvPoke snapshot f627e89: Incinerate = 20E/5 turns, Flame Charge = 50E.
+        val incinerate = fast("INCINERATE", 20, 5)
+        val window = ChargedMovePredictor.energyWindow(listOf(h(incinerate, 0, 1f)), 50)!!
+        assertEquals(3, window.fastMovesLikely)
+        assertEquals(15, window.turnsLikely)
+    }
 }
