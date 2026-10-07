@@ -119,6 +119,8 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var lastMotion = 0f
     private var ownShieldsRemaining = 2
     private var opponentShieldsRemaining = 2
+    private var ownShieldsKnown = true
+    private var opponentShieldsKnown = true
     private var captureHealth = CaptureHealth.FRESH
     private var captureStatusText: String? = null
     private var captureGapStartedAtMs: Long? = null
@@ -194,6 +196,8 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastMotion = 0f
         ownShieldsRemaining = 2
         opponentShieldsRemaining = 2
+        ownShieldsKnown = true
+        opponentShieldsKnown = true
         captureHealth = CaptureHealth.FRESH
         captureStatusText = null
         captureGapStartedAtMs = null
@@ -209,6 +213,15 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun onBattleConfidence(value: Float) {
         lastBattleConfidence = value.coerceIn(0f, 1f)
+    }
+
+    /**
+     * Capture may start after one or more shields were already spent. Preserve the
+     * unknown state instead of pretending the battle still has 2/2 shields.
+     */
+    fun onStartedMidBattle() {
+        ownShieldsKnown = false
+        opponentShieldsKnown = false
     }
 
     fun onCaptureHealth(health: CaptureHealth, statusText: String? = null) {
@@ -1179,16 +1192,21 @@ class BattleEngine(private val repo: GameDataRepository) {
         // nothing. Wait long enough for the impact animation and require several
         // stable HP observations before consuming a shield, so a delayed frame cannot
         // turn into a false shield event.
+        val shieldsKnown = if (targetIsOwn) ownShieldsKnown else opponentShieldsKnown
         val defenderShields = if (targetIsOwn) ownShieldsRemaining else opponentShieldsRemaining
         if (
             ShieldObservationPolicy.isShieldLikely(
                 damageFraction = damage,
                 observations = sample.observations,
                 elapsedMs = nowMs - sample.armedAtMs,
-                shieldsRemaining = defenderShields
+                // When capture started mid-battle, only the use itself can be inferred;
+                // the exact remaining count is intentionally unknown.
+                shieldsRemaining = if (shieldsKnown) defenderShields else 1
             )
         ) {
-            val remaining = if (targetIsOwn) {
+            val remaining = if (!shieldsKnown) {
+                null
+            } else if (targetIsOwn) {
                 if (ownShieldsRemaining <= 0) return null
                 ownShieldsRemaining = (ownShieldsRemaining - 1).coerceAtLeast(0)
                 ownShieldsRemaining
@@ -1732,6 +1750,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         return BattleUiState(
             playerName = playerName,
             playerCp = playerCp,
+            playerTypes = pTypes,
             opponentName = enemyName,
             opponentCp = enemyCp,
             opponentTypes = eTypes,
@@ -1758,6 +1777,8 @@ class BattleEngine(private val repo: GameDataRepository) {
             playerHpBarYFraction = lastPlayerHpBarYFraction,
             ownShieldsRemaining = ownShieldsRemaining,
             opponentShieldsRemaining = opponentShieldsRemaining,
+            ownShieldsKnown = ownShieldsKnown,
+            opponentShieldsKnown = opponentShieldsKnown,
             incomingDamagePreview = incomingPreview,
             captureHealth = captureHealth,
             captureStatusText = captureStatusText,
