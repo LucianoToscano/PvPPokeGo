@@ -352,60 +352,17 @@ class GameDataRepository(private val context: Context) {
         val raw = nameOrSpeciesId ?: return null
         val target = observedCp?.takeIf { it >= 10 } ?: return null
         val key = normalizeName(raw) + "|" + target + "|" + currentLeagueCp
-        if (attackRangeCache.containsKey(key)) return attackRangeCache[key]
+        attackRangeCache[key]?.let { return it }
 
         val def = pokemon(raw) ?: return null
-        val base = def.baseStats
-        if (base.atk <= 0 || base.def <= 0 || base.hp <= 0 || cpMultipliers.isEmpty()) return null
-
-        val cpCap = if (currentLeagueCp >= 10_000) Int.MAX_VALUE else currentLeagueCp
-        var bestError = Int.MAX_VALUE
-        var minAttack = Double.POSITIVE_INFINITY
-        var maxAttack = Double.NEGATIVE_INFINITY
-        var samples = 0
-
-        cpMultipliers.forEach { cpm ->
-            for (atkIv in 0..15) {
-                val attack = (base.atk + atkIv) * cpm
-                for (defIv in 0..15) {
-                    val defenseRoot = kotlin.math.sqrt((base.def + defIv).toDouble())
-                    val partial = (base.atk + atkIv).toDouble() * defenseRoot * cpm * cpm
-                    for (hpIv in 0..15) {
-                        val staminaRoot = kotlin.math.sqrt((base.hp + hpIv).toDouble())
-                        val cp = floor(partial * staminaRoot / 10.0).toInt().coerceAtLeast(10)
-                        if (cp > cpCap) continue
-                        val error = kotlin.math.abs(cp - target)
-                        when {
-                            error < bestError -> {
-                                bestError = error
-                                minAttack = attack
-                                maxAttack = attack
-                                samples = 1
-                            }
-                            error == bestError -> {
-                                minAttack = minOf(minAttack, attack)
-                                maxAttack = maxOf(maxAttack, attack)
-                                samples++
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (samples <= 0 || !minAttack.isFinite() || !maxAttack.isFinite() || bestError > 25) {
-            return null
-        }
-        val likely = estimatedBattleStats(raw, target)?.attack
-            ?.coerceIn(minAttack, maxAttack)
-            ?: ((minAttack + maxAttack) / 2.0)
-        return AttackRangeEstimate(
-            minAttack = minAttack,
-            likelyAttack = likely,
-            maxAttack = maxAttack,
-            sampleCount = samples,
-            cpError = bestError
-        ).also { attackRangeCache[key] = it }
+        val likelyAttack = estimatedBattleStats(raw, target)?.attack
+        return AttackRangeEstimator.estimate(
+            base = def.baseStats,
+            cpMultipliers = cpMultipliers,
+            targetCp = target,
+            leagueCp = currentLeagueCp,
+            likelyAttack = likelyAttack
+        )?.also { attackRangeCache[key] = it }
     }
 
     fun localizedMoveName(move: MoveDef): String = moveNamesPtBr[normalizeId(move.moveId)] ?: move.name
