@@ -436,11 +436,11 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
     fun recordShield(
         actor: String,
         againstMove: String,
-        remaining: Int,
+        remaining: Int?,
         nowMs: Long = System.currentTimeMillis(),
         pokemon: String? = null,
-        confidence: String = "CONFIRMADO",
-        source: String = "barra de HP"
+        confidence: String = "INFERIDO_ALTO",
+        source: String = "barra de HP estável pós-Charged"
     ) {
         addEvent(
             actor = actor,
@@ -452,7 +452,10 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
             confidence = confidence,
             source = source,
             reason = null,
-            details = mapOf("shields" to remaining.coerceIn(0, 2).toString())
+            details = buildMap {
+                remaining?.let { put("shields", it.coerceIn(0, 2).toString()) }
+                if (remaining == null) put("shields", "desconhecido")
+            }
         )
     }
 
