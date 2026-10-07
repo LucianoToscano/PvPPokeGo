@@ -539,6 +539,13 @@ PRÓXIMO PASSO:
 - Com runner funcional, deixar o workflow Standard concluir e baixar o artefato efetivamente produzido; registrar checksum, teste e link na documentação.
 
 
+### Adendo ao registro anterior — checklist e espelho sincronizados
+
+- Checklist 0.5.26 atualizado no commit `e7348403c5d4b19f3c5c5191b423662c2955f2d7`.
+- Espelho do Guia Mestre no Google Drive (`178P8tWol8mjv_juy5qhyitEvE6yl1fzPnuLWGDV1cXw`) atualizado e conferido via conector nativo.
+- Último run `37702558022` não gerou artefatos (0), com job `113069219336` em failure e `steps=null`.
+- Nenhum APK renomeado, publicado ou entregue indevidamente.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
