@@ -70,6 +70,16 @@ Quando algo mudar, adicionar um novo registro explicando a correção/decisão.
 
 ## 3. Fonte de verdade atual
 
+### Fonte canônica
+
+GitHub:
+https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.26/docs/PROJECT_CONTINUITY_GUIDE.md
+
+Espelho no Google Drive:
+https://docs.google.com/document/d/178P8tWol8mjv_juy5qhyitEvE6yl1fzPnuLWGDV1cXw/edit?usp=drivesdk
+
+**Regra:** o GitHub é a fonte canônica versionada; o Google Drive é um espelho de consulta/continuidade. Quando houver divergência, verificar o estado real do repositório e atualizar os dois.
+
 Projeto: **PvPPokeGo**  
 Repositório: https://github.com/LucianoToscano/PvPPokeGo  
 Branch em desenvolvimento: `release/0.5.26`  
@@ -324,7 +334,12 @@ CONCLUÍDO.
 ### 2026-10-07 — Regra canônica de documentação e continuidade
 
 Versão: 0.5.26  
-Branch: `release/0.5.26`
+Branch: `release/0.5.26`  
+Commits:
+- `13650e1d1ac5190078aedd6433d284d940173d16` — criação do Guia Mestre;
+- `f2b20b8ad84521785a3d9301a2cbbde59d4735e1` — START_HERE redirecionado;
+- `0f0288ea7ecca3f927c2bf4646bfa4b661526597` — handoff 0.5.20 arquivado;
+- `5bd0cdf45aec1d80140f889ac27776c6abff9f28` — handoff atual redirecionado.
 
 OBJETIVO/PROBLEMA:
 - evitar perda de contexto entre chats, duplicação de trabalho e decisões contraditórias.
@@ -334,13 +349,22 @@ ALTERAÇÕES:
 - definido protocolo obrigatório de atualização;
 - definido template de registro;
 - definido prompt padrão para novo chat;
-- definido que `START_HERE_NEW_CHAT.md` deve apontar para este documento.
+- `START_HERE_NEW_CHAT.md` agora aponta para este documento;
+- o handoff antigo da 0.5.20 foi preservado em `docs/archive/CURRENT_DEVELOPMENT_HANDOFF-0.5.20.md`;
+- `docs/CURRENT_DEVELOPMENT_HANDOFF.md` agora aponta para o Guia Mestre;
+- criado espelho no Google Drive dentro da pasta oficial do projeto.
+
+GOOGLE DRIVE:
+- Documento: `PvPPokeGo — GUIA MESTRE DE CONTINUIDADE E REGISTRO`
+- ID: `178P8tWol8mjv_juy5qhyitEvE6yl1fzPnuLWGDV1cXw`
+- Link: https://docs.google.com/document/d/178P8tWol8mjv_juy5qhyitEvE6yl1fzPnuLWGDV1cXw/edit?usp=drivesdk
 
 RESULTADO:
-- passa a existir uma única referência principal para continuidade do projeto.
+- existe uma referência principal versionada no GitHub e um espelho persistente no Drive;
+- novos chats devem começar pelo Guia Mestre, não por resumos antigos.
 
 STATUS:
-CONCLUÍDO após commit deste documento.
+CONCLUÍDO.
 
 ## 12. Regra final
 
