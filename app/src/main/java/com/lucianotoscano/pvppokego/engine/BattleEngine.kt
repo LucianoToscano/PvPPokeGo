@@ -931,6 +931,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun selectFast(move: MoveDef) {
         fast = move
         activeState?.apply { fastMoveId = move.moveId; fastMoveManual = true }
+        ensurePredictiveEnergyInitialized()
+        predictiveEnergy.confirmFastMove(move)
+        syncLegacyEnemyEnergyFromPredictive()
         saveActiveState()
     }
 
@@ -984,8 +987,14 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun manualFastDelta(delta: Int) {
         val f = fast ?: return
-        if (delta > 0) tracker.onFastMove(f, delta)
-        if (delta < 0) tracker.undoFastMove(f, -delta)
+        ensurePredictiveEnergyInitialized()
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.manualFastDelta(delta, if (activeState?.fastMoveManual == true) f else null)
+            syncLegacyEnemyEnergyFromPredictive()
+        } else {
+            if (delta > 0) tracker.onFastMove(f, delta)
+            if (delta < 0) tracker.undoFastMove(f, -delta)
+        }
         lastAutoSource = "manual"
         saveActiveState()
     }
@@ -996,19 +1005,35 @@ class BattleEngine(private val repo: GameDataRepository) {
         source: String,
         hpRatio: Float?,
         motion: Float,
-        damageFraction: Float? = null
+        damageFraction: Float? = null,
+        nowMs: Long = System.currentTimeMillis()
     ) {
         lastDetectorConfidence = confidence
         lastAutoSource = source
         hpRatio?.let { lastHpRatio = it.coerceIn(0f, 1f) }
         lastMotion = motion
         if (count <= 0) return
-        if (System.currentTimeMillis() < ignoreFastUntilMs) { lastAutoSource = "charged-guard"; return }
+        if (nowMs < ignoreFastUntilMs) { lastAutoSource = "charged-guard"; return }
         val f = effectiveEnemyFastMove() ?: return
         if (fast?.moveId != f.moveId) {
             fast = f
             activeState?.fastMoveId = f.moveId
         }
+        ensurePredictiveEnergyInitialized()
+        val observedInterval = lastEnemyFastEventAtMs
+            .takeIf { it > 0L }
+            ?.let { (nowMs - it).coerceAtLeast(0L) }
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeFastCompletion(
+                count = count,
+                eventId = nowMs,
+                confidence = confidence,
+                observedIntervalMs = observedInterval
+            )
+            if (activeState?.fastMoveManual == true) predictiveEnergy.confirmFastMove(f)
+            syncLegacyEnemyEnergyFromPredictive()
+        }
+        lastEnemyFastEventAtMs = nowMs
         incomingDamageTracker.record(
             attackerKey = currentEnemyDamageKey(),
             defenderKey = currentPlayerDamageKey(),
@@ -1018,7 +1043,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             confidence = confidence,
             charged = false
         )
-        tracker.onFastMove(f, count)
+        if (!predictiveEnergy.isInitialized) tracker.onFastMove(f, count)
         saveActiveState()
     }
 
@@ -1202,13 +1227,30 @@ class BattleEngine(private val repo: GameDataRepository) {
         (playerSpeciesId ?: playerName)?.takeIf { it.isNotBlank() }?.let(::normalize)
 
     fun chargedUsed(move: MoveDef): Boolean {
-        val ok = tracker.onChargedMove(move)
-        if (ok) recordChargedMove(move, observed = false)
+        ensurePredictiveEnergyInitialized()
+        val ok = if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeCharged(move)
+            syncLegacyEnemyEnergyFromPredictive()
+            true
+        } else {
+            tracker.onChargedMove(move)
+        }
+        if (ok) {
+            applyChargedStatEffects(move, actorIsEnemy = true)
+            recordChargedMove(move, observed = false)
+        }
         return ok
     }
 
     private fun observedChargedUsed(move: MoveDef, nowMs: Long = System.currentTimeMillis()): Boolean {
-        tracker.onObservedChargedMove(move)
+        ensurePredictiveEnergyInitialized()
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeCharged(move)
+            syncLegacyEnemyEnergyFromPredictive()
+        } else {
+            tracker.onObservedChargedMove(move)
+        }
+        applyChargedStatEffects(move, actorIsEnemy = true)
         recordChargedMove(move, observed = true)
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = nowMs
@@ -1219,8 +1261,16 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     private fun observedUnknownChargedUsed(nowMs: Long = System.currentTimeMillis()): Boolean {
-        val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
-        if (!tracker.onObservedUnknownCharged(candidates)) return false
+        val candidates = legalEnemyChargedMoves().ifEmpty { possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) } }
+        ensurePredictiveEnergyInitialized()
+        val accepted = if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeUnknownCharged(candidates).also {
+                if (it) syncLegacyEnemyEnergyFromPredictive()
+            }
+        } else {
+            tracker.onObservedUnknownCharged(candidates)
+        }
+        if (!accepted) return false
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = nowMs
         ignoreFastUntilMs = maxOf(ignoreFastUntilMs, nowMs + CHARGED_FAST_GUARD_MS)
@@ -1231,6 +1281,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun observedOwnChargedUsed(move: MoveDef): Boolean {
         ownTracker.onObservedChargedMove(move)
+        applyChargedStatEffects(move, actorIsEnemy = false)
         val state = ownActiveState
         if (state != null) {
             state.lastChargedMoveId = move.moveId
