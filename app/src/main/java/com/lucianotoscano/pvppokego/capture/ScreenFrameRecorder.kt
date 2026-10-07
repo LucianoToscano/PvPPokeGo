@@ -56,6 +56,11 @@ class ScreenFrameRecorder(private val context: Context) {
     private var outputHeight = 0
     private var encodedSampleCount = 0
     private var firstFrameSubmitted = false
+    private var submittedFrameCount = 0
+    private var inputWidth = 0
+    private var inputHeight = 0
+    private var conservativeProfile = false
+    private var currentFrameIntervalNs = FRAME_INTERVAL_NS
 
     var isRecording: Boolean = false
         private set
@@ -66,22 +71,47 @@ class ScreenFrameRecorder(private val context: Context) {
     var lastErrorMessage: String? = null
         private set
 
+    val hasEncodedSample: Boolean
+        get() = encodedSampleCount > 0
+
+    val submittedFrames: Int
+        get() = submittedFrameCount
+
+    val activeProfileLabel: String
+        get() = if (conservativeProfile) "compatível" else "padrão"
+
+    val encoderStalled: Boolean
+        get() = isRecording &&
+            conservativeProfile &&
+            encodedSampleCount == 0 &&
+            submittedFrameCount >= CONSERVATIVE_STALL_FRAMES
+
     fun start(width: Int, height: Int): Boolean {
         if (isRecording) return true
+        inputWidth = width
+        inputHeight = height
+        conservativeProfile = false
+        return startProfile(width, height, conservative = false)
+    }
+
+    private fun startProfile(width: Int, height: Int, conservative: Boolean): Boolean {
         lastErrorMessage = null
         if (width < 2 || height < 2) {
             lastErrorMessage = "Dimensões de captura inválidas"
             return false
         }
+        conservativeProfile = conservative
+        val maxWidth = if (conservative) CONSERVATIVE_MAX_OUTPUT_WIDTH else MAX_OUTPUT_WIDTH
+        val maxHeight = if (conservative) CONSERVATIVE_MAX_OUTPUT_HEIGHT else MAX_OUTPUT_HEIGHT
+        val targetFps = if (conservative) CONSERVATIVE_FPS else TARGET_FPS
+        currentFrameIntervalNs = 1_000_000_000L / targetFps.coerceAtLeast(1)
 
         val scale = minOf(
             1f,
-            MAX_OUTPUT_WIDTH.toFloat() / width.toFloat(),
-            MAX_OUTPUT_HEIGHT.toFloat() / height.toFloat()
+            maxWidth.toFloat() / width.toFloat(),
+            maxHeight.toFloat() / height.toFloat()
         )
-        // Many Samsung/Qualcomm AVC encoders are happiest with macroblock-aligned
-        // dimensions. 720x1600 exceeded common AVC level limits and could produce
-        // an MP4 that existed but was not decodable by Gallery.
+        // Samsung/Qualcomm AVC encoders are usually more reliable with macroblock-aligned dimensions.
         fun align16(value: Int): Int = ((value.coerceAtLeast(16)) / 16) * 16
         outputWidth = align16((width * scale).toInt())
         outputHeight = align16((height * scale).toInt())
@@ -94,18 +124,16 @@ class ScreenFrameRecorder(private val context: Context) {
                 outputHeight
             ).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                setInteger(MediaFormat.KEY_BIT_RATE, suggestedBitrate(outputWidth, outputHeight))
-                setInteger(MediaFormat.KEY_FRAME_RATE, TARGET_FPS)
+                val bitrate = suggestedBitrate(outputWidth, outputHeight)
+                setInteger(MediaFormat.KEY_BIT_RATE, if (conservative) (bitrate * .62f).toInt() else bitrate)
+                setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-                // Deliberately avoid forcing profile/bitrate mode. Several OEM codecs
-                // accept the surface but later emit an unreadable stream when those
-                // optional constraints are unsupported.
             }
 
-            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).also {
-                it.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-                codecSurface = it.createInputSurface()
-                it.start()
+            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).also { encoder ->
+                encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                codecSurface = encoder.createInputSurface()
+                encoder.start()
             }
             muxer = MediaMuxer(tempFile!!.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             setupEgl(codecSurface ?: error("Encoder surface unavailable"))
@@ -115,14 +143,25 @@ class ScreenFrameRecorder(private val context: Context) {
             muxerStarted = false
             trackIndex = -1
             encodedSampleCount = 0
+            submittedFrameCount = 0
             firstFrameSubmitted = false
             isRecording = true
             true
         }.getOrElse { error ->
-            lastErrorMessage = "Falha ao iniciar encoder: ${error.javaClass.simpleName}: ${error.message ?: "sem detalhe"}"
+            lastErrorMessage = "Falha ao iniciar encoder (" + activeProfileLabel + "): " +
+                error.javaClass.simpleName + ": " + (error.message ?: "sem detalhe")
             releaseInternal(deleteTemp = true)
             false
         }
+    }
+
+    private fun retryWithConservativeProfile(): Boolean {
+        if (conservativeProfile || inputWidth < 2 || inputHeight < 2) return false
+        val reason = "Encoder padrão não produziu vídeo; tentando perfil compatível"
+        releaseInternal(deleteTemp = true)
+        val ok = startProfile(inputWidth, inputHeight, conservative = true)
+        if (ok) lastErrorMessage = reason
+        return ok
     }
 
     /**
@@ -131,9 +170,21 @@ class ScreenFrameRecorder(private val context: Context) {
      */
     fun recordFrame(bitmap: Bitmap, nowNs: Long = System.nanoTime()) {
         if (!isRecording || bitmap.isRecycled) return
-        if (lastFrameAtNs != 0L && nowNs - lastFrameAtNs < FRAME_INTERVAL_NS) return
-        lastFrameAtNs = nowNs
+        if (lastFrameAtNs != 0L && nowNs - lastFrameAtNs < currentFrameIntervalNs) return
 
+        if (
+            !conservativeProfile &&
+            encodedSampleCount == 0 &&
+            submittedFrameCount >= PRIMARY_RETRY_SUBMITTED_FRAMES &&
+            nowNs - startedAtNs >= PRIMARY_RETRY_AFTER_NS
+        ) {
+            if (retryWithConservativeProfile()) {
+                recordFrame(bitmap, System.nanoTime())
+            }
+            return
+        }
+
+        lastFrameAtNs = nowNs
         runCatching {
             if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) return@runCatching
             GLES20.glViewport(0, 0, outputWidth, outputHeight)
@@ -163,6 +214,7 @@ class ScreenFrameRecorder(private val context: Context) {
                 (nowNs - startedAtNs).coerceAtLeast(0L)
             )
             EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+            submittedFrameCount++
             if (!firstFrameSubmitted) {
                 firstFrameSubmitted = true
                 runCatching {
@@ -375,6 +427,7 @@ class ScreenFrameRecorder(private val context: Context) {
         muxerStarted = false
         trackIndex = -1
         encodedSampleCount = 0
+        submittedFrameCount = 0
         firstFrameSubmitted = false
     }
 
@@ -423,10 +476,16 @@ class ScreenFrameRecorder(private val context: Context) {
 
     companion object {
         private const val TARGET_FPS = 10
+        private const val CONSERVATIVE_FPS = 8
         private const val FRAME_INTERVAL_NS = 100_000_000L
+        private const val PRIMARY_RETRY_AFTER_NS = 2_200_000_000L
+        private const val PRIMARY_RETRY_SUBMITTED_FRAMES = 12
+        private const val CONSERVATIVE_STALL_FRAMES = 24
         private const val EGL_RECORDABLE_ANDROID = 0x3142
         private const val MAX_OUTPUT_WIDTH = 720
         private const val MAX_OUTPUT_HEIGHT = 1280
+        private const val CONSERVATIVE_MAX_OUTPUT_WIDTH = 576
+        private const val CONSERVATIVE_MAX_OUTPUT_HEIGHT = 1024
         private const val MIN_VALID_MP4_BYTES = 16_384L
 
         private val VERTICES: FloatBuffer = ByteBuffer

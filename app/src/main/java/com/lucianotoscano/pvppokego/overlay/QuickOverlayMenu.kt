@@ -168,8 +168,10 @@ class QuickOverlayMenu(
         val labels = settings.quickMenuShowLabels
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            background = panelBackground()
+            // PGSharp-style floating menu: no card/panel behind the controls.
+            // Only the icon tiles and high-contrast white labels are drawn.
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setBackgroundColor(Color.TRANSPARENT)
         }
         if (labels) buildLabeledMenu(content) else buildIconMenu(content)
 
@@ -247,9 +249,9 @@ class QuickOverlayMenu(
                 IconItem("⚡","Energia",settings.showEnergyProgress){settings.showEnergyProgress=!settings.showEnergyProgress;changed()}
             )
             row(
+                IconItem("HP","HP / dano",settings.showHpAssist){settings.showHpAssist=!settings.showHpAssist;changed()},
                 IconItem("↻","Timer",settings.showSwitchTimer){settings.showSwitchTimer=!settings.showSwitchTimer;changed()},
                 IconItem("H","Histórico",settings.showEnemyHistory){settings.showEnemyHistory=!settings.showEnemyHistory;changed()},
-                IconItem("◐","Opacidade",null){settings.opacity=if(settings.opacity>=.99f).3f else settings.opacity+.1f;callbacks.onSettingsChanged(false);refreshPanel()},
                 IconItem("D","Debug",settings.debugMode){settings.debugMode=!settings.debugMode;changed()}
             )
             row(
@@ -339,6 +341,10 @@ class QuickOverlayMenu(
                 settings.showEnergyProgress = !settings.showEnergyProgress
                 changed()
             }
+            addRow(parent, "HP", "HP e previsão de dano", settings.showHpAssist) {
+                settings.showHpAssist = !settings.showHpAssist
+                changed()
+            }
             addRow(parent, "↻", "Timer de troca", settings.showSwitchTimer) {
                 settings.showSwitchTimer = !settings.showSwitchTimer
                 changed()
@@ -422,9 +428,10 @@ class QuickOverlayMenu(
     private fun addSectionHeader(parent: LinearLayout, title: String) {
         parent.addView(TextView(context).apply {
             text = title
-            setTextColor(Color.rgb(85, 85, 85))
+            setTextColor(Color.argb(225, 255, 255, 255))
             textSize = 10f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setShadowLayer(3.2f, 0f, 1.2f, Color.BLACK)
             setPadding(dp(4), dp(8), dp(4), dp(4))
             letterSpacing = .08f
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -441,9 +448,9 @@ class QuickOverlayMenu(
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(5), dp(3), dp(8), dp(3))
+            setPadding(dp(2), dp(2), dp(6), dp(2))
             isClickable = true
-            background = menuRowBackground(danger)
+            setBackgroundColor(Color.TRANSPARENT)
             setOnClickListener { onTap() }
         }
         row.addView(TextView(context).apply {
@@ -456,12 +463,14 @@ class QuickOverlayMenu(
         }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(9) })
         row.addView(TextView(context).apply {
             text = label
-            setTextColor(if (danger) Color.rgb(185, 45, 52) else Color.rgb(45, 45, 45))
-            textSize = 13f
+            setTextColor(Color.WHITE)
+            textSize = 13.5f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setShadowLayer(4f, 0f, 1.5f, Color.BLACK)
             maxLines = 1
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
-            bottomMargin = dp(3)
+        parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(41)).apply {
+            bottomMargin = dp(1)
         })
     }
 
@@ -630,31 +639,18 @@ class QuickOverlayMenu(
         setStroke(dp(1), Color.argb(225, 238, 241, 246))
     }
 
-    private fun panelBackground(): GradientDrawable = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        cornerRadius = dp(10).toFloat()
-        setColor(Color.argb(248, 250, 250, 247))
-        setStroke(dp(1), Color.argb(150, 210, 214, 210))
-    }
-
-    private fun menuRowBackground(danger: Boolean): GradientDrawable = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        cornerRadius = dp(5).toFloat()
-        setColor(if (danger) Color.rgb(255, 240, 240) else Color.rgb(250, 250, 247))
-    }
-
     private fun squareIconBackground(enabled: Boolean?, danger: Boolean = false): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
-        cornerRadius = dp(2).toFloat()
+        cornerRadius = dp(1).toFloat()
         setColor(
             when {
-                danger -> Color.rgb(167, 89, 89)
-                enabled == true -> Color.rgb(102, 112, 105)
-                enabled == false -> Color.rgb(151, 154, 151)
-                else -> Color.rgb(132, 136, 132)
+                danger -> Color.argb(235, 118, 92, 92)
+                enabled == true -> Color.argb(238, 112, 118, 113)
+                enabled == false -> Color.argb(218, 132, 136, 133)
+                else -> Color.argb(230, 122, 126, 123)
             }
         )
-        setStroke(dp(1), Color.argb(80, 70, 70, 70))
+        setStroke(dp(1), Color.argb(125, 245, 245, 245))
     }
 
     private fun leagueBackground(kind: LeagueKind): GradientDrawable = GradientDrawable().apply {

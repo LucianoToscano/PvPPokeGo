@@ -59,6 +59,7 @@ class BattleOverlayView(
     private var nativeTopCardYpx: Int? = null
     private var blockAlphaMultiplier = 1f
     private val reserveUsableCache = booleanArrayOf(true, true)
+    private val pokemonIconAtlas = PokemonIconAtlas(context.applicationContext)
 
     fun render(newState: BattleUiState) {
         state = newState
@@ -209,8 +210,23 @@ class BattleOverlayView(
 
         if (settings.showCurrentIndicator) withBlockAlpha(BLOCK_PLAYER_MATCHUP) {
             val (x, y) = topPos(BLOCK_PLAYER_MATCHUP, PLAYER_MATCHUP_X)
-            drawMatchupIndicator(canvas, rx(x), ry(y), state.playerMatchup, 14f*u()*settings.blockScale(BLOCK_PLAYER_MATCHUP))
+            val sx = rx(x)
+            val sy = ry(y)
+            val bs = settings.blockScale(BLOCK_PLAYER_MATCHUP)
+            drawMatchupIndicator(canvas, sx, sy, state.playerMatchup, 14f*u()*bs)
+            if (settings.showHudText && settings.showHpAssist) {
+                state.playerHpRatio?.let { hp ->
+                    paint.color = hudColor(Color.WHITE, .92f)
+                    paint.textAlign = Paint.Align.CENTER
+                    paint.typeface = Typeface.DEFAULT_BOLD
+                    paint.textSize = 9.2f*u()*bs
+                    paint.setShadowLayer(3f, 0f, 1f, Color.BLACK)
+                    canvas.drawText("HP " + (hp.coerceIn(0f,1f)*100f).toInt() + "%", sx, sy + 29f*u()*bs, paint)
+                    paint.clearShadowLayer()
+                }
+            }
         }
+        drawIncomingDamagePreview(canvas)
         if (settings.showStrongTypes) withBlockAlpha(BLOCK_STRONG_TYPES) { drawStrongTypes(canvas) }
         if (settings.showEnemyMoves) withBlockAlpha(BLOCK_ENEMY_MOVES) { drawMoveTriangle(canvas) }
         if (state.chargedIncoming && settings.showEnemyMoves && !settings.battleAssistEnabled) drawShieldAdvice(canvas)
@@ -299,6 +315,63 @@ class BattleOverlayView(
         }
     }
 
+    private fun drawIncomingDamagePreview(canvas: Canvas) {
+        if (!settings.showHpAssist) return
+        val forecast = state.incomingDamagePreview ?: return
+        val hp = state.playerHpRatio?.coerceIn(0f, 1f) ?: return
+        val yFraction = state.playerHpBarYFraction?.takeIf { it in 0f..1f } ?: return
+        if (
+            state.captureHealth == com.lucianotoscano.pvppokego.data.CaptureHealth.STALE ||
+            state.captureHealth == com.lucianotoscano.pvppokego.data.CaptureHealth.PAUSED
+        ) return
+
+        // Same player HP ROI used by BattleFrameEventDetector. Draw above the native
+        // bar so the preview never hides Pokemon GO current HP.
+        val left = width * .035f
+        val right = width * .405f
+        val fullWidth = (right - left).coerceAtLeast(1f)
+        val y = height * yFraction - 8f * u()
+        val barHeight = 5.2f * u()
+        val currentX = left + fullWidth * hp
+        val minDamage = (forecast.minPercent / 100f).coerceIn(0f, 1f)
+        val maxDamage = (forecast.maxPercent / 100f).coerceIn(minDamage, 1f)
+        val bestRemaining = (hp - minDamage).coerceIn(0f, hp)
+        val worstRemaining = (hp - maxDamage).coerceIn(0f, hp)
+        val bestX = left + fullWidth * bestRemaining
+        val worstX = left + fullWidth * worstRemaining
+
+        val predictiveOnly = !state.chargedIncoming
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(Color.rgb(238, 70, 64), if (predictiveOnly) .22f else .34f)
+        canvas.drawRoundRect(RectF(worstX, y, currentX, y + barHeight), 2.5f*u(), 2.5f*u(), paint)
+        paint.color = hudColor(Color.rgb(255, 184, 58), .55f)
+        canvas.drawRect(bestX - 1.2f*u(), y - 1f*u(), bestX + 1.2f*u(), y + barHeight + 1f*u(), paint)
+        paint.color = hudColor(Color.rgb(238, 70, 64), .78f)
+        canvas.drawRect(worstX - 1.2f*u(), y - 1f*u(), worstX + 1.2f*u(), y + barHeight + 1f*u(), paint)
+
+        if (settings.showHudText) {
+            val remainMin = (hp * 100f - forecast.maxPercent).coerceIn(0f, 100f)
+            val remainMax = (hp * 100f - forecast.minPercent).coerceIn(0f, 100f)
+            val source = when (forecast.confidence) {
+                com.lucianotoscano.pvppokego.data.DamageForecastConfidence.OBSERVED_STABLE -> "OBS"
+                com.lucianotoscano.pvppokego.data.DamageForecastConfidence.OBSERVED_ESTIMATED -> "OBS~"
+                com.lucianotoscano.pvppokego.data.DamageForecastConfidence.MODEL -> "MODELO"
+            }
+            val phase = if (predictiveOnly) "PREVIEW" else "IMPACTO"
+            val shields = if (state.ownShieldsRemaining > 0) "ESC " + state.ownShieldsRemaining else "SEM ESCUDO"
+            val label = phase + " • " + shields + " • -" + "%.0f".format(forecast.minPercent) + "-" +
+                "%.0f".format(forecast.maxPercent) + "% • →" + "%.0f".format(remainMin) + "-" +
+                "%.0f".format(remainMax) + "% • " + source
+            paint.color = hudColor(Color.WHITE, .96f)
+            paint.textAlign = Paint.Align.LEFT
+            paint.textSize = 8.8f*u()
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.setShadowLayer(3f, 0f, 1.2f, Color.BLACK)
+            canvas.drawText(label, left, y - 4f*u(), paint)
+            paint.clearShadowLayer()
+        }
+    }
+
     private fun drawStrongTypes(canvas: Canvas) {
         val strong = state.strongTypesAgainstOpponent.take(4)
         if (strong.isEmpty()) return
@@ -325,6 +398,7 @@ class BattleOverlayView(
         val spread=rx(74f)*bs; val fastRadius=31f*u()*bs; val chargedRadius=41f*u()*bs
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)
+            drawObservedDamageBadge(canvas, centerX, fastY-fastRadius-10f*u()*bs, state.incomingFastDamage)
             drawMoveLabel(
                 canvas,
                 centerX,
@@ -335,6 +409,7 @@ class BattleOverlayView(
         state.charged1?.let { p ->
             val cx=centerX-spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
+            drawObservedDamageBadge(canvas, cx, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged1Damage)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged1Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
@@ -342,23 +417,137 @@ class BattleOverlayView(
         state.charged2?.let { p ->
             val cx=centerX+spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
+            drawObservedDamageBadge(canvas, cx, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged2Damage)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged2Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
         if (settings.showHudText) {
-            val p = state.charged1 ?: state.charged2
-            if (p != null) {
-                val energyText = when (p.confidence) {
-                    EnergyConfidence.CONFIRMED -> "ENERGIA ${p.currentEnergy} • CONFIRMADA"
-                    EnergyConfidence.ESTIMATED -> "ENERGIA ~${p.currentEnergy} • ESTIMADA"
-                    EnergyConfidence.RANGE -> "ENERGIA ${p.minEnergy}-${p.maxEnergy} • FAIXA"
+            val predictive = state.enemyEnergyForecast
+            if (predictive != null) {
+                val energyText = if (predictive.energyMin == predictive.energyMax) {
+                    "⚡ " + predictive.energyLikely + " E"
+                } else {
+                    "⚡ " + predictive.energyMin + "-" + predictive.energyMax + " E"
                 }
-                paint.color=hudColor(Color.WHITE,.82f); paint.textAlign=Paint.Align.CENTER; paint.textSize=9.5f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint); paint.clearShadowLayer()
+                val fastHypothesis = if (predictive.fastMoveNames.size > 1) {
+                    " • " + predictive.fastMoveNames.size + " FAST possíveis"
+                } else ""
+                paint.color=hudColor(Color.WHITE,.84f)
+                paint.textAlign=Paint.Align.CENTER
+                paint.textSize=9.4f*u()*bs
+                paint.typeface=Typeface.DEFAULT_BOLD
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+                canvas.drawText(
+                    energyText + fastHypothesis,
+                    centerX,
+                    chargedY+chargedRadius+53f*u()*bs,
+                    paint
+                )
+                paint.clearShadowLayer()
+                drawPredictiveThreatRows(
+                    canvas,
+                    centerX,
+                    chargedY+chargedRadius+69f*u()*bs,
+                    bs,
+                    predictive
+                )
+            } else {
+                val p = state.charged1 ?: state.charged2
+                if (p != null) {
+                    val energyText = when (p.confidence) {
+                        EnergyConfidence.CONFIRMED -> "ENERGIA " + p.currentEnergy + " • CONFIRMADA"
+                        EnergyConfidence.ESTIMATED -> "ENERGIA ~" + p.currentEnergy + " • ESTIMADA"
+                        EnergyConfidence.RANGE -> "ENERGIA " + p.minEnergy + "-" + p.maxEnergy + " • FAIXA"
+                    }
+                    paint.color=hudColor(Color.WHITE,.82f)
+                    paint.textAlign=Paint.Align.CENTER
+                    paint.textSize=9.5f*u()*bs
+                    paint.typeface=Typeface.DEFAULT_BOLD
+                    paint.setShadowLayer(2f,0f,1f,Color.BLACK)
+                    canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint)
+                    paint.clearShadowLayer()
+                }
             }
         }
-        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 138f*u()*bs, 122f*u()*bs)
+        drawEditSelection(
+            canvas,
+            BLOCK_ENEMY_MOVES,
+            centerX,
+            (fastY+chargedY)/2f + 11f*u()*bs,
+            142f*u()*bs,
+            148f*u()*bs
+        )
+    }
+
+    private fun drawPredictiveThreatRows(
+        canvas: Canvas,
+        centerX: Float,
+        firstY: Float,
+        bs: Float,
+        forecast: com.lucianotoscano.pvppokego.data.EnemyEnergyForecast
+    ) {
+        val candidates = forecast.candidates
+            .sortedWith(
+                compareByDescending<com.lucianotoscano.pvppokego.data.ChargedThreatForecast> { it.readyCertain }
+                    .thenByDescending { it.readyPossible }
+                    .thenBy { it.turnsRemainingMin }
+                    .thenByDescending { it.threatScore }
+            )
+            .take(2)
+        candidates.forEachIndexed { index, candidate ->
+            val status = when {
+                candidate.readyCertain && candidate.likelyKo -> "DANGER"
+                candidate.readyCertain -> "READY"
+                candidate.readyPossible -> "READY?"
+                candidate.turnsRemainingMin <= forecast.reactionTurns -> "PREPARE"
+                else -> "+" + candidate.fastMovesRemainingLikely + " FAST"
+            }
+            val time = when {
+                candidate.readyPossible -> "agora"
+                candidate.likelyTimeMs <= 0L -> "agora"
+                else -> "~" + "%.1f".format(candidate.likelyTimeMs / 1000f) + "s"
+            }
+            val confidence = (candidate.confidence * 100f).toInt().coerceIn(0, 100)
+            val line = shortMoveName(candidate.move.name) + "  " + status + " • " + time + " • " + confidence + "%"
+            paint.color = hudColor(
+                when {
+                    candidate.readyCertain && candidate.likelyKo -> Color.rgb(244, 72, 68)
+                    candidate.readyPossible -> Color.rgb(244, 112, 64)
+                    candidate.turnsRemainingMin <= forecast.reactionTurns -> Color.rgb(245, 175, 52)
+                    else -> Color.WHITE
+                },
+                .94f
+            )
+            paint.textAlign = Paint.Align.CENTER
+            paint.textSize = 9.2f*u()*bs
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.setShadowLayer(3f,0f,1.1f,Color.BLACK)
+            canvas.drawText(line, centerX, firstY + index * 15f*u()*bs, paint)
+            paint.clearShadowLayer()
+        }
+    }
+
+    private fun drawObservedDamageBadge(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+        estimate: com.lucianotoscano.pvppokego.data.ObservedDamageEstimate?
+    ) {
+        if (!settings.showHudText || estimate == null) return
+        paint.color = hudColor(Color.WHITE, .90f)
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = 9.0f*u()
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.setShadowLayer(3f, 0f, 1f, Color.BLACK)
+        val sampleSuffix = if (estimate.samples > 1) " • " + estimate.samples + "x" else ""
+        canvas.drawText(
+            "~" + "%.0f".format(estimate.averagePercent) + "% HP" + sampleSuffix,
+            x,
+            y,
+            paint
+        )
+        paint.clearShadowLayer()
     }
 
     private fun drawEnemySuperEffectiveText(canvas: Canvas, x: Float, y: Float, move: MoveDef) {
@@ -471,53 +660,181 @@ class BattleOverlayView(
     }
 
     private fun drawReserves(canvas: Canvas) {
-        state.reserves.take(2).forEachIndexed { index,reserve ->
-            if (reserve.name.isNullOrBlank()) return@forEachIndexed
+        state.reserves.take(2).forEachIndexed { index, reserve ->
+            val reserveName = reserve.name?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
             val block = if (index == 0) BLOCK_RESERVE_1 else BLOCK_RESERVE_2
             if (settings.isBlockHidden(block)) return@forEachIndexed
+
             val bs = settings.blockScale(block)
             val oldAlpha = blockAlphaMultiplier
             blockAlphaMultiplier = settings.blockOpacity(block)
+
             val (indicatorRefX, cardRefY) = reservePos(index)
             val indicatorX = rx(indicatorRefX)
             val cardCenterY = ry(cardRefY)
+            val identityReady = reserve.identityConfirmed
+            val matchup = if (identityReady) reserve.matchup else MatchupState.UNKNOWN
 
-            if (!reserve.identityConfirmed) {
-                drawMatchupIndicator(canvas, indicatorX, cardCenterY, MatchupState.UNKNOWN, 13.5f*u()*bs)
-                if (settings.showHudText) {
-                    paint.color=hudColor(Color.WHITE,.72f)
-                    paint.textAlign=Paint.Align.CENTER; paint.textSize=8.6f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
-                    paint.setShadowLayer(2f,0f,1f,Color.BLACK)
-                    canvas.drawText("IDENTIFICANDO",indicatorX,cardCenterY+27f*u()*bs,paint)
-                    paint.clearShadowLayer()
+            // Matchup badge belongs to the stable team identity, not to the still-unknown
+            // upper/lower native card mapping.
+            drawMatchupIndicator(
+                canvas,
+                indicatorX,
+                cardCenterY,
+                matchup,
+                13.5f * u() * bs
+            )
+
+            val iconCenterX = indicatorX + rx(43f) * bs
+            val iconRadius = 23f * u() * bs
+            drawReservePokemonIcon(
+                canvas = canvas,
+                reserve = reserve,
+                fallbackName = reserveName,
+                centerX = iconCenterX,
+                centerY = cardCenterY,
+                radius = iconRadius
+            )
+
+            if (settings.showHudText) {
+                val textX = indicatorX + rx(105f) * bs
+                val title = buildString {
+                    append(reserveName)
+                    reserve.cp?.let { append(" PC ").append(it) }
                 }
-                drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
-                blockAlphaMultiplier = oldAlpha
-                return@forEachIndexed
+                paint.textAlign = Paint.Align.CENTER
+                paint.typeface = Typeface.DEFAULT_BOLD
+                paint.textSize = 10.0f * u() * bs
+                paint.color = hudColor(Color.WHITE, .95f)
+                paint.setShadowLayer(2.8f, 0f, 1f, Color.BLACK)
+                canvas.drawText(shortReserveTitle(title), textX, cardCenterY - 8f * u() * bs, paint)
+
+                val matchupText = when {
+                    !identityReady -> "IDENTIFICANDO"
+                    matchup == MatchupState.UNKNOWN -> "ANALISANDO"
+                    else -> reserveMatchupLabel(matchup)
+                }
+                val recommendation = reserve.recommendation
+                    ?.takeIf { it == "MELHOR" || it == "EVITAR" }
+                val hpLabel = if (settings.showHpAssist) {
+                    reserve.hpRatio?.let { "HP " + (it.coerceIn(0f, 1f) * 100f).toInt() + "%" }
+                } else null
+                val lifeLabel = if (
+                    reserve.status == com.lucianotoscano.pvppokego.data.TeamPokemonStatus.FAINTED
+                ) "DESMAIADO" else null
+                val status = listOfNotNull(lifeLabel, matchupText, recommendation, hpLabel)
+                    .distinct()
+                    .joinToString(" • ")
+
+                paint.textSize = 9.1f * u() * bs
+                paint.color = hudColor(
+                    if (identityReady) reserveMatchupColor(matchup) else Color.rgb(190, 194, 201),
+                    .96f
+                )
+                canvas.drawText(status, textX, cardCenterY + 10f * u() * bs, paint)
+                paint.clearShadowLayer()
             }
 
-            drawMatchupIndicator(canvas,indicatorX,cardCenterY,reserve.matchup,13.5f*u()*bs)
-            if(settings.showReserveTypes && reserve.types.isNotEmpty()){
-                val typeRadius=12f*u()*bs; val spacing=rx(31f)*bs; val centerX=rx(indicatorRefX+98f)
-                var x=centerX-if(reserve.types.size>1) spacing/2f else 0f
-                reserve.types.take(2).forEach{type->drawTypeChip(canvas,x,cardCenterY+ry(82f),type,typeRadius);x+=spacing}
+            if (settings.showReserveTypes && reserve.types.isNotEmpty() && identityReady) {
+                val typeRadius = 10.5f * u() * bs
+                val spacing = rx(27f) * bs
+                val centerX = indicatorX + rx(105f) * bs
+                var x = centerX - if (reserve.types.size > 1) spacing / 2f else 0f
+                reserve.types.take(2).forEach { type ->
+                    drawTypeChip(canvas, x, cardCenterY + 31f * u() * bs, type, typeRadius)
+                    x += spacing
+                }
             }
-            if (settings.showHudText && !reserve.recommendation.isNullOrBlank()) {
-                paint.color=hudColor(when(reserve.recommendation){"MELHOR"->Color.rgb(46,188,105);"EVITAR"->Color.rgb(232,61,72);else->Color.WHITE})
-                paint.textAlign=Paint.Align.CENTER; paint.textSize=9.2f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(reserve.recommendation!!,indicatorX,cardCenterY+27f*u()*bs,paint); paint.clearShadowLayer()
-            }
-            drawEditSelection(canvas, block, indicatorX+rx(49f), cardCenterY+ry(41f), 112f*u()*bs, 72f*u()*bs)
+
+            drawEditSelection(
+                canvas,
+                block,
+                indicatorX + rx(72f) * bs,
+                cardCenterY,
+                132f * u() * bs,
+                52f * u() * bs
+            )
             blockAlphaMultiplier = oldAlpha
         }
     }
+
+    private fun drawReservePokemonIcon(
+        canvas: Canvas,
+        reserve: com.lucianotoscano.pvppokego.data.ReserveState,
+        fallbackName: String,
+        centerX: Float,
+        centerY: Float,
+        radius: Float
+    ) {
+        paint.style = Paint.Style.FILL
+        paint.color = hudColor(Color.rgb(20, 24, 31), .72f)
+        canvas.drawCircle(centerX, centerY, radius + 2.0f * u(), paint)
+
+        stroke.style = Paint.Style.STROKE
+        stroke.strokeWidth = 1.7f * u()
+        stroke.color = hudColor(
+            if (reserve.identityConfirmed) reserveMatchupColor(reserve.matchup) else Color.WHITE,
+            .92f
+        )
+        canvas.drawCircle(centerX, centerY, radius + 1.0f * u(), stroke)
+
+        val def = gameRepo.pokemon(reserve.speciesId ?: fallbackName)
+        val destination = RectF(
+            centerX - radius,
+            centerY - radius,
+            centerX + radius,
+            centerY + radius
+        )
+        val oldPaintAlpha = paint.alpha
+        paint.alpha = (hudAlpha * blockAlphaMultiplier).toInt().coerceIn(0, 255)
+        val drawn = pokemonIconAtlas.draw(
+            canvas = canvas,
+            speciesId = reserve.speciesId ?: def?.speciesId,
+            dex = def?.dex?.takeIf { it > 0 },
+            destination = destination,
+            paint = paint
+        )
+        paint.alpha = oldPaintAlpha
+
+        if (!drawn) {
+            paint.color = hudColor(Color.WHITE, .95f)
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = Typeface.DEFAULT_BOLD
+            paint.textSize = radius * .72f
+            val initials = fallbackName
+                .split(Regex("\\s+"))
+                .filter { it.isNotBlank() }
+                .take(2)
+                .joinToString("") { it.take(1).uppercase() }
+                .ifBlank { "?" }
+            canvas.drawText(initials, centerX, centerY + radius * .25f, paint)
+        }
+    }
+
+    private fun reserveMatchupLabel(matchup: MatchupState): String = when (matchup) {
+        MatchupState.FAVORABLE -> "FORTE"
+        MatchupState.UNFAVORABLE -> "FRACO"
+        MatchupState.NEUTRAL -> "NEUTRO"
+        MatchupState.UNKNOWN -> "ANALISANDO"
+    }
+
+    private fun reserveMatchupColor(matchup: MatchupState): Int = when (matchup) {
+        MatchupState.FAVORABLE -> Color.rgb(46, 188, 105)
+        MatchupState.UNFAVORABLE -> Color.rgb(232, 61, 72)
+        MatchupState.NEUTRAL -> Color.rgb(188, 191, 196)
+        MatchupState.UNKNOWN -> Color.rgb(155, 160, 169)
+    }
+
+    private fun shortReserveTitle(value: String): String =
+        if (value.length <= 23) value else value.take(22) + "…"
 
     /** During Pokemon GO's switch chooser, show matchup only for a confirmed card identity. */
     private fun drawSwitchChoiceIndicators(canvas: Canvas) {
         val candidates = state.reserves.take(2).mapIndexedNotNull { index, reserve ->
             if (
                 reserveUsableCache.getOrElse(index) { true } &&
-                reserve.identityConfirmed
+                reserve.identityConfirmed &&
+                reserve.cardMappingConfirmed
             ) index to reserve else null
         }
         if (candidates.isEmpty()) return

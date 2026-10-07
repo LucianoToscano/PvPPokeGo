@@ -2,7 +2,11 @@ package com.lucianotoscano.pvppokego.engine
 
 import com.lucianotoscano.pvppokego.data.BattleDetection
 import com.lucianotoscano.pvppokego.data.BattlePokemonState
+import com.lucianotoscano.pvppokego.data.BattleStrategyProfile
 import com.lucianotoscano.pvppokego.data.BattleUiState
+import com.lucianotoscano.pvppokego.data.CaptureHealth
+import com.lucianotoscano.pvppokego.data.DamageForecast
+import com.lucianotoscano.pvppokego.data.DamageForecastConfidence
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
@@ -11,6 +15,8 @@ import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
 import com.lucianotoscano.pvppokego.data.ReserveCardEvidence
 import com.lucianotoscano.pvppokego.data.ReserveState
+import com.lucianotoscano.pvppokego.data.TeamPokemonStatus
+import com.lucianotoscano.pvppokego.data.StatStageRange
 import java.text.Normalizer
 
 /**
@@ -19,6 +25,17 @@ import java.text.Normalizer
  */
 class BattleEngine(private val repo: GameDataRepository) {
     data class DetectionChanges(val playerChanged: Boolean, val enemyChanged: Boolean)
+    data class DamageObservation(
+        /** Actor that launched the Charged Move: VOCÊ or INIMIGO. */
+        val actor: String,
+        val moveId: String,
+        val moveName: String,
+        val damagePercent: Float,
+        val damagePoints: Int,
+        val learnedSamples: Int,
+        val shielded: Boolean = false,
+        val shieldsRemaining: Int? = null
+    )
     data class BattleTextResult(
         val newChargedPrompt: Boolean = false,
         val chargedMoveConfirmed: Boolean = false,
@@ -40,6 +57,9 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val enemyCpTracker = StableCpTracker()
 
     private var tracker = EnergyTracker()
+    private val predictiveEnergy = EnemyEnergyTracker()
+    private val reactionWindow = ReactionWindowEstimator()
+    private var lastEnemyFastEventAtMs = 0L
     private var activeState: BattlePokemonState? = null
     private var fast: MoveDef? = null
     private var charge1: MoveDef? = null
@@ -71,6 +91,7 @@ class BattleEngine(private val repo: GameDataRepository) {
     private val ownTeam = linkedMapOf<String, Int?>()
     private val ownTeamSlots = mutableListOf<OwnTeamSlot>()
     private val reserveSlotVisible = arrayOfNulls<Boolean>(2)
+    private val reserveCardHpRatios = arrayOfNulls<Float>(2)
     private val reserveMissingStreak = IntArray(2)
     private val reserveCardCps = arrayOfNulls<Int>(2)
     private val reserveCpCandidate = arrayOfNulls<Int>(2)
@@ -94,7 +115,32 @@ class BattleEngine(private val repo: GameDataRepository) {
     private var lastBattleConfidence = 0f
     private var lastHpRatio: Float? = null
     private var lastOpponentHpRatio: Float? = null
+    private var lastPlayerHpBarYFraction: Float? = null
     private var lastMotion = 0f
+    private var ownShieldsRemaining = 2
+    private var opponentShieldsRemaining = 2
+    private var captureHealth = CaptureHealth.FRESH
+    private var captureStatusText: String? = null
+    private var captureGapStartedAtMs: Long? = null
+    private var localStrategyProfile: BattleStrategyProfile? = null
+
+    private val incomingDamageTracker = ObservedDamageTracker()
+    private var pendingIncomingChargedHpBefore: Float? = null
+    private var pendingOutgoingChargedHpBefore: Float? = null
+    private data class PendingChargedDamage(
+        val actor: String,
+        val moveId: String,
+        val moveName: String,
+        val attackerKey: String,
+        val defenderKey: String,
+        val hpBefore: Float,
+        val armedAtMs: Long,
+        var minimumHpAfter: Float = hpBefore,
+        var firstDropAtMs: Long? = null,
+        var observations: Int = 0
+    )
+    private var pendingIncomingChargedDamage: PendingChargedDamage? = null
+    private var pendingOutgoingChargedDamage: PendingChargedDamage? = null
 
     fun resetBattle() {
         playerName = null
@@ -106,6 +152,8 @@ class BattleEngine(private val repo: GameDataRepository) {
         playerCpTracker.reset()
         enemyCpTracker.reset()
         tracker.reset()
+        predictiveEnergy.clear()
+        lastEnemyFastEventAtMs = 0L
         ownTracker.reset()
         activeState = null
         ownActiveState = null
@@ -118,6 +166,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         ownTeam.clear()
         ownTeamSlots.clear()
         reserveSlotVisible.fill(null)
+        reserveCardHpRatios.fill(null)
         reserveMissingStreak.fill(0)
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
@@ -141,7 +190,19 @@ class BattleEngine(private val repo: GameDataRepository) {
         lastBattleConfidence = 0f
         lastHpRatio = null
         lastOpponentHpRatio = null
+        lastPlayerHpBarYFraction = null
         lastMotion = 0f
+        ownShieldsRemaining = 2
+        opponentShieldsRemaining = 2
+        captureHealth = CaptureHealth.FRESH
+        captureStatusText = null
+        captureGapStartedAtMs = null
+        localStrategyProfile = null
+        incomingDamageTracker.resetBattle()
+        pendingIncomingChargedHpBefore = null
+        pendingOutgoingChargedHpBefore = null
+        pendingIncomingChargedDamage = null
+        pendingOutgoingChargedDamage = null
         enemyStates.clearBattle()
         ownStates.clearBattle()
     }
@@ -149,6 +210,45 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onBattleConfidence(value: Float) {
         lastBattleConfidence = value.coerceIn(0f, 1f)
     }
+
+    fun onCaptureHealth(health: CaptureHealth, statusText: String? = null) {
+        val now = System.currentTimeMillis()
+        val wasGap = captureHealth == CaptureHealth.STALE || captureHealth == CaptureHealth.PAUSED
+        val isGap = health == CaptureHealth.STALE || health == CaptureHealth.PAUSED
+        if (!wasGap && isGap) {
+            captureGapStartedAtMs = now
+        } else if (wasGap && !isGap) {
+            val gapMs = captureGapStartedAtMs?.let { (now - it).coerceAtLeast(0L) } ?: 0L
+            ensurePredictiveEnergyInitialized()
+            if (predictiveEnergy.isInitialized && gapMs > 0L) {
+                val fastestTurns = predictiveEnergy.fastTurnsRange().first.coerceAtLeast(1)
+                val fastestMs = fastestTurns * EnemyEnergyTracker.TURN_MS.toLong()
+                val possibleMissed = kotlin.math.ceil(gapMs.toDouble() / fastestMs.toDouble())
+                    .toInt()
+                    .coerceIn(0, 5)
+                predictiveEnergy.widenForPossibleMissedFast(possibleMissed)
+                syncLegacyEnemyEnergyFromPredictive()
+                saveActiveState()
+            }
+            captureGapStartedAtMs = null
+        }
+        captureHealth = health
+        captureStatusText = statusText
+    }
+
+    fun onPipelineLatencySample(latencyMs: Long) {
+        reactionWindow.recordPipelineLatency(latencyMs)
+    }
+    fun onLocalStrategyProfile(profile: BattleStrategyProfile?) {
+        localStrategyProfile = profile?.takeIf {
+            enemyName == null || it.opponentName.equals(enemyName, ignoreCase = true)
+        }
+    }
+
+    fun onPlayerHpBarYFraction(value: Float?) {
+        value?.takeIf { it in 0f..1f }?.let { lastPlayerHpBarYFraction = it }
+    }
+
 
     fun onDetection(d: BattleDetection): DetectionChanges {
         val oldPlayer = playerName
@@ -348,6 +448,29 @@ class BattleEngine(private val repo: GameDataRepository) {
         )
     }
 
+    fun onReserveHpRatios(first: Float?, second: Float?) {
+        listOf(first, second).forEachIndexed { index, value ->
+            value?.takeIf { it in 0f..1f }?.let { reserveCardHpRatios[index] = it }
+        }
+
+        // Persist HP only after the native card is confidently mapped to a stable team slot.
+        // An unconfirmed upper/lower card must never contaminate another Pokémon's HP.
+        resolvedOwnReserves()
+            .filter { it.confirmed }
+            .forEach { resolved ->
+                val hp = reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: return@forEach
+                val slot = resolved.slot
+                val def = slotDefinition(slot)
+                val name = def?.speciesName ?: slot.name
+                val speciesId = slot.speciesId ?: def?.speciesId
+                val key = ownIdentityKey(name, slot.cp, speciesId)
+                val state = ownStates.getOrCreate(key, name, speciesId)
+                state.lastHpRatio = hp.coerceIn(0f, 1f)
+                if (hp <= .01f) state.fainted = true
+                state.lastSeenAtMs = System.currentTimeMillis()
+            }
+    }
+
     fun onReserveSlotsDetected(firstVisible: Boolean?, secondVisible: Boolean?) {
         fun update(index: Int, value: Boolean?) {
             when (value) {
@@ -439,25 +562,77 @@ class BattleEngine(private val repo: GameDataRepository) {
             }
         }
 
+        fun learnMissingMember(index: Int, evidence: ReserveCardEvidence) {
+            val stableSpeciesId = reserveCardSpeciesIds[index]
+            val stableDex = reserveCardDexes[index] ?: evidence.visualDex
+            val def = repo.pokemonForVisualIdentity(stableSpeciesId, stableDex ?: 0) ?: return
+            val confidence = evidence.visualConfidence ?: return
+            if (confidence < RESERVE_VISUAL_MIN_CONFIDENCE) return
+
+            // The native reserve cards belong to our team. Once the visual identity has
+            // passed the same confidence gate used by the matcher, it may fill a missing
+            // team slot even when the pre-battle team screen was never captured.
+            if (samePokemonIdentity(
+                    playerName,
+                    playerSpeciesId,
+                    def.speciesName,
+                    def.speciesId
+                )
+            ) {
+                return
+            }
+
+            val stableCp = reserveCardCps[index]
+            val existing = findOwnSlot(def.speciesName, stableCp, def.speciesId)
+            if (existing != null) {
+                if (stableCp != null) existing.cp = stableCp
+                existing.speciesId = def.speciesId
+                if (def.dex > 0) existing.dex = def.dex
+                existing.identityConfidence = maxOf(existing.identityConfidence, confidence)
+                rememberOwnPokemon(
+                    def.speciesName,
+                    stableCp,
+                    def.speciesId,
+                    def.dex.takeIf { it > 0 },
+                    confidence
+                )
+                return
+            }
+
+            if (ownTeamSlots.size >= 3) return
+            rememberOwnPokemon(
+                def.speciesName,
+                stableCp,
+                def.speciesId,
+                def.dex.takeIf { it > 0 },
+                confidence
+            )
+        }
+
         listOf(top, bottom).forEachIndexed { index, evidence ->
             updateCp(index, evidence.cp)
             updateSpecies(index, evidence)
             updateDex(index, evidence)
+            learnMissingMember(index, evidence)
         }
+        rebindOwnActiveStateToStableSlot()
     }
 
     fun onReserveCardCps(topCp: Int?, bottomCp: Int?) =
         onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
 
-    fun needsReserveCardScan(): Boolean =
-        ownTeamSlots.size >= 2 &&
-            reserveCardCps.indices.any { index ->
-                reserveCardCps[index] == null &&
-                    reserveCardSpeciesIds[index] == null &&
-                    reserveCardDexes[index] == null
-            }
+    fun needsReserveCardScan(): Boolean {
+        if (playerName.isNullOrBlank()) return false
+        if (ownTeamSlots.size < 3) return true
+        return reserveCardCps.indices.any { index ->
+            reserveCardCps[index] == null &&
+                reserveCardSpeciesIds[index] == null &&
+                reserveCardDexes[index] == null
+        }
+    }
 
     private fun clearReserveCardIdentity() {
+        reserveCardHpRatios.fill(null)
         reserveCardCps.fill(null)
         reserveCpCandidate.fill(null)
         reserveCpStreak.fill(0)
@@ -564,7 +739,18 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun activeEnemyName(): String? = enemyName
     fun latestPlayerHpRatio(): Float? = lastHpRatio
     fun latestOpponentHpRatio(): Float? = lastOpponentHpRatio
-    fun currentFastDurationMs(): Long = effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
+    fun currentFastDurationMs(): Long {
+        ensurePredictiveEnergyInitialized()
+        val manualOrOnlyHypothesis =
+            activeState?.fastMoveManual == true || predictiveEnergy.hypothesisCount() <= 1
+        return if (manualOrOnlyHypothesis) {
+            effectiveEnemyFastMove()?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
+        } else {
+            (predictiveEnergy.likelyFastTurns() * EnemyEnergyTracker.TURN_MS)
+                .toLong()
+                .coerceIn(500L, 3_500L)
+        }
+    }
     fun currentOwnFastDurationMs(): Long = ownFast?.cooldown?.toLong()?.coerceIn(500L, 3_500L) ?: 1_000L
 
     private fun samePokemonIdentity(
@@ -625,6 +811,23 @@ class BattleEngine(private val repo: GameDataRepository) {
                 slot.speciesId = def.speciesId
                 if (def.dex > 0) slot.dex = def.dex
             }
+        } else if (
+            ownTeamSlots.size < 3 &&
+            !speciesId.isNullOrBlank() &&
+            confidence >= ReserveMatchupPolicy.MIN_STABLE_TEAM_IDENTITY_CONFIDENCE
+        ) {
+            val nextSlot = (0..2).firstOrNull { candidate ->
+                ownTeamSlots.none { it.slot == candidate }
+            } ?: ownTeamSlots.size
+            val def = repo.pokemon(speciesId)
+            ownTeamSlots += OwnTeamSlot(
+                slot = nextSlot,
+                name = def?.speciesName ?: name,
+                cp = cp,
+                speciesId = def?.speciesId ?: speciesId,
+                dex = dex ?: def?.dex?.takeIf { it > 0 },
+                identityConfidence = confidence
+            )
         }
     }
 
@@ -669,13 +872,24 @@ class BattleEngine(private val repo: GameDataRepository) {
         target.charge2Manual = old.charge2Manual
         target.observedChargedMoveIds.clear()
         target.observedChargedMoveIds.addAll(old.observedChargedMoveIds)
+        target.attackStageMin = old.attackStageMin
+        target.attackStageMax = old.attackStageMax
+        target.defenseStageMin = old.defenseStageMin
+        target.defenseStageMax = old.defenseStageMax
+        target.lastHpRatio = old.lastHpRatio
+        target.fainted = old.fainted
         target.lastSeenAtMs = old.lastSeenAtMs
         ownActiveState = target
     }
 
     private fun onPlayerChanged(name: String, cp: Int?, speciesId: String? = null) {
         saveOwnActiveState()
+        resetStages(ownActiveState)
         ownChargedCycle.reset()
+        pendingIncomingChargedDamage = null
+        pendingOutgoingChargedDamage = null
+        pendingIncomingChargedHpBefore = null
+        pendingOutgoingChargedHpBefore = null
         playerName = name
         playerSpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         playerCp = cp
@@ -705,11 +919,18 @@ class BattleEngine(private val repo: GameDataRepository) {
         val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
         val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
         ownTracker.restoreRange(minE, maxE, saved.fastMoveCount)
+        lastHpRatio = saved.lastHpRatio
         saveOwnActiveState()
     }
 
     private fun onEnemyChanged(name: String, speciesId: String? = null) {
         saveActiveState()
+        resetStages(activeState)
+        pendingIncomingChargedDamage = null
+        pendingOutgoingChargedDamage = null
+        pendingIncomingChargedHpBefore = null
+        pendingOutgoingChargedHpBefore = null
+        localStrategyProfile = null
         enemyName = name
         enemySpeciesId = speciesId ?: repo.pokemon(name)?.speciesId
         chargedPendingSinceMs = null
@@ -725,15 +946,28 @@ class BattleEngine(private val repo: GameDataRepository) {
             charge1 = c1
             charge2 = c2
         }
-        val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
-        val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
-        tracker.restoreRange(minE, maxE, saved.fastMoveCount)
+        val weightedFast = repo.weightedFastMoves(lookup)
+        predictiveEnergy.reset(weightedFast, saved.predictiveEnergySnapshot)
+        if (saved.fastMoveManual || weightedFast.size <= 1) {
+            fast?.let(predictiveEnergy::confirmFastMove)
+        }
+        if (predictiveEnergy.isInitialized) {
+            syncLegacyEnemyEnergyFromPredictive()
+        } else {
+            val minE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.minEnergy else saved.estimatedEnergy
+            val maxE = if (saved.maxEnergy > 0 || saved.minEnergy > 0 || saved.energyUncertain) saved.maxEnergy else saved.estimatedEnergy
+            tracker.restoreRange(minE, maxE, saved.fastMoveCount)
+        }
+        lastEnemyFastEventAtMs = 0L
         saveActiveState()
     }
 
     fun selectFast(move: MoveDef) {
         fast = move
         activeState?.apply { fastMoveId = move.moveId; fastMoveManual = true }
+        ensurePredictiveEnergyInitialized()
+        predictiveEnergy.confirmFastMove(move)
+        syncLegacyEnemyEnergyFromPredictive()
         saveActiveState()
     }
 
@@ -787,25 +1021,63 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     fun manualFastDelta(delta: Int) {
         val f = fast ?: return
-        if (delta > 0) tracker.onFastMove(f, delta)
-        if (delta < 0) tracker.undoFastMove(f, -delta)
+        ensurePredictiveEnergyInitialized()
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.manualFastDelta(delta, if (activeState?.fastMoveManual == true) f else null)
+            syncLegacyEnemyEnergyFromPredictive()
+        } else {
+            if (delta > 0) tracker.onFastMove(f, delta)
+            if (delta < 0) tracker.undoFastMove(f, -delta)
+        }
         lastAutoSource = "manual"
         saveActiveState()
     }
 
-    fun onFastDetected(count: Int, confidence: Float, source: String, hpRatio: Float?, motion: Float) {
+    fun onFastDetected(
+        count: Int,
+        confidence: Float,
+        source: String,
+        hpRatio: Float?,
+        motion: Float,
+        damageFraction: Float? = null,
+        nowMs: Long = System.currentTimeMillis()
+    ) {
         lastDetectorConfidence = confidence
         lastAutoSource = source
-        lastHpRatio = hpRatio
+        hpRatio?.let { lastHpRatio = it.coerceIn(0f, 1f) }
         lastMotion = motion
         if (count <= 0) return
-        if (System.currentTimeMillis() < ignoreFastUntilMs) { lastAutoSource = "charged-guard"; return }
+        if (nowMs < ignoreFastUntilMs) { lastAutoSource = "charged-guard"; return }
         val f = effectiveEnemyFastMove() ?: return
         if (fast?.moveId != f.moveId) {
             fast = f
             activeState?.fastMoveId = f.moveId
         }
-        tracker.onFastMove(f, count)
+        ensurePredictiveEnergyInitialized()
+        val observedInterval = lastEnemyFastEventAtMs
+            .takeIf { it > 0L }
+            ?.let { (nowMs - it).coerceAtLeast(0L) }
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeFastCompletion(
+                count = count,
+                eventId = nowMs,
+                confidence = confidence,
+                observedIntervalMs = observedInterval
+            )
+            if (activeState?.fastMoveManual == true) predictiveEnergy.confirmFastMove(f)
+            syncLegacyEnemyEnergyFromPredictive()
+        }
+        lastEnemyFastEventAtMs = nowMs
+        incomingDamageTracker.record(
+            attackerKey = currentEnemyDamageKey(),
+            defenderKey = currentPlayerDamageKey(),
+            moveKey = ObservedDamageTracker.FAST_MOVE_KEY,
+            totalDamageFraction = damageFraction,
+            hits = count,
+            confidence = confidence,
+            charged = false
+        )
+        if (!predictiveEnergy.isInitialized) tracker.onFastMove(f, count)
         saveActiveState()
     }
 
@@ -819,14 +1091,200 @@ class BattleEngine(private val repo: GameDataRepository) {
         saveOwnActiveState()
     }
 
+    fun onHpObservation(
+        playerHpRatio: Float?,
+        opponentHpRatio: Float?,
+        nowMs: Long = System.currentTimeMillis()
+    ): List<DamageObservation> {
+        playerHpRatio?.let { value ->
+            lastHpRatio = value.coerceIn(0f, 1f)
+            ownActiveState?.let { state ->
+                state.lastHpRatio = lastHpRatio
+                if (value <= .01f) state.fainted = true
+            }
+        }
+        opponentHpRatio?.let { lastOpponentHpRatio = it.coerceIn(0f, 1f) }
+
+        val outcomes = mutableListOf<DamageObservation>()
+        processChargedOutcome(
+            pending = pendingIncomingChargedDamage,
+            hpRatio = playerHpRatio,
+            nowMs = nowMs,
+            targetIsOwn = true
+        )?.let { outcome ->
+            outcomes += outcome
+            pendingIncomingChargedDamage = null
+        }
+        processChargedOutcome(
+            pending = pendingOutgoingChargedDamage,
+            hpRatio = opponentHpRatio,
+            nowMs = nowMs,
+            targetIsOwn = false
+        )?.let { outcome ->
+            outcomes += outcome
+            pendingOutgoingChargedDamage = null
+        }
+
+        if (pendingIncomingChargedDamage?.let { nowMs - it.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS } == true) {
+            pendingIncomingChargedDamage = null
+        }
+        if (pendingOutgoingChargedDamage?.let { nowMs - it.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS } == true) {
+            pendingOutgoingChargedDamage = null
+        }
+        return outcomes
+    }
+
+    private fun processChargedOutcome(
+        pending: PendingChargedDamage?,
+        hpRatio: Float?,
+        nowMs: Long,
+        targetIsOwn: Boolean
+    ): DamageObservation? {
+        val sample = pending ?: return null
+        if (nowMs - sample.armedAtMs > CHARGED_DAMAGE_OBSERVATION_WINDOW_MS) return null
+        val hp = hpRatio ?: return null
+        sample.observations++
+        if (hp < sample.minimumHpAfter) sample.minimumHpAfter = hp
+
+        val damage = (sample.hpBefore - sample.minimumHpAfter).coerceIn(0f, 1f)
+        if (damage >= MIN_CHARGED_DAMAGE_SAMPLE_FRACTION && sample.firstDropAtMs == null) {
+            sample.firstDropAtMs = nowMs
+        }
+
+        val firstDropAt = sample.firstDropAtMs
+        if (firstDropAt != null && nowMs - firstDropAt >= CHARGED_DAMAGE_SETTLE_MS) {
+            val accepted = incomingDamageTracker.record(
+                attackerKey = sample.attackerKey,
+                defenderKey = sample.defenderKey,
+                moveKey = sample.moveId,
+                totalDamageFraction = damage,
+                hits = 1,
+                confidence = 1f,
+                charged = true
+            )
+            if (!accepted) return DamageObservation(
+                actor = sample.actor,
+                moveId = sample.moveId,
+                moveName = sample.moveName,
+                damagePercent = damage * 100f,
+                damagePoints = (damage * 1000f).toInt(),
+                learnedSamples = 0
+            )
+            val estimate = incomingDamageTracker.estimate(
+                sample.attackerKey,
+                sample.defenderKey,
+                sample.moveId,
+                if (targetIsOwn) lastHpRatio else lastOpponentHpRatio
+            )
+            return DamageObservation(
+                actor = sample.actor,
+                moveId = sample.moveId,
+                moveName = sample.moveName,
+                damagePercent = damage * 100f,
+                damagePoints = (damage * 1000f).toInt(),
+                learnedSamples = estimate?.samples ?: 1
+            )
+        }
+
+        // A shielded Charged Move normally changes the visible HP bar by virtually
+        // nothing. Wait long enough for the impact animation and require several
+        // stable HP observations before consuming a shield, so a delayed frame cannot
+        // turn into a false shield event.
+        val defenderShields = if (targetIsOwn) ownShieldsRemaining else opponentShieldsRemaining
+        if (
+            ShieldObservationPolicy.isShieldLikely(
+                damageFraction = damage,
+                observations = sample.observations,
+                elapsedMs = nowMs - sample.armedAtMs,
+                shieldsRemaining = defenderShields
+            )
+        ) {
+            val remaining = if (targetIsOwn) {
+                if (ownShieldsRemaining <= 0) return null
+                ownShieldsRemaining = (ownShieldsRemaining - 1).coerceAtLeast(0)
+                ownShieldsRemaining
+            } else {
+                if (opponentShieldsRemaining <= 0) return null
+                opponentShieldsRemaining = (opponentShieldsRemaining - 1).coerceAtLeast(0)
+                opponentShieldsRemaining
+            }
+            return DamageObservation(
+                actor = sample.actor,
+                moveId = sample.moveId,
+                moveName = sample.moveName,
+                damagePercent = damage * 100f,
+                damagePoints = (damage * 1000f).toInt(),
+                learnedSamples = 0,
+                shielded = true,
+                shieldsRemaining = remaining
+            )
+        }
+        return null
+    }
+
+    private fun armIncomingChargedDamage(move: MoveDef, nowMs: Long) {
+        val before = pendingIncomingChargedHpBefore ?: lastHpRatio ?: return
+        val attacker = currentEnemyDamageKey() ?: return
+        val defender = currentPlayerDamageKey() ?: return
+        pendingIncomingChargedDamage = PendingChargedDamage(
+            actor = "INIMIGO",
+            moveId = move.moveId,
+            moveName = move.name,
+            attackerKey = attacker,
+            defenderKey = defender,
+            hpBefore = before.coerceIn(0f, 1f),
+            armedAtMs = nowMs
+        )
+        pendingIncomingChargedHpBefore = null
+    }
+
+    private fun armOutgoingChargedDamage(move: MoveDef, nowMs: Long) {
+        val before = pendingOutgoingChargedHpBefore ?: lastOpponentHpRatio ?: return
+        val attacker = currentPlayerDamageKey() ?: return
+        val defender = currentEnemyDamageKey() ?: return
+        pendingOutgoingChargedDamage = PendingChargedDamage(
+            actor = "VOCÊ",
+            moveId = move.moveId,
+            moveName = move.name,
+            attackerKey = attacker,
+            defenderKey = defender,
+            hpBefore = before.coerceIn(0f, 1f),
+            armedAtMs = nowMs
+        )
+        pendingOutgoingChargedHpBefore = null
+    }
+
+    private fun currentEnemyDamageKey(): String? =
+        (enemySpeciesId ?: enemyName)?.takeIf { it.isNotBlank() }?.let(::normalize)
+
+    private fun currentPlayerDamageKey(): String? =
+        (playerSpeciesId ?: playerName)?.takeIf { it.isNotBlank() }?.let(::normalize)
+
     fun chargedUsed(move: MoveDef): Boolean {
-        val ok = tracker.onChargedMove(move)
-        if (ok) recordChargedMove(move, observed = false)
+        ensurePredictiveEnergyInitialized()
+        val ok = if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeCharged(move).also { accepted ->
+                if (accepted) syncLegacyEnemyEnergyFromPredictive()
+            }
+        } else {
+            tracker.onChargedMove(move)
+        }
+        if (ok) {
+            applyChargedStatEffects(move, actorIsEnemy = true)
+            recordChargedMove(move, observed = false)
+        }
         return ok
     }
 
     private fun observedChargedUsed(move: MoveDef, nowMs: Long = System.currentTimeMillis()): Boolean {
-        tracker.onObservedChargedMove(move)
+        ensurePredictiveEnergyInitialized()
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeCharged(move)
+            syncLegacyEnemyEnergyFromPredictive()
+        } else {
+            tracker.onObservedChargedMove(move)
+        }
+        applyChargedStatEffects(move, actorIsEnemy = true)
         recordChargedMove(move, observed = true)
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = nowMs
@@ -837,8 +1295,16 @@ class BattleEngine(private val repo: GameDataRepository) {
     }
 
     private fun observedUnknownChargedUsed(nowMs: Long = System.currentTimeMillis()): Boolean {
-        val candidates = possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) }
-        if (!tracker.onObservedUnknownCharged(candidates)) return false
+        val candidates = legalEnemyChargedMoves().ifEmpty { possibleChargedMoves().ifEmpty { listOfNotNull(charge1, charge2) } }
+        ensurePredictiveEnergyInitialized()
+        val accepted = if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.observeUnknownCharged(candidates).also {
+                if (it) syncLegacyEnemyEnergyFromPredictive()
+            }
+        } else {
+            tracker.onObservedUnknownCharged(candidates)
+        }
+        if (!accepted) return false
         chargedPendingSinceMs = null
         lastChargedConfirmedAtMs = nowMs
         ignoreFastUntilMs = maxOf(ignoreFastUntilMs, nowMs + CHARGED_FAST_GUARD_MS)
@@ -849,6 +1315,14 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private fun observedOwnChargedUsed(move: MoveDef): Boolean {
         ownTracker.onObservedChargedMove(move)
+        applyChargedStatEffects(move, actorIsEnemy = false)
+        // During our Charged sequence the opponent may have a Fast Move register ("float").
+        // Preserve both worlds instead of silently assuming zero gained energy.
+        ensurePredictiveEnergyInitialized()
+        if (predictiveEnergy.isInitialized) {
+            predictiveEnergy.widenForPossibleMissedFast(1)
+            syncLegacyEnemyEnergyFromPredictive()
+        }
         val state = ownActiveState
         if (state != null) {
             state.lastChargedMoveId = move.moveId
@@ -912,6 +1386,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         if (CHARGED_PROMPTS.any { text.contains(it) }) {
             if (chargedPendingSinceMs == null && nowMs - lastChargedConfirmedAtMs > UNKNOWN_CHARGED_DEBOUNCE_MS) {
                 chargedPendingSinceMs = nowMs
+                pendingIncomingChargedHpBefore = lastHpRatio
                 newPrompt = true
             }
         }
@@ -941,6 +1416,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                     moveId = ownMatched.moveId
                 )
                 if (ownChargedCycle.observe(signature, nowMs)) {
+                    pendingOutgoingChargedHpBefore = lastOpponentHpRatio
+                    armOutgoingChargedDamage(ownMatched, nowMs)
                     observedOwnChargedUsed(ownMatched)
                     return BattleTextResult(newPrompt, false, true, ownChargedMove = ownMatched)
                 }
@@ -959,6 +1436,7 @@ class BattleEngine(private val repo: GameDataRepository) {
                     moveId = matched.moveId
                 )
                 if (enemyChargedCycle.observe(signature, nowMs)) {
+                    armIncomingChargedDamage(matched, nowMs)
                     observedChargedUsed(matched, nowMs)
                     return BattleTextResult(newPrompt, true, false, enemyChargedMove = matched)
                 }
@@ -1013,6 +1491,69 @@ class BattleEngine(private val repo: GameDataRepository) {
             ?.let(repo::possibleChargedMoves)
             .orEmpty()
 
+    private fun legalEnemyFastMoves() =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::weightedFastMoves)
+            .orEmpty()
+
+    private fun legalEnemyChargedMoves(): List<MoveDef> =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::legalChargedMoves)
+            .orEmpty()
+
+    private fun weightedEnemyChargedMoves() =
+        (activeState?.speciesId ?: enemySpeciesId ?: enemyName)
+            ?.let(repo::weightedChargedMoves)
+            .orEmpty()
+
+    private fun ensurePredictiveEnergyInitialized() {
+        if (predictiveEnergy.isInitialized) return
+        val candidates = legalEnemyFastMoves()
+        if (candidates.isEmpty()) return
+        predictiveEnergy.reset(candidates, activeState?.predictiveEnergySnapshot)
+        if (activeState?.fastMoveManual == true || candidates.size <= 1) {
+            fast?.let(predictiveEnergy::confirmFastMove)
+        }
+        syncLegacyEnemyEnergyFromPredictive()
+    }
+
+    private fun stages(state: BattlePokemonState?): StatStageTracker.Stages =
+        StatStageTracker.Stages(
+            attack = StatStageRange(
+                state?.attackStageMin ?: 0,
+                state?.attackStageMax ?: 0
+            ).normalized(),
+            defense = StatStageRange(
+                state?.defenseStageMin ?: 0,
+                state?.defenseStageMax ?: 0
+            ).normalized()
+        )
+
+    private fun writeStages(state: BattlePokemonState?, value: StatStageTracker.Stages) {
+        state ?: return
+        val attack = value.attack.normalized()
+        val defense = value.defense.normalized()
+        state.attackStageMin = attack.min
+        state.attackStageMax = attack.max
+        state.defenseStageMin = defense.min
+        state.defenseStageMax = defense.max
+    }
+
+    private fun applyChargedStatEffects(move: MoveDef, actorIsEnemy: Boolean) {
+        if (move.buffs.size < 2 || move.buffChance <= 0f) return
+        val enemy = stages(activeState)
+        val own = stages(ownActiveState)
+        if (actorIsEnemy) {
+            val result = StatStageTracker.applyMove(move, self = enemy, opponent = own)
+            writeStages(activeState, result.self)
+            writeStages(ownActiveState, result.opponent)
+        } else {
+            val result = StatStageTracker.applyMove(move, self = own, opponent = enemy)
+            writeStages(ownActiveState, result.self)
+            writeStages(activeState, result.opponent)
+        }
+    }
+
     private fun switchSeconds(readyAtMs: Long, nowMs: Long = System.currentTimeMillis()): Int? {
         val remaining = readyAtMs - nowMs
         if (remaining <= 0L) return null
@@ -1049,11 +1590,19 @@ class BattleEngine(private val repo: GameDataRepository) {
                     likely.second,
                     likely.third
                 )
-                val score = if (resolved.confirmed) {
+                val stableSpeciesId = slot.speciesId ?: def?.speciesId
+                val identityReady = ReserveMatchupPolicy.canEvaluate(
+                    speciesId = stableSpeciesId,
+                    identityConfidence = slot.identityConfidence,
+                    types = types,
+                    enemyTypes = eTypes,
+                    cardMappingConfirmed = resolved.confirmed
+                )
+                val score = if (identityReady) {
                     reserveScore(
                         name = name,
                         cp = cp,
-                        speciesId = slot.speciesId ?: def?.speciesId,
+                        speciesId = stableSpeciesId,
                         myTypes = types,
                         enemyTypes = eTypes
                     )
@@ -1062,23 +1611,46 @@ class BattleEngine(private val repo: GameDataRepository) {
                 }
                 ReserveState(
                     name = name,
-                    speciesId = slot.speciesId ?: def?.speciesId,
+                    speciesId = stableSpeciesId,
                     cp = cp,
                     types = types,
-                    matchup = if (resolved.confirmed) classify(types, eTypes) else MatchupState.UNKNOWN,
-                    visible = reserveSlotVisible.getOrNull(index) != false,
+                    matchup = if (identityReady) ReserveMatchupPolicy.classifyScore(score) else MatchupState.UNKNOWN,
+                    // Visibility belongs to a physical native card. Until that card is
+                    // mapped, do not mark a known team member dead just because the
+                    // opposite card temporarily disappeared.
+                    visible = if (resolved.confirmed) {
+                        reserveSlotVisible.getOrNull(resolved.cardIndex) != false
+                    } else {
+                        true
+                    },
                     score = score,
                     teamSlot = slot.slot,
                     identityKey = identity,
                     cardCp = resolved.cardCp,
-                    identityConfirmed = resolved.confirmed,
+                    identityConfirmed = identityReady,
+                    cardMappingConfirmed = resolved.confirmed,
                     identitySource = resolved.source,
                     fastMove = reserveFast,
                     chargedMove1 = reserveC1,
                     chargedMove2 = reserveC2,
                     fastMoveKnowledge = moveKnowledge(saved, 0, reserveFast),
                     chargedMove1Knowledge = moveKnowledge(saved, 1, reserveC1),
-                    chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2)
+                    chargedMove2Knowledge = moveKnowledge(saved, 2, reserveC2),
+                    hpRatio = if (resolved.confirmed) {
+                        reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: saved?.lastHpRatio
+                    } else {
+                        saved?.lastHpRatio
+                    },
+                    status = when {
+                        saved?.fainted == true -> TeamPokemonStatus.FAINTED
+                        resolved.confirmed &&
+                            reserveSlotVisible.getOrNull(resolved.cardIndex) == false ->
+                            TeamPokemonStatus.FAINTED
+                        resolved.confirmed &&
+                            (reserveCardHpRatios.getOrNull(resolved.cardIndex) ?: 1f) <= .01f ->
+                            TeamPokemonStatus.FAINTED
+                        else -> TeamPokemonStatus.RESERVE
+                    }
                 )
             }
         val bestVisibleScore = rawReserves
@@ -1094,8 +1666,56 @@ class BattleEngine(private val repo: GameDataRepository) {
             r.copy(recommendation = label)
         }
 
+        ensurePredictiveEnergyInitialized()
+        val enemyStages = stages(activeState)
+        val ownStages = stages(ownActiveState)
+        val predictiveForecast = if (predictiveEnergy.isInitialized) {
+            ChargedMovePredictor.forecast(
+                repo = repo,
+                energyTracker = predictiveEnergy,
+                chargedMoves = weightedEnemyChargedMoves(),
+                attackerId = enemySpeciesId ?: enemyName,
+                attackerCp = enemyCp,
+                defenderId = playerSpeciesId ?: playerName,
+                defenderCp = playerCp,
+                currentHpRatio = lastHpRatio,
+                reaction = reactionWindow,
+                observedDamage = { move ->
+                    incomingDamageTracker.estimate(
+                        currentEnemyDamageKey(),
+                        currentPlayerDamageKey(),
+                        move.moveId,
+                        lastHpRatio
+                    )
+                },
+                attackerAttackStages = enemyStages.attack,
+                defenderDefenseStages = ownStages.defense
+            )
+        } else null
+
         val enemyConf = enemyEnergyConfidence()
         val ownConf = ownEnergyConfidence()
+        val enemyCharged1Prediction = if (f != null && charge1 != null) tracker.predict(charge1!!, f, enemyConf) else null
+        val enemyCharged2Prediction = if (f != null && charge2 != null) tracker.predict(charge2!!, f, enemyConf) else null
+        val ownCharged1Prediction = if (of != null && ownCharge1 != null) ownTracker.predict(ownCharge1!!, of, ownConf) else null
+        val ownCharged2Prediction = if (of != null && ownCharge2 != null) ownTracker.predict(ownCharge2!!, of, ownConf) else null
+        val incomingPreview = if (
+            captureHealth != CaptureHealth.STALE &&
+            captureHealth != CaptureHealth.PAUSED
+        ) {
+            if (chargedPendingSinceMs != null) {
+                combinedIncomingDamageForecast(
+                    listOfNotNull(enemyCharged1Prediction, enemyCharged2Prediction)
+                )
+            } else {
+                predictiveForecast?.candidates
+                    ?.firstOrNull {
+                        it.readyPossible ||
+                            it.turnsRemainingMin <= predictiveForecast.reactionTurns
+                    }
+                    ?.damageForecast
+            }
+        } else null
         val enemyHistory = enemyStates.all()
             .sortedByDescending { it.lastSeenAtMs }
             .take(3)
@@ -1119,20 +1739,76 @@ class BattleEngine(private val repo: GameDataRepository) {
             strongTypesAgainstOpponent = if (eTypes.isEmpty()) emptyList() else TypeChart.strongTypesAgainst(eTypes),
             reserves = reserveStates,
             fastMove = f,
-            charged1 = if (f != null && charge1 != null) tracker.predict(charge1!!, f, enemyConf) else null,
-            charged2 = if (f != null && charge2 != null) tracker.predict(charge2!!, f, enemyConf) else null,
+            charged1 = enemyCharged1Prediction,
+            charged2 = enemyCharged2Prediction,
             fastMoveKnowledge = moveKnowledge(activeState, 0, f),
             charged1Knowledge = moveKnowledge(activeState, 1, charge1),
             charged2Knowledge = moveKnowledge(activeState, 2, charge2),
             ownFastMove = of,
-            ownCharged1 = if (of != null && ownCharge1 != null) ownTracker.predict(ownCharge1!!, of, ownConf) else null,
-            ownCharged2 = if (of != null && ownCharge2 != null) ownTracker.predict(ownCharge2!!, of, ownConf) else null,
+            ownCharged1 = ownCharged1Prediction,
+            ownCharged2 = ownCharged2Prediction,
             ownFastMoveKnowledge = moveKnowledge(ownActiveState, 0, of),
             ownCharged1Knowledge = moveKnowledge(ownActiveState, 1, ownCharge1),
             ownCharged2Knowledge = moveKnowledge(ownActiveState, 2, ownCharge2),
             ownSwitchSeconds = switchSeconds(ownSwitchReadyAtMs),
             opponentSwitchSeconds = switchSeconds(opponentSwitchReadyAtMs),
             chargedIncoming = chargedPendingSinceMs != null,
+            playerHpRatio = lastHpRatio,
+            opponentHpRatio = lastOpponentHpRatio,
+            playerHpBarYFraction = lastPlayerHpBarYFraction,
+            ownShieldsRemaining = ownShieldsRemaining,
+            opponentShieldsRemaining = opponentShieldsRemaining,
+            incomingDamagePreview = incomingPreview,
+            captureHealth = captureHealth,
+            captureStatusText = captureStatusText,
+            strategyPatternHint = localStrategyProfile?.let { profile ->
+                when {
+                    profile.firstChargedMove != null &&
+                        profile.chargedSamples >= 3 &&
+                        profile.firstChargedRate >= .60f ->
+                        "Histórico local: " + profile.firstChargedMove + " foi o primeiro carregado em " +
+                            "%.0f".format(profile.firstChargedRate * 100f) + "% de " + profile.battles + " batalha(s)"
+                    profile.mostCommonChargedMove != null && profile.chargedSamples >= 4 ->
+                        "Histórico local: " + profile.mostCommonChargedMove + " apareceu em " +
+                            "%.0f".format(profile.mostCommonChargedRate * 100f) + "% dos carregados observados"
+                    else -> null
+                }
+            },
+            strategyPatternConfidence = localStrategyProfile?.let { profile ->
+                when {
+                    profile.chargedSamples >= 8 -> .85f
+                    profile.chargedSamples >= 4 -> .68f
+                    profile.chargedSamples >= 3 -> .58f
+                    else -> 0f
+                }
+            } ?: 0f,
+            enemyEnergyForecast = predictiveForecast,
+            enemyAttackStages = enemyStages.attack,
+            enemyDefenseStages = enemyStages.defense,
+            playerAttackStages = ownStages.attack,
+            playerDefenseStages = ownStages.defense,
+            incomingFastDamage = incomingDamageTracker.estimate(
+                currentEnemyDamageKey(),
+                currentPlayerDamageKey(),
+                ObservedDamageTracker.FAST_MOVE_KEY,
+                lastHpRatio
+            ),
+            incomingCharged1Damage = charge1?.let { move ->
+                incomingDamageTracker.estimate(
+                    currentEnemyDamageKey(),
+                    currentPlayerDamageKey(),
+                    move.moveId,
+                    lastHpRatio
+                )
+            },
+            incomingCharged2Damage = charge2?.let { move ->
+                incomingDamageTracker.estimate(
+                    currentEnemyDamageKey(),
+                    currentPlayerDamageKey(),
+                    move.moveId,
+                    lastHpRatio
+                )
+            },
             detectorConfidence = lastDetectorConfidence,
             battleConfidence = lastBattleConfidence,
             enemyHistory = enemyHistory,
@@ -1144,12 +1820,84 @@ class BattleEngine(private val repo: GameDataRepository) {
                 appendLine("Inimigo: ${enemyName ?: "?"} PC ${enemyCp ?: "?"}")
                 appendLine("Fast: ${f?.name ?: "?"} | contagem=${tracker.fastMoveCount} manual=${s?.fastMoveManual == true}")
                 appendLine("Energia=${tracker.minEnergy}-${tracker.maxEnergy}/100 | fonte=$lastAutoSource conf=${"%.2f".format(lastDetectorConfidence)}")
+                predictiveForecast?.let { pf ->
+                    val next = pf.candidates.firstOrNull()
+                    appendLine(
+                        "Predict=" + pf.energyMin + "-" + pf.energyMax + "E hyp=" + pf.hypothesisCount +
+                            " lead=" + pf.leadTimeMs + "ms/" + pf.reactionTurns + "T next=" +
+                            (next?.move?.name ?: "?") + ":" + (next?.turnsRemainingMin ?: -1) + "T"
+                    )
+                }
+                appendLine(
+                    "Stages E atk=" + enemyStages.attack.min + ".." + enemyStages.attack.max +
+                        " def=" + enemyStages.defense.min + ".." + enemyStages.defense.max +
+                        " | Own atk=" + ownStages.attack.min + ".." + ownStages.attack.max +
+                        " def=" + ownStages.defense.min + ".." + ownStages.defense.max
+                )
                 appendLine("Battle conf=${"%.2f".format(lastBattleConfidence)} HP=${lastHpRatio?.let { "%.3f".format(it) } ?: "?"}/${lastOpponentHpRatio?.let { "%.3f".format(it) } ?: "?"}")
                 appendLine("Reservas vis=${reserveSlotVisible.joinToString { it?.toString() ?: "?" }} CPcards=${reserveCardCps.joinToString { it?.toString() ?: "?" }} DEXcards=${reserveCardDexes.joinToString { it?.toString() ?: "?" }} FORMS=${reserveCardSpeciesIds.joinToString { it ?: "?" }}")
                 appendLine("C1=${charge1?.name ?: "?"} conf=${s?.charge1Confirmed} manual=${s?.charge1Manual}")
                 appendLine("C2=${charge2?.name ?: "?"} conf=${s?.charge2Confirmed} manual=${s?.charge2Manual}")
                 append("Own C1=${ownCharge1?.name ?: "?"} C2=${ownCharge2?.name ?: "?"} state=${os?.speciesName ?: "?"}")
             } else null
+        )
+    }
+
+    private fun combinedIncomingDamageForecast(
+        predictions: List<com.lucianotoscano.pvppokego.data.ChargedPrediction>
+    ): DamageForecast? {
+        if (predictions.isEmpty()) return null
+        val plausible = predictions.filter {
+            it.ready || it.maxEnergy >= it.energyCost || it.progress >= .72f
+        }.ifEmpty { predictions }
+
+        val forecasts = plausible.mapNotNull { prediction ->
+            val move = prediction.move
+            val observed = incomingDamageTracker.estimate(
+                currentEnemyDamageKey(),
+                currentPlayerDamageKey(),
+                move.moveId,
+                lastHpRatio
+            )
+            DamageForecastEngine.forecast(
+                repo = repo,
+                attackerId = enemySpeciesId ?: enemyName,
+                attackerCp = enemyCp,
+                defenderId = playerSpeciesId ?: playerName,
+                defenderCp = playerCp,
+                move = move,
+                observed = observed,
+                currentHpRatio = lastHpRatio,
+                attackerAttackStages = stages(activeState).attack,
+                defenderDefenseStages = stages(ownActiveState).defense
+            )?.let { forecast -> move to forecast }
+        }
+        if (forecasts.isEmpty()) return null
+        if (forecasts.size == 1) return forecasts.first().second
+
+        val minDamage = forecasts.minOf { it.second.minPercent }
+        val maxDamage = forecasts.maxOf { it.second.maxPercent }
+        val avgDamage = forecasts.maxOf { it.second.averagePercent }
+        val currentHpPercent = lastHpRatio?.times(100f)
+        val names = forecasts.map { repo.localizedMoveName(it.first) }.distinct()
+        val allObserved = forecasts.all {
+            it.second.confidence != DamageForecastConfidence.MODEL
+        }
+        val stableObserved = forecasts.all {
+            it.second.confidence == DamageForecastConfidence.OBSERVED_STABLE
+        }
+        return DamageForecast(
+            moveName = names.joinToString(" / ").take(50),
+            averagePercent = avgDamage,
+            minPercent = minDamage,
+            maxPercent = maxDamage,
+            projectedRemainingPercent = currentHpPercent?.let { (it - avgDamage).coerceIn(0f, 100f) },
+            source = if (allObserved) "dano observado • golpes possíveis" else "modelo PvPoke • golpes possíveis",
+            confidence = when {
+                stableObserved -> DamageForecastConfidence.OBSERVED_STABLE
+                allObserved -> DamageForecastConfidence.OBSERVED_ESTIMATED
+                else -> DamageForecastConfidence.MODEL
+            }
         )
     }
 
@@ -1206,6 +1954,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private data class ResolvedOwnReserve(
         val slot: OwnTeamSlot,
+        val cardIndex: Int,
         val cardCp: Int?,
         val confirmed: Boolean,
         val source: String
@@ -1238,9 +1987,9 @@ class BattleEngine(private val repo: GameDataRepository) {
             cardCps = reserveCardCps.toList(),
             cardDexes = reserveCardDexes.toList(),
             cardSpeciesIds = reserveCardSpeciesIds.toList()
-        ).mapNotNull { match ->
+        ).mapIndexedNotNull { cardIndex, match ->
             slots.firstOrNull { it.slot == match.member.slot }?.let { slot ->
-                ResolvedOwnReserve(slot, match.cardCp, match.confirmed, match.source)
+                ResolvedOwnReserve(slot, cardIndex, match.cardCp, match.confirmed, match.source)
             }
         }
     }
@@ -1303,11 +2052,20 @@ class BattleEngine(private val repo: GameDataRepository) {
         state.fastMoveId = fast?.moveId
         state.chargedMove1Id = charge1?.moveId
         state.chargedMove2Id = charge2?.moveId
-        state.fastMoveCount = tracker.fastMoveCount
-        state.estimatedEnergy = tracker.energy
-        state.minEnergy = tracker.minEnergy
-        state.maxEnergy = tracker.maxEnergy
-        state.energyUncertain = tracker.isRange
+        if (predictiveEnergy.isInitialized) {
+            state.predictiveEnergySnapshot = predictiveEnergy.snapshot()
+            state.fastMoveCount = predictiveEnergy.hypotheses().maxOfOrNull { it.completedFastMoves } ?: tracker.fastMoveCount
+            state.estimatedEnergy = predictiveEnergy.energyLikely()
+            state.minEnergy = predictiveEnergy.energyMin()
+            state.maxEnergy = predictiveEnergy.energyMax()
+            state.energyUncertain = state.minEnergy != state.maxEnergy || predictiveEnergy.hypothesisCount() > 1
+        } else {
+            state.fastMoveCount = tracker.fastMoveCount
+            state.estimatedEnergy = tracker.energy
+            state.minEnergy = tracker.minEnergy
+            state.maxEnergy = tracker.maxEnergy
+            state.energyUncertain = tracker.isRange
+        }
         state.lastSeenAtMs = System.currentTimeMillis()
     }
 
@@ -1322,7 +2080,29 @@ class BattleEngine(private val repo: GameDataRepository) {
         state.minEnergy = ownTracker.minEnergy
         state.maxEnergy = ownTracker.maxEnergy
         state.energyUncertain = ownTracker.isRange
+        lastHpRatio?.let { hp ->
+            state.lastHpRatio = hp.coerceIn(0f, 1f)
+            if (hp <= .01f) state.fainted = true
+        }
         state.lastSeenAtMs = System.currentTimeMillis()
+    }
+
+    private fun resetStages(state: BattlePokemonState?) {
+        state ?: return
+        state.attackStageMin = 0
+        state.attackStageMax = 0
+        state.defenseStageMin = 0
+        state.defenseStageMax = 0
+    }
+
+    private fun syncLegacyEnemyEnergyFromPredictive() {
+        if (!predictiveEnergy.isInitialized) return
+        val count = predictiveEnergy.hypotheses().maxOfOrNull { it.completedFastMoves } ?: 0
+        tracker.restoreRange(
+            predictiveEnergy.energyMin(),
+            predictiveEnergy.energyMax(),
+            count
+        )
     }
 
     private fun normalizedMoveNames(move: MoveDef): Set<String> = buildSet {
@@ -1350,6 +2130,9 @@ class BattleEngine(private val repo: GameDataRepository) {
         private const val UNKNOWN_CHARGED_DEBOUNCE_MS = 4_200L
         private const val SWITCH_COOLDOWN_MS = 50_000L
         private const val RESERVE_MISSING_CONFIRM_FRAMES = 12
+        private const val CHARGED_DAMAGE_OBSERVATION_WINDOW_MS = 6_000L
+        private const val CHARGED_DAMAGE_SETTLE_MS = 420L
+        private const val MIN_CHARGED_DAMAGE_SAMPLE_FRACTION = 0.010f
         private const val CHARGED_FAST_GUARD_MS = 2_200L
         private const val PENDING_CONFIRM_DELAY_MS = 2_400L
 

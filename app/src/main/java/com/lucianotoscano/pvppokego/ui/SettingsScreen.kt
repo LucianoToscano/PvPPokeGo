@@ -74,6 +74,7 @@ fun SettingsScreen(
     var moves by remember { mutableStateOf(repository.showEnemyMoves) }
     var counter by remember { mutableStateOf(repository.showChargedCounter) }
     var progress by remember { mutableStateOf(repository.showEnergyProgress) }
+    var hpAssist by remember { mutableStateOf(repository.showHpAssist) }
     var timer by remember { mutableStateOf(repository.showSwitchTimer) }
     var debug by remember { mutableStateOf(repository.debugMode) }
     var edit by remember { mutableStateOf(repository.editMode) }
@@ -92,109 +93,158 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Spacer(Modifier.height(8.dp))
-                Text("PvPPokeGo", style = MaterialTheme.typography.headlineMedium)
-                Text("Assistente visual externo de PvP. Não modifica nem envia comandos ao Pokémon GO.")
-
-                if (!overlayPermissionGranted) {
-                    Button(
-                        onClick = onRequestOverlayPermission,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Permitir sobreposição")
-                    }
-                }
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = onStartOverlay,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Iniciar overlay")
-                    }
-                    Button(
-                        onClick = onStopOverlay,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Parar")
-                    }
-                }
-
-                Button(
-                    onClick = onResetBattle,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("RESET BATTLE")
-                }
-
-                OutlinedButton(
-                    onClick = onToggleRecording,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Gravar / parar gravação pelo PvPPokeGo")
-                }
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    "A gravação interna reutiliza a captura do overlay e mantém a detecção completa. " +
-                        "O vídeo é salvo em Movies/PvPPokeGo.",
-                    style = MaterialTheme.typography.bodySmall
+                    "PvPPokeGo",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Assistente visual de batalhas PvP",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Analisa a tela e mostra informações em tempo real sem enviar comandos ao Pokémon GO.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                if (recorderCompatibilityAvailable) {
-                    OutlinedButton(
-                        onClick = onOpenRecorderCompatibility,
-                        modifier = Modifier.fillMaxWidth()
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+                    )
+                ) {
+                    Column(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            if (recorderCompatibilityEnabled) {
-                                "Compatibilidade com gravador externo: ATIVA"
-                            } else {
-                                "Ativar compatibilidade com gravador externo"
-                            }
+                            "Batalha",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                    }
-                    Text(
-                        if (recorderCompatibilityEnabled) {
-                            "Pronto para Samsung Screen Recorder e outros gravadores. Se o Android retirar a MediaProjection do PvPPokeGo, " +
-                                "o HUD continua ativo e o app muda para capturas de tela de compatibilidade. OCR, tipos e matchup continuam; " +
-                                "a contagem automática de ataques rápidos fica reduzida nesse modo."
-                        } else {
-                            "Este APK Recorder Compat inclui o serviço opcional de Acessibilidade para capturas de compatibilidade. " +
-                                "Ative somente se você realmente precisar gravar com outro aplicativo."
-                        },
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                        Text(
+                            if (overlayPermissionGranted) {
+                                "Pronto para iniciar o HUD."
+                            } else {
+                                "Permita a sobreposição para usar o HUD durante a batalha."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
-                    Button(
-                        onClick = onStartExternalRecorderMode,
-                        enabled = recorderCompatibilityEnabled,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Iniciar overlay para gravador Samsung / externo")
+                        if (!overlayPermissionGranted) {
+                            Button(
+                                onClick = onRequestOverlayPermission,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Permitir sobreposição")
+                            }
+                        }
+
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = onStartOverlay,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Iniciar")
+                            }
+                            OutlinedButton(
+                                onClick = onStopOverlay,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Parar")
+                            }
+                        }
+
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onToggleRecording,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Gravar")
+                            }
+                            OutlinedButton(
+                                onClick = onResetBattle,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Nova batalha")
+                            }
+                        }
                     }
-                } else {
+                }
+
+                if (recorderCompatibilityAvailable) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = .92f)
+                        )
+                    ) {
+                        Column(
+                            Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "Gravador externo",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                if (recorderCompatibilityEnabled) {
+                                    "Compatibilidade ativa para Samsung Screen Recorder e outros gravadores."
+                                } else {
+                                    "Ative somente se precisar usar um gravador externo junto com o PvPPokeGo."
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            OutlinedButton(
+                                onClick = onOpenRecorderCompatibility,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    if (recorderCompatibilityEnabled) "Compatibilidade ativa"
+                                    else "Ativar compatibilidade"
+                                )
+                            }
+                            Button(
+                                onClick = onStartExternalRecorderMode,
+                                enabled = recorderCompatibilityEnabled,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Iniciar modo gravador externo")
+                            }
+                        }
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .72f)
+                ) {
                     Text(
-                        "APK padrão: não solicita Acessibilidade. Isso reduz avisos do Play Protect. " +
-                            "Para gravar, prefira o gravador interno do PvPPokeGo. A versão Recorder Compat é separada porque o Android " +
-                            "classifica captura por Acessibilidade como acesso sensível.",
-                        style = MaterialTheme.typography.bodySmall
+                        "HUD: 🔓 mover • 🔒 travar • ◉ mostrar/ocultar • ⚙ menu rápido\n" +
+                            "Gravação interna: Movies/PvPPokeGo • Versão " + BuildConfig.VERSION_NAME,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                Text(
-                    "Controles do overlay:\n" +
-                        "• 🔓 Cadeado aberto → arrasta os blocos do HUD (toques do jogo passam fora dos blocos)\n" +
-                        "• 🔒 Cadeado fechado → layout travado\n" +
-                        "• ◉ → mostrar / ocultar HUD\n" +
-                        "• ⚙ → menu rápido (liga, edição, opções)\n" +
-                        "• Editar HUD → barra ✓ (salvar) e ↺ (reset)\n" +
-                        "Versão " + BuildConfig.VERSION_NAME,
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                SectionTitle("Assistência e HUD")
                 Toggle("Overlay", overlay) {
                     overlay = it
                     repository.overlayEnabled = it
@@ -214,6 +264,7 @@ fun SettingsScreen(
                     )
                 }
 
+                SectionTitle("Liga e análise")
                 Text("Liga / ranking PvP", style = MaterialTheme.typography.titleMedium)
                 Text(
                     if (league == BattleLeagueMode.AUTO) {
@@ -274,6 +325,22 @@ fun SettingsScreen(
                     progress = it
                     repository.showEnergyProgress = it
                 }
+                Text(
+                    "A previsão inimiga usa turns de 0,5 s, energia residual e hipóteses de Fast Move. " +
+                        "Quando há incerteza, mostra faixa/READY? em vez de inventar um valor exato.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Toggle("HP e previsão de dano sem escudo", hpAssist) {
+                    hpAssist = it
+                    repository.showHpAssist = it
+                }
+                Text(
+                    "Mostra HP estimado e uma faixa fantasma sobre a barra quando um carregado inimigo pode chegar. " +
+                        "Dano observado tem prioridade; sem amostras, usa o modelo offline PvPoke como estimativa.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Toggle("Timer de troca", timer) {
                     timer = it
                     repository.showSwitchTimer = it
@@ -321,7 +388,7 @@ fun SettingsScreen(
                     steps = 6
                 )
 
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                SectionTitle("Backup e diagnóstico")
                 Text("Backup de configurações e posições", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Salva opções, escala, opacidade e as posições personalizadas dos ícones, blocos e menus do HUD. " +
@@ -351,12 +418,11 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
 
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text("Histórico de batalhas", style = MaterialTheme.typography.titleMedium)
+                SectionTitle("Histórico de batalhas")
                 Text(
-                    "Cada batalha agora separa VOCÊ, INIMIGO, ASSISTENTE e DIAGNÓSTICO. " +
-                        "Os dados técnicos ficam ocultos por padrão para a linha do tempo ficar fácil de ler.",
-                    style = MaterialTheme.typography.bodySmall
+                    "Cada batalha abre como uma conversa cronológica: você, inimigo e assistente em balões separados.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(
                     Modifier.fillMaxWidth(),
@@ -403,8 +469,7 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text("Sobre", style = MaterialTheme.typography.titleMedium)
+                SectionTitle("Sobre")
                 Text("Desenvolvimento PvPPokGo by: LucianoToscano\n(84) 99131-9021")
                 Text("Versão " + BuildConfig.VERSION_NAME)
                 Text(
@@ -443,8 +508,37 @@ private fun BattleHistoryCard(
     val enemyCharged = battle.events.count { it.actor == "INIMIGO" && it.category == "CARREGADO" }
     val decisions = battle.events.count { it.actor == "ASSISTENTE" || it.category == "DECISÃO" }
     val diagnostics = battle.events.count { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
+    val ownPokemon = remember(battle.id, battle.events.size) {
+        linkedSetOf<String>().apply {
+            battle.playerName?.takeIf { it.isNotBlank() }?.let(::add)
+            battle.events.filter { it.actor == "VOCÊ" }.forEach { event ->
+                event.pokemon?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["de"]?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["para"]?.takeIf { it.isNotBlank() }?.let(::add)
+            }
+        }.take(3)
+    }
+    val enemyPokemon = remember(battle.id, battle.events.size) {
+        linkedSetOf<String>().apply {
+            battle.opponentName?.takeIf { it.isNotBlank() }?.let(::add)
+            battle.events.filter { it.actor == "INIMIGO" }.forEach { event ->
+                event.pokemon?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["de"]?.takeIf { it.isNotBlank() }?.let(::add)
+                event.details["para"]?.takeIf { it.isNotBlank() }?.let(::add)
+            }
+        }.take(3)
+    }
+    val ownShieldsUsed = battle.events.count { it.actor == "VOCÊ" && it.category == "ESCUDO" }
+    val enemyShieldsUsed = battle.events.count { it.actor == "INIMIGO" && it.category == "ESCUDO" }
+    val switches = battle.events.count { it.category == "TROCA" }
+    val largestDamage = battle.events
+        .filter { it.category == "DANO" }
+        .mapNotNull { event -> event.details["damagePercent"]?.toFloatOrNull()?.let { it to event } }
+        .maxByOrNull { it.first }
+    val uncertainEvents = battle.events.count {
+        it.confidence == "ESTIMADO" || it.confidence == "DESCONHECIDO" || it.confidence == "FAIXA"
+    }
     var showDiagnostics by remember(battle.id) { mutableStateOf(false) }
-    var showTimeline by remember(battle.id) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -494,6 +588,22 @@ private fun BattleHistoryCard(
                 }
             }
 
+            if (ownPokemon.isNotEmpty() || enemyPokemon.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .72f)
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        if (ownPokemon.isNotEmpty()) {
+                            Text("Seu time: " + ownPokemon.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (enemyPokemon.isNotEmpty()) {
+                            Text("Inimigos vistos: " + enemyPokemon.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -508,47 +618,51 @@ private fun BattleHistoryCard(
 
             if (expanded) {
                 HorizontalDivider()
-                Text("Detalhes da batalha", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    "Conversa da batalha",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Os eventos aparecem na ordem em que aconteceram. Você fica à direita, o inimigo à esquerda e o assistente em destaque.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-                val ownEvents = battle.events.filter {
-                    it.actor == "VOCÊ" && it.category != "ESTADO"
-                }
-                val enemyEvents = battle.events.filter {
-                    it.actor == "INIMIGO" && it.category != "ESTADO"
-                }
-                val assistantEvents = battle.events.filter {
-                    it.actor == "ASSISTENTE" || it.category == "DECISÃO"
-                }
-                val stateEvents = battle.events.filter {
-                    it.actor == "PARTIDA" || it.category == "TROCA" || it.category == "ESTADO"
-                }
-                val normalEvents = battle.events.filterNot {
-                    it.actor == "APP" || it.category == "DIAGNÓSTICO"
-                }
-
-                BattleHistorySection("VOCÊ", ownEvents)
-                BattleHistorySection("INIMIGO", enemyEvents)
-                BattleHistorySection("ASSISTENTE", assistantEvents)
-                BattleHistorySection("TROCAS E ESTADO", stateEvents)
-
-                OutlinedButton(
-                    onClick = { showTimeline = !showTimeline },
-                    modifier = Modifier.fillMaxWidth()
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .78f)
                 ) {
-                    Text(if (showTimeline) "Ocultar linha do tempo completa" else "Ver linha do tempo completa")
-                }
-                if (showTimeline) {
-                    Text(
-                        "Linha do tempo cronológica",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (normalEvents.isEmpty()) {
-                        Text("Nenhum evento identificado.", style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        normalEvents.sortedBy { it.elapsedMs }.forEach { event ->
-                            BattleHistoryEventCard(event)
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Momentos-chave", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text("Escudos: você usou $ownShieldsUsed • inimigo usou $enemyShieldsUsed", style = MaterialTheme.typography.bodySmall)
+                        Text("Trocas detectadas: $switches • decisões do assistente: $decisions", style = MaterialTheme.typography.bodySmall)
+                        largestDamage?.let { (damage, event) ->
+                            Text(
+                                "Maior dano observado: ${"%.1f".format(damage)}% • ${event.moveName}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
+                        if (uncertainEvents > 0) {
+                            Text(
+                                "$uncertainEvents eventos ficaram estimados/indeterminados; veja o diagnóstico para revisar.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                val conversationEvents = battle.events
+                    .filterNot { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
+                    .sortedBy { it.elapsedMs }
+
+                if (conversationEvents.isEmpty()) {
+                    Text("Nenhum evento identificado.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    conversationEvents.forEach { event ->
+                        BattleHistoryEventCard(event)
                     }
                 }
 
@@ -557,15 +671,20 @@ private fun BattleHistoryCard(
                         onClick = { showDiagnostics = !showDiagnostics },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (showDiagnostics) "Ocultar diagnóstico técnico" else "Mostrar diagnóstico técnico ($diagnostics)")
+                        Text(
+                            if (showDiagnostics) "Ocultar diagnóstico técnico"
+                            else "Diagnóstico técnico ($diagnostics)"
+                        )
                     }
                     if (showDiagnostics) {
                         Text(
-                            "Diagnóstico técnico — útil para investigar erros de identificação.",
-                            style = MaterialTheme.typography.labelMedium
+                            "Leituras, confiança e fontes usadas pelo motor.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         battle.events
                             .filter { it.actor == "APP" || it.category == "DIAGNÓSTICO" }
+                            .sortedBy { it.elapsedMs }
                             .forEach { event -> BattleHistoryEventCard(event, technical = true) }
                     }
                 }
@@ -607,77 +726,142 @@ private fun BattleHistoryEventCard(
 ) {
     val seconds = event.elapsedMs / 1000.0
     val actorLabel = when (event.actor) {
-        "VOCÊ" -> "VOCÊ"
-        "INIMIGO" -> "INIMIGO"
-        "ASSISTENTE" -> "ASSISTENTE"
-        else -> "APP"
+        "VOCÊ" -> "Você"
+        "INIMIGO" -> "Inimigo"
+        "ASSISTENTE" -> "Assistente"
+        "PARTIDA" -> "Partida"
+        else -> "Sistema"
     }
+    val isOwn = event.actor == "VOCÊ"
+    val isEnemy = event.actor == "INIMIGO"
+    val isAssistant = event.actor == "ASSISTENTE" || event.category == "DECISÃO"
+    val isSystem = !isOwn && !isEnemy && !isAssistant
+
     val container = when {
-        technical -> MaterialTheme.colorScheme.surface
-        event.actor == "VOCÊ" -> MaterialTheme.colorScheme.primaryContainer
-        event.actor == "INIMIGO" -> MaterialTheme.colorScheme.errorContainer
-        event.actor == "ASSISTENTE" -> MaterialTheme.colorScheme.tertiaryContainer
+        technical -> MaterialTheme.colorScheme.surfaceVariant
+        isOwn -> MaterialTheme.colorScheme.primaryContainer
+        isEnemy -> MaterialTheme.colorScheme.surfaceVariant
+        isAssistant -> MaterialTheme.colorScheme.tertiaryContainer
         else -> MaterialTheme.colorScheme.surface
     }
     val content = when {
-        technical -> MaterialTheme.colorScheme.onSurface
-        event.actor == "VOCÊ" -> MaterialTheme.colorScheme.onPrimaryContainer
-        event.actor == "INIMIGO" -> MaterialTheme.colorScheme.onErrorContainer
-        event.actor == "ASSISTENTE" -> MaterialTheme.colorScheme.onTertiaryContainer
+        technical -> MaterialTheme.colorScheme.onSurfaceVariant
+        isOwn -> MaterialTheme.colorScheme.onPrimaryContainer
+        isAssistant -> MaterialTheme.colorScheme.onTertiaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val count = if (event.count > 1) " ×${event.count}" else ""
+    val bubbleFraction = when {
+        technical -> .94f
+        isAssistant -> .92f
+        isSystem -> .78f
+        else -> .84f
+    }
+    val arrangement = when {
+        isOwn -> Arrangement.End
+        isEnemy -> Arrangement.Start
+        else -> Arrangement.Center
+    }
+
+    val count = if (event.count > 1) " ×" + event.count else ""
     val source = friendlyHistorySource(event.source)
     val confidence = friendlyConfidence(event.confidence)
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = container,
-        contentColor = content,
-        tonalElevation = if (technical) 0.dp else 1.dp
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = arrangement
     ) {
-        Column(
-            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth(bubbleFraction),
+            shape = when {
+                isOwn -> RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)
+                isEnemy -> RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp)
+                else -> RoundedCornerShape(14.dp)
+            },
+            color = container,
+            contentColor = content,
+            tonalElevation = if (technical) 0.dp else 1.dp
         ) {
-            Text(
-                "+${"%.1f".format(Locale.US, seconds)}s  •  $actorLabel  •  ${event.category}",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                event.moveName + count,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            val detail = buildList {
-                event.pokemon?.takeIf { it.isNotBlank() }?.let { add(it) }
-                confidence?.let { add(it) }
-                source?.let { add(it) }
-            }.joinToString(" • ")
-            if (detail.isNotBlank()) {
-                Text(detail, style = MaterialTheme.typography.bodySmall)
-            }
-            if (event.details.isNotEmpty()) {
+            Column(
+                Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        actorLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "+" + "%.1f".format(Locale.US, seconds) + "s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = .68f)
+                    )
+                }
+
                 Text(
-                    event.details.entries.joinToString(" • ") { (key, value) ->
-                        when (key) {
-                            "hpPercent" -> "HP $value%"
-                            "energyMin" -> "Energia mín. $value"
-                            "energyMax" -> "Energia máx. $value"
-                            "shields" -> "Escudos $value"
-                            "de" -> "De: $value"
-                            "para" -> "Para: $value"
-                            "pc" -> "PC $value"
-                            else -> "$key: $value"
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall
+                    event.moveName + count,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
                 )
-            }
-            event.reason?.takeIf { it.isNotBlank() }?.let { reason ->
-                Text("Motivo: $reason", style = MaterialTheme.typography.bodySmall)
+
+                if (event.category.isNotBlank()) {
+                    Text(
+                        event.category,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = .72f)
+                    )
+                }
+
+                val detail = buildList {
+                    event.pokemon?.takeIf { it.isNotBlank() }?.let { add(it) }
+                    confidence?.let { add(it) }
+                    source?.let { add(it) }
+                }.joinToString(" • ")
+                if (detail.isNotBlank()) {
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = content.copy(alpha = .80f)
+                    )
+                }
+
+                if (event.details.isNotEmpty()) {
+                    Text(
+                        event.details.entries.joinToString(" • ") { (key, value) ->
+                            when (key) {
+                                "hpPercent" -> "HP $value%"
+                                "energyMin" -> "Energia mín. $value"
+                                "energyMax" -> "Energia máx. $value"
+                                "shields" -> "Escudos $value"
+                                "damagePercent" -> "Dano $value%"
+                                "damagePerHitPercent" -> "Dano/golpe $value%"
+                                "damagePoints" -> "Dano $value/1000"
+                                "samples" -> "Amostras $value"
+                                "target" -> "Alvo: $value"
+                                "de" -> "De: $value"
+                                "para" -> "Para: $value"
+                                "pc" -> "PC $value"
+                                else -> "$key: $value"
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = content.copy(alpha = .82f)
+                    )
+                }
+
+                event.reason?.takeIf { it.isNotBlank() }?.let { reason ->
+                    Text(
+                        reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = content.copy(alpha = .78f)
+                    )
+                }
             }
         }
     }
@@ -709,6 +893,23 @@ private fun friendlyHistorySource(raw: String?): String? = when (raw) {
     "motion-cadence" -> "movimento + cadência"
     null, "" -> null
     else -> raw
+}
+
+@Composable
+private fun SectionTitle(title: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 14.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        HorizontalDivider()
+    }
 }
 
 @Composable

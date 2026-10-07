@@ -41,6 +41,17 @@ data class BattleHistoryEntry(
     val events: List<BattleHistoryEvent> = emptyList()
 )
 
+data class BattleStrategyProfile(
+    val opponentName: String,
+    val battles: Int,
+    val chargedSamples: Int,
+    val mostCommonChargedMove: String? = null,
+    val mostCommonChargedRate: Float = 0f,
+    val firstChargedMove: String? = null,
+    val firstChargedRate: Float = 0f,
+    val shieldEvents: Int = 0
+)
+
 class BattleHistoryRepository(context: Context) {
     private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -57,6 +68,67 @@ class BattleHistoryRepository(context: Context) {
             prefs.edit().putString(KEY_HISTORY, json.encodeToString(repaired)).apply()
         }
         return repaired
+    }
+
+    /**
+     * Local-only pattern profile derived from the user's own prior battles.
+     * It never uploads battle data and is intentionally advisory rather than authoritative.
+     */
+    fun strategyProfile(opponentName: String?): BattleStrategyProfile? {
+        val target = opponentName?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val matchingBattles = loadHistory().filter { battle ->
+            battle.opponentName.equals(target, ignoreCase = true) ||
+                battle.events.any {
+                    it.actor == "INIMIGO" &&
+                        it.pokemon.equals(target, ignoreCase = true)
+                }
+        }
+        if (matchingBattles.isEmpty()) return null
+
+        val charged = matchingBattles.flatMap { battle ->
+            battle.events.filter {
+                it.actor == "INIMIGO" &&
+                    it.category == "CARREGADO" &&
+                    (it.pokemon == null || it.pokemon.equals(target, ignoreCase = true))
+            }
+        }
+        val chargedCounts = charged.groupingBy { it.moveName }.eachCount()
+        val topCharged = chargedCounts.maxByOrNull { it.value }
+
+        val firstChargedPerBattle = matchingBattles.mapNotNull { battle ->
+            battle.events
+                .filter {
+                    it.actor == "INIMIGO" &&
+                        it.category == "CARREGADO" &&
+                        (it.pokemon == null || it.pokemon.equals(target, ignoreCase = true))
+                }
+                .minByOrNull { it.elapsedMs }
+                ?.moveName
+        }
+        val firstCounts = firstChargedPerBattle.groupingBy { it }.eachCount()
+        val topFirst = firstCounts.maxByOrNull { it.value }
+        val shields = matchingBattles.sumOf { battle ->
+            battle.events.count {
+                it.actor == "INIMIGO" &&
+                    it.category == "ESCUDO" &&
+                    (it.pokemon == null || it.pokemon.equals(target, ignoreCase = true))
+            }
+        }
+
+        return BattleStrategyProfile(
+            opponentName = target,
+            battles = matchingBattles.size,
+            chargedSamples = charged.size,
+            mostCommonChargedMove = topCharged?.key,
+            mostCommonChargedRate = if (charged.isNotEmpty()) {
+                topCharged?.value?.toFloat()?.div(charged.size.toFloat()) ?: 0f
+            } else 0f,
+            firstChargedMove = topFirst?.key,
+            firstChargedRate = if (firstChargedPerBattle.isNotEmpty()) {
+                topFirst?.value?.toFloat()?.div(firstChargedPerBattle.size.toFloat()) ?: 0f
+            } else 0f,
+            shieldEvents = shields
+        )
     }
 
     fun exportJson(): String = json.encodeToString(loadHistory())
@@ -174,11 +246,28 @@ class BattleHistoryRepository(context: Context) {
         prefs.edit().putString(KEY_HISTORY, json.encodeToString(next.take(MAX_BATTLES))).apply()
     }
 
-    fun clear() = prefs.edit().remove(KEY_HISTORY).apply()
+    fun saveActiveCheckpoint(entry: BattleHistoryEntry) {
+        prefs.edit().putString(KEY_ACTIVE_CHECKPOINT, json.encodeToString(entry)).apply()
+    }
+
+    fun loadActiveCheckpoint(): BattleHistoryEntry? = runCatching {
+        prefs.getString(KEY_ACTIVE_CHECKPOINT, null)
+            ?.let { json.decodeFromString<BattleHistoryEntry>(it) }
+    }.getOrNull()
+
+    fun clearActiveCheckpoint() {
+        prefs.edit().remove(KEY_ACTIVE_CHECKPOINT).apply()
+    }
+
+    fun clear() = prefs.edit()
+        .remove(KEY_HISTORY)
+        .remove(KEY_ACTIVE_CHECKPOINT)
+        .apply()
 
     companion object {
         private const val FILE = "pvppokego_battle_history"
         private const val KEY_HISTORY = "history_json"
+        private const val KEY_ACTIVE_CHECKPOINT = "active_checkpoint_json"
         private const val MAX_BATTLES = 50
     }
 }
@@ -203,6 +292,37 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
     private var active: Active? = null
     private var appVersion: String = "desconhecida"
     private var dataVersion: String? = null
+    private var lastCheckpointAtMs: Long = 0L
+
+    init {
+        val now = System.currentTimeMillis()
+        val checkpoint = repository.loadActiveCheckpoint()
+        if (
+            checkpoint != null &&
+            now - checkpoint.endedAtEpochMs in 0..RECOVERY_MAX_AGE_MS
+        ) {
+            active = Active(
+                id = checkpoint.id,
+                startedAt = checkpoint.startedAtEpochMs,
+                leagueCp = checkpoint.leagueCp,
+                playerName = checkpoint.playerName,
+                playerCp = checkpoint.playerCp,
+                opponentName = checkpoint.opponentName,
+                opponentCp = checkpoint.opponentCp,
+                appVersion = checkpoint.appVersion,
+                dataVersion = checkpoint.dataVersion,
+                startedMidBattle = true,
+                result = checkpoint.result,
+                lastEvidenceAtMs = checkpoint.endedAtEpochMs,
+                events = checkpoint.events.toMutableList()
+            )
+            appVersion = checkpoint.appVersion
+            dataVersion = checkpoint.dataVersion
+            lastCheckpointAtMs = now
+        } else {
+            repository.clearActiveCheckpoint()
+        }
+    }
 
     fun setMetadata(appVersion: String, dataVersion: String?) {
         this.appVersion = appVersion
@@ -297,10 +417,73 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         nowMs: Long = System.currentTimeMillis(),
         pokemon: String? = null,
         confidence: String? = null,
-        source: String? = null
+        source: String? = null,
+        damageFraction: Float? = null
     ) {
         if (count <= 0) return
-        addEvent(actor, "RÁPIDO", moveName, count, nowMs, pokemon, confidence, source, null)
+        val details = buildMap {
+            damageFraction?.takeIf { it > 0f }?.let { fraction ->
+                val totalPercent = fraction.coerceIn(0f, 1f) * 100f
+                val perHitPercent = totalPercent / count.coerceAtLeast(1)
+                put("damagePercent", "%.1f".format(Locale.US, totalPercent))
+                put("damagePerHitPercent", "%.1f".format(Locale.US, perHitPercent))
+                put("damagePoints", (fraction.coerceIn(0f, 1f) * 1000f).toInt().toString())
+            }
+        }
+        addEvent(actor, "RÁPIDO", moveName, count, nowMs, pokemon, confidence, source, null, details)
+    }
+
+    fun recordShield(
+        actor: String,
+        againstMove: String,
+        remaining: Int,
+        nowMs: Long = System.currentTimeMillis(),
+        pokemon: String? = null,
+        confidence: String = "CONFIRMADO",
+        source: String = "barra de HP"
+    ) {
+        addEvent(
+            actor = actor,
+            category = "ESCUDO",
+            moveName = "Escudo contra $againstMove",
+            count = 1,
+            nowMs = nowMs,
+            pokemon = pokemon,
+            confidence = confidence,
+            source = source,
+            reason = null,
+            details = mapOf("shields" to remaining.coerceIn(0, 2).toString())
+        )
+    }
+
+    fun recordDamageObservation(
+        actor: String,
+        moveName: String,
+        damagePercent: Float,
+        damagePoints: Int,
+        learnedSamples: Int,
+        nowMs: Long = System.currentTimeMillis(),
+        attackerPokemon: String? = null,
+        targetPokemon: String? = null,
+        source: String = "HP"
+    ) {
+        addEvent(
+            actor = actor,
+            category = "DANO",
+            moveName = moveName,
+            count = 1,
+            nowMs = nowMs,
+            pokemon = attackerPokemon,
+            confidence = if (learnedSamples >= 5) "CONFIRMADO" else "ESTIMADO",
+            source = source,
+            reason = null,
+            details = buildMap {
+                put("damagePercent", "%.1f".format(Locale.US, damagePercent.coerceAtLeast(0f)))
+                put("damagePoints", damagePoints.coerceAtLeast(0).toString())
+                put("samples", learnedSamples.coerceAtLeast(1).toString())
+                targetPokemon?.let { put("target", it) }
+            }
+        )
     }
 
     fun recordCharged(
@@ -354,13 +537,15 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         shields: Int? = null,
         confidence: String? = null,
         nowMs: Long = System.currentTimeMillis(),
-        source: String = "engine"
+        source: String = "engine",
+        extraDetails: Map<String, String> = emptyMap()
     ) {
         val details = buildMap {
             hpRatio?.let { put("hpPercent", (it.coerceIn(0f, 1f) * 100f).toInt().toString()) }
             energyMin?.let { put("energyMin", it.toString()) }
             energyMax?.let { put("energyMax", it.toString()) }
             shields?.let { put("shields", it.toString()) }
+            putAll(extraDetails)
         }
         if (details.isEmpty()) return
         addEvent(actor, "ESTADO", "Estado da batalha", 1, nowMs, pokemon, confidence, source, null, details)
@@ -383,6 +568,31 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
         a.events += BattleHistoryEvent(
             elapsed, actor, category, moveName, count, pokemon, confidence, source, reason, details
         )
+        maybeCheckpoint(nowMs)
+    }
+
+    private fun maybeCheckpoint(nowMs: Long, force: Boolean = false) {
+        val a = active ?: return
+        if (!force && nowMs - lastCheckpointAtMs < CHECKPOINT_INTERVAL_MS) return
+        lastCheckpointAtMs = nowMs
+        repository.saveActiveCheckpoint(
+            BattleHistoryEntry(
+                id = a.id,
+                startedAtEpochMs = a.startedAt,
+                endedAtEpochMs = nowMs.coerceAtLeast(a.startedAt),
+                leagueCp = a.leagueCp,
+                playerName = a.playerName,
+                playerCp = a.playerCp,
+                opponentName = a.opponentName,
+                opponentCp = a.opponentCp,
+                appVersion = a.appVersion,
+                dataVersion = a.dataVersion,
+                startedMidBattle = a.startedMidBattle,
+                endReason = "checkpoint ativo",
+                result = a.result,
+                events = a.events.toList()
+            )
+        )
     }
 
     fun finish(
@@ -404,6 +614,7 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
             reason = reason
         )
         active = null
+        repository.clearActiveCheckpoint()
         val useful = a.playerName != null || a.opponentName != null || a.events.isNotEmpty()
         if (!useful) return
         repository.append(
@@ -428,5 +639,7 @@ class BattleHistoryRecorder(private val repository: BattleHistoryRepository) {
 
     companion object {
         private const val SESSION_INACTIVITY_GRACE_MS = 28_000L
+        private const val CHECKPOINT_INTERVAL_MS = 5_000L
+        private const val RECOVERY_MAX_AGE_MS = 180_000L
     }
 }

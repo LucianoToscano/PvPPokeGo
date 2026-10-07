@@ -18,6 +18,12 @@ class BattleFrameEventDetector {
         val ownFastMoveCount: Int = 0,
         val hpRatio: Float? = null,
         val opponentHpRatio: Float? = null,
+        val playerHpBarYFraction: Float? = null,
+        val reserve1HpRatio: Float? = null,
+        val reserve2HpRatio: Float? = null,
+        /** Normalized HP lost by the player/opponent in the confirmed Fast-Move event. */
+        val playerDamageFraction: Float? = null,
+        val opponentDamageFraction: Float? = null,
         val motion: Float = 0f,
         val confidence: Float = 0f,
         val source: String = "none",
@@ -50,6 +56,7 @@ class BattleFrameEventDetector {
     private val reserveVisibility = arrayOfNulls<Boolean>(2)
     private val reserveHitStreak = IntArray(2)
     private val reserveMissStreak = IntArray(2)
+    private val reserveMaxHpRun = IntArray(2)
 
     fun reset() {
         previousHpRun = null
@@ -66,6 +73,7 @@ class BattleFrameEventDetector {
         reserveVisibility.fill(null)
         reserveHitStreak.fill(0)
         reserveMissStreak.fill(0)
+        reserveMaxHpRun.fill(0)
     }
 
     fun freezeForCharged(nowMs: Long = System.currentTimeMillis(), durationMs: Long = 6_200L) {
@@ -85,8 +93,18 @@ class BattleFrameEventDetector {
     ): Event {
         if (frame.isRecycled) return Event()
 
-        val reserve1 = updateReserveVisibility(0, hasNativeReserveHpBar(frame, 0))
-        val reserve2 = updateReserveVisibility(1, hasNativeReserveHpBar(frame, 1))
+        val reserve1Fill = findNativeReserveHpFill(frame, 0)
+        val reserve2Fill = findNativeReserveHpFill(frame, 1)
+        val reserve1 = updateReserveVisibility(0, reserve1Fill != null)
+        val reserve2 = updateReserveVisibility(1, reserve2Fill != null)
+        val reserve1HpRatio = reserve1Fill?.let { fill ->
+            reserveMaxHpRun[0] = max(reserveMaxHpRun[0], fill.run)
+            if (reserveMaxHpRun[0] > 0) fill.run.toFloat() / reserveMaxHpRun[0].toFloat() else null
+        }?.coerceIn(0f, 1f)
+        val reserve2HpRatio = reserve2Fill?.let { fill ->
+            reserveMaxHpRun[1] = max(reserveMaxHpRun[1], fill.run)
+            if (reserveMaxHpRun[1] > 0) fill.run.toFloat() / reserveMaxHpRun[1].toFloat() else null
+        }?.coerceIn(0f, 1f)
 
         val playerHp = findPlayerHpFill(frame)
         val opponentHp = findOpponentHpFill(frame)
@@ -117,6 +135,9 @@ class BattleFrameEventDetector {
             return Event(
                 hpRatio = hpRatio,
                 opponentHpRatio = opponentHpRatio,
+                playerHpBarYFraction = playerHp?.y?.toFloat()?.div(frame.height.toFloat()),
+                reserve1HpRatio = reserve1HpRatio,
+                reserve2HpRatio = reserve2HpRatio,
                 motion = motion,
                 source = "frozen",
                 reserve1Visible = reserve1,
@@ -133,6 +154,8 @@ class BattleFrameEventDetector {
         var ownFast = 0
         var source = if (battleUiVisible) "battle-hud" else "no-battle-hud"
         var confidence = if (battleUiVisible) .78f else .18f
+        var playerDamageFraction: Float? = null
+        var opponentDamageFraction: Float? = null
 
         if (hpRun != null) {
             val old = previousHpRun
@@ -177,6 +200,9 @@ class BattleFrameEventDetector {
                     if (decision.confirm && !chargedLikeDrop) {
                         lastFastAtMs = nowMs
                         enemyFast = decision.count
+                        playerDamageFraction = if (maximumHpRun > 0) {
+                            pendingEnemyHpDropPx.toFloat() / maximumHpRun.toFloat()
+                        } else null
                         source = when (decision.source) {
                             "hp-drop" -> "player-hp-drop"
                             "hp-drop-cadence" -> "player-hp-cadence"
@@ -234,6 +260,9 @@ class BattleFrameEventDetector {
                     if (decision.confirm && !chargedLikeDrop) {
                         lastOwnFastAtMs = nowMs
                         ownFast = decision.count
+                        opponentDamageFraction = if (maximumOpponentHpRun > 0) {
+                            pendingOwnHpDropPx.toFloat() / maximumOpponentHpRun.toFloat()
+                        } else null
                         source = when {
                             enemyFast > 0 -> "both-hp-drop"
                             decision.source == "hp-drop" -> "opponent-hp-drop"
@@ -256,6 +285,11 @@ class BattleFrameEventDetector {
             ownFastMoveCount = ownFast,
             hpRatio = hpRatio,
             opponentHpRatio = opponentHpRatio,
+            playerHpBarYFraction = playerHp?.y?.toFloat()?.div(frame.height.toFloat()),
+            reserve1HpRatio = reserve1HpRatio,
+            reserve2HpRatio = reserve2HpRatio,
+            playerDamageFraction = playerDamageFraction,
+            opponentDamageFraction = opponentDamageFraction,
             motion = motion,
             confidence = confidence,
             source = source,
@@ -281,7 +315,7 @@ class BattleFrameEventDetector {
     }
 
     /** Detect only the thin native HP line under each reserve card. */
-    private fun hasNativeReserveHpBar(frame: Bitmap, slot: Int): Boolean {
+    private fun findNativeReserveHpFill(frame: Bitmap, slot: Int): HpFill? {
         val left = (frame.width * .82f).toInt().coerceAtLeast(0)
         val right = (frame.width * .94f).toInt().coerceAtMost(frame.width)
         val topFrac = if (slot == 0) .604f else .700f
@@ -305,7 +339,8 @@ class BattleFrameEventDetector {
             }
             y++
         }
-        return best >= (frame.width * .034f).toInt().coerceAtLeast(24)
+        val minimum = (frame.width * .034f).toInt().coerceAtLeast(24)
+        return if (best >= minimum) HpFill(best, top) else null
     }
 
     /**

@@ -2,6 +2,7 @@ package com.lucianotoscano.pvppokego.engine
 
 import android.graphics.Color
 import com.lucianotoscano.pvppokego.data.BattleUiState
+import com.lucianotoscano.pvppokego.data.CaptureHealth
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
@@ -28,6 +29,15 @@ object BattleAssistAdvisor {
                 playerTypes.isNotEmpty() &&
                 enemyTypes.isNotEmpty()
 
+        if (state.captureHealth == CaptureHealth.STALE || state.captureHealth == CaptureHealth.PAUSED) {
+            return Advice(
+                "ANALISANDO",
+                state.captureStatusText ?: "Aguardando uma imagem atual da batalha",
+                Color.rgb(128, 136, 146),
+                140
+            )
+        }
+
         if (!identityReady || state.battleConfidence < .45f) {
             return Advice(
                 "ANALISANDO",
@@ -52,12 +62,15 @@ object BattleAssistAdvisor {
                         .distinctBy { it.move.moveId }
                         .take(2)
                         .joinToString(" ou ") { shortName(it.move.name) }
+                    val forecast = state.incomingDamagePreview?.let { f ->
+                        " • sem escudo ~${"%.0f".format(f.minPercent)}-${"%.0f".format(f.maxPercent)}% HP"
+                    }.orEmpty()
                     return Advice(
-                        "ANALISANDO ATAQUE",
+                        if (state.ownShieldsRemaining <= 0) "SEM ESCUDOS" else "ANALISANDO ATAQUE",
                         if (possibleNames.isNotBlank()) {
-                            "Possível: $possibleNames • ${energyLabel(threat)}"
+                            "Possível: $possibleNames$forecast • ${energyLabel(threat)}"
                         } else {
-                            "Ataque carregado detectado • aguardando identificação"
+                            "Ataque carregado detectado$forecast"
                         },
                         Color.rgb(245, 175, 52),
                         112
@@ -66,9 +79,44 @@ object BattleAssistAdvisor {
 
                 val eff = TypeChart.multiplier(threat.move.type, playerTypes)
                 val score = threat.move.power.toDouble() * eff
+                val observedDamage = incomingDamageForMove(state, threat.move.moveId)
+                val currentHpPercent = state.playerHpRatio?.times(100f)
+                val learnedEnough = (observedDamage?.samples ?: 0) >= 2
+                val observedLikelyLethal = learnedEnough &&
+                    currentHpPercent != null &&
+                    observedDamage != null &&
+                    observedDamage.averagePercent >= currentHpPercent - 1.5f
+                val observedLowDamage = learnedEnough &&
+                    observedDamage != null &&
+                    observedDamage.averagePercent <= 16f
+                val damageDetail = observedDamage?.let(::damageLabel)
                 val baitPossible = bait != null && bait.move.moveId != threat.move.moveId &&
                     bait.energyCost + 5 <= threat.energyCost && threat.maxEnergy >= threat.energyCost
                 return when {
+                    state.ownShieldsRemaining <= 0 -> Advice(
+                        "SEM ESCUDOS",
+                        listOfNotNull(
+                            shortName(threat.move.name),
+                            damageDetail ?: state.incomingDamagePreview?.let {
+                                "~${"%.0f".format(it.minPercent)}-${"%.0f".format(it.maxPercent)}% HP"
+                            },
+                            "prepare troca/farm conforme o HP"
+                        ).joinToString(" • "),
+                        Color.rgb(232, 61, 72),
+                        118
+                    )
+                    observedLikelyLethal -> Advice(
+                        "ESCUDO",
+                        listOfNotNull(shortName(threat.move.name), damageDetail, "pode nocautear").joinToString(" • "),
+                        Color.rgb(232, 61, 72),
+                        114
+                    )
+                    observedLowDamage && eff <= 1.01 -> Advice(
+                        "NÃO ESCUDE",
+                        listOfNotNull(shortName(threat.move.name), damageDetail, "dano observado baixo").joinToString(" • "),
+                        Color.rgb(46, 188, 105),
+                        110
+                    )
                     baitPossible && score >= 95.0 -> Advice(
                         "PODE SER BAIT",
                         "${shortName(bait!!.move.name)} ou ${shortName(threat.move.name)} • ${energyLabel(threat)}",
@@ -92,6 +140,66 @@ object BattleAssistAdvisor {
                         "${shortName(threat.move.name)} • dano moderado",
                         Color.rgb(245, 175, 52),
                         103
+                    )
+                }
+            }
+        }
+
+        // Predictive warning before the Charged prompt appears.
+        state.enemyEnergyForecast?.let { forecast ->
+            val threat = forecast.candidates.firstOrNull()
+            if (threat != null && threat.confidence >= .30f) {
+                val damage = threat.damageForecast
+                val damageText = damage?.let {
+                    "sem escudo ~" + "%.0f".format(it.minPercent) + "-" + "%.0f".format(it.maxPercent) + "% HP"
+                }
+                val currentHp = state.playerHpRatio?.times(100f)
+                val lethal = threat.likelyKo || (
+                    damage != null && currentHp != null && damage.maxPercent >= currentHp - 1f
+                )
+                val energyRange = if (forecast.energyMin == forecast.energyMax) {
+                    forecast.energyLikely.toString() + "E"
+                } else {
+                    forecast.energyMin.toString() + "-" + forecast.energyMax + "E"
+                }
+                if (threat.readyPossible) {
+                    val readyLabel = if (threat.readyCertain) "READY" else "READY POSSÍVEL"
+                    return Advice(
+                        if (lethal && state.ownShieldsRemaining > 0) "PERIGO • ESCUDO" else "PERIGO • $readyLabel",
+                        listOfNotNull(
+                            shortName(threat.move.name),
+                            energyRange,
+                            damageText,
+                            if (threat.baitPotential) "bait possível" else null,
+                            if (threat.doubleReadyPossible) "pode armazenar 2" else null,
+                            if (state.ownShieldsRemaining <= 0) "sem escudos" else null
+                        ).joinToString(" • "),
+                        if (lethal) Color.rgb(232, 61, 72) else Color.rgb(245, 175, 52),
+                        104
+                    )
+                }
+                val insideReactionWindow = threat.turnsRemainingMin <= forecast.reactionTurns
+                val nearWindow = threat.fastMovesRemainingMin <= 2 ||
+                    threat.turnsRemainingMin <= forecast.reactionTurns + 2
+                if (insideReactionWindow || (nearWindow && ownCharged.none { it.ready })) {
+                    val fastText = if (threat.fastMovesRemainingMin == threat.fastMovesRemainingMax) {
+                        threat.fastMovesRemainingMin.toString() + " Fast"
+                    } else {
+                        threat.fastMovesRemainingMin.toString() + "-" + threat.fastMovesRemainingMax + " Fast"
+                    }
+                    val seconds = "%.1f".format(threat.likelyTimeMs / 1000f)
+                    return Advice(
+                        "PREPARE-SE",
+                        listOfNotNull(
+                            shortName(threat.move.name),
+                            fastText,
+                            "~" + seconds + "s",
+                            damageText,
+                            if (threat.mayKoBeforeCharged) "Fast pode nocautear antes" else null,
+                            if (lethal) "risco de KO" else null
+                        ).joinToString(" • "),
+                        if (insideReactionWindow) Color.rgb(245, 175, 52) else Color.rgb(110, 170, 235),
+                        if (insideReactionWindow) 101 else 98
                     )
                 }
             }
@@ -139,7 +247,11 @@ object BattleAssistAdvisor {
         }
 
         // 4) Smarter swap recommendation using the engine's move-aware reserve score.
-        val visibleReserves = state.reserves.filter { it.visible && it.identityConfirmed }
+        val visibleReserves = state.reserves.filter {
+            it.visible &&
+                it.identityConfirmed &&
+                it.status != com.lucianotoscano.pvppokego.data.TeamPokemonStatus.FAINTED
+        }
         val bestReserve = visibleReserves.maxByOrNull { it.score }
         if (state.playerMatchup == MatchupState.UNFAVORABLE && bestReserve != null && bestReserve.score > -.10) {
             return Advice(
@@ -154,11 +266,25 @@ object BattleAssistAdvisor {
         val enemyReady = enemyCharged.filter { it.ready }
         if (enemyReady.isNotEmpty()) {
             val cheapest = enemyReady.minByOrNull { it.energyCost }
+            val pattern = state.strategyPatternHint
+                ?.takeIf { state.strategyPatternConfidence >= .58f }
+                ?.let { " • $it" }
+                .orEmpty()
             return Advice(
                 "ATENÇÃO",
-                cheapest?.let { "Pode usar ${shortName(it.move.name)} • ${energyLabel(it)}" } ?: "Charged inimigo disponível",
+                (cheapest?.let { "Pode usar ${shortName(it.move.name)} • ${energyLabel(it)}" }
+                    ?: "Charged inimigo disponível") + pattern,
                 Color.rgb(245, 175, 52),
                 75
+            )
+        }
+
+        if (state.strategyPatternConfidence >= .68f && !state.strategyPatternHint.isNullOrBlank()) {
+            return Advice(
+                "PADRÃO LOCAL",
+                state.strategyPatternHint,
+                Color.rgb(126, 156, 220),
+                52
             )
         }
 
@@ -198,6 +324,18 @@ object BattleAssistAdvisor {
             EnergyConfidence.RANGE -> "${p.minEnergy}-${p.maxEnergy}E possíveis"
         }
     }
+
+    private fun incomingDamageForMove(
+        state: BattleUiState,
+        moveId: String
+    ) = when (moveId) {
+        state.charged1?.move?.moveId -> state.incomingCharged1Damage
+        state.charged2?.move?.moveId -> state.incomingCharged2Damage
+        else -> null
+    }
+
+    private fun damageLabel(value: com.lucianotoscano.pvppokego.data.ObservedDamageEstimate): String =
+        "~" + "%.0f".format(value.averagePercent) + "% HP obs. " + value.samples + "x"
 
     private fun enemyMoveKnowledge(state: BattleUiState, moveId: String): MoveKnowledgeConfidence = when (moveId) {
         state.charged1?.move?.moveId -> state.charged1Knowledge

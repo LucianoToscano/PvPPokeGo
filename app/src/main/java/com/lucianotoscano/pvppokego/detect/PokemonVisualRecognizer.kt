@@ -80,7 +80,34 @@ class PokemonVisualRecognizer(context: Context) {
 
     val isAvailable: Boolean get() = entries.isNotEmpty()
 
-    fun match(bitmap: Bitmap): Match? {
+    fun match(bitmap: Bitmap): Match? =
+        matchWithThresholds(bitmap, MIN_SCORE, MIN_MARGIN)
+
+    /**
+     * Reserve cards have a dark green native background plus CP text. Feeding that whole
+     * card directly to the regular fingerprint path makes the background dominate dHash
+     * and hue. Clean the card first, then require a stronger score/margin than normal so
+     * a noisy thumbnail can never overwrite a stable team identity.
+     */
+    fun matchReserveCard(bitmap: Bitmap): Match? {
+        if (bitmap.isRecycled || entries.isEmpty()) return null
+        val cleaned = cleanReserveCard(bitmap) ?: return null
+        return try {
+            matchWithThresholds(
+                cleaned,
+                RESERVE_MIN_SCORE,
+                RESERVE_MIN_MARGIN
+            )
+        } finally {
+            cleaned.recycle()
+        }
+    }
+
+    private fun matchWithThresholds(
+        bitmap: Bitmap,
+        minScore: Double,
+        minMargin: Double
+    ): Match? {
         if (bitmap.isRecycled || entries.isEmpty()) return null
         val fp = fingerprint(bitmap) ?: return null
 
@@ -109,7 +136,7 @@ class PokemonVisualRecognizer(context: Context) {
 
         val winner = best ?: return null
         val margin = bestScore - secondScore
-        if (bestScore < MIN_SCORE || margin < MIN_MARGIN) return null
+        if (bestScore < minScore || margin < minMargin) return null
         return Match(
             dex = winner.dex,
             speciesId = winner.speciesId,
@@ -117,6 +144,42 @@ class PokemonVisualRecognizer(context: Context) {
             hashSimilarity = bestHash.toFloat().coerceIn(0f, 1f),
             colorSimilarity = bestColor.toFloat().coerceIn(0f, 1f)
         )
+    }
+
+    private fun cleanReserveCard(source: Bitmap): Bitmap? {
+        if (source.width < 8 || source.height < 8) return null
+        val output = source.copy(Bitmap.Config.ARGB_8888, true) ?: return null
+        val hsv = FloatArray(3)
+
+        // Left-middle is normally empty card background, unlike the centered Pokémon.
+        val sampleX = (output.width * 0.06f).toInt().coerceIn(0, output.width - 1)
+        val sampleY = (output.height * 0.52f).toInt().coerceIn(0, output.height - 1)
+        val bgColor = output.getPixel(sampleX, sampleY)
+        val bgHsv = FloatArray(3)
+        Color.colorToHSV(bgColor, bgHsv)
+
+        val topTextCut = (output.height * 0.28f).toInt()
+        for (y in 0 until output.height) {
+            for (x in 0 until output.width) {
+                val color = output.getPixel(x, y)
+                Color.colorToHSV(color, hsv)
+
+                val hueDistance = kotlin.math.min(
+                    kotlin.math.abs(hsv[0] - bgHsv[0]),
+                    360f - kotlin.math.abs(hsv[0] - bgHsv[0])
+                )
+                val closeToCardBackground =
+                    hueDistance < 35f &&
+                        kotlin.math.abs(hsv[1] - bgHsv[1]) < 0.50f &&
+                        kotlin.math.abs(hsv[2] - bgHsv[2]) < 0.12f
+                val brightNeutralText = hsv[1] < 0.20f && hsv[2] > 0.62f
+
+                if (y < topTextCut || closeToCardBackground || brightNeutralText) {
+                    output.setPixel(x, y, Color.WHITE)
+                }
+            }
+        }
+        return output
     }
 
     private fun fingerprint(source: Bitmap): Fingerprint? {
@@ -284,5 +347,7 @@ class PokemonVisualRecognizer(context: Context) {
         private const val COLOR_WEIGHT = 0.26
         private const val MIN_SCORE = 0.69
         private const val MIN_MARGIN = 0.018
+        private const val RESERVE_MIN_SCORE = 0.76
+        private const val RESERVE_MIN_MARGIN = 0.025
     }
 }
