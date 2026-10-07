@@ -1,3 +1,22 @@
+import java.util.Properties
+
+val releaseSigningProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+fun releaseSigningValue(propertyName: String, environmentName: String): String? =
+    releaseSigningProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(environmentName)?.takeIf { it.isNotBlank() }
+
+val releaseKeystorePath = releaseSigningValue("storeFile", "PVPPG_KEYSTORE_PATH")
+val releaseKeystorePassword = releaseSigningValue("storePassword", "PVPPG_KEYSTORE_PASSWORD")
+val releaseKeyAlias = releaseSigningValue("keyAlias", "PVPPG_KEY_ALIAS")
+val releaseKeyPassword = releaseSigningValue("keyPassword", "PVPPG_KEY_PASSWORD")
+val hasPermanentReleaseSigning = listOf(
+    releaseKeystorePath, releaseKeystorePassword, releaseKeyAlias, releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -36,6 +55,21 @@ android {
     }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 
+    signingConfigs {
+        create("permanentRelease") {
+            if (hasPermanentReleaseSigning) {
+                storeFile = rootProject.file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         // Keep the installable QA APK on the real applicationId so there is only one
         // PvPPokeGo on the device and launcher/icon/cache cannot point to an older app.
@@ -43,6 +77,9 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasPermanentReleaseSigning) {
+                signingConfig = signingConfigs.getByName("permanentRelease")
+            }
         }
     }
 
