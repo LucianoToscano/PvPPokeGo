@@ -1827,7 +1827,9 @@ class BattleEngine(private val repo: GameDataRepository) {
                 defenderCp = playerCp,
                 move = move,
                 observed = observed,
-                currentHpRatio = lastHpRatio
+                currentHpRatio = lastHpRatio,
+                attackerAttackStages = stages(activeState).attack,
+                defenderDefenseStages = stages(ownActiveState).defense
             )?.let { forecast -> move to forecast }
         }
         if (forecasts.isEmpty()) return null
