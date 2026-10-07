@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.23
+
+- Novo motor preditivo de energia inimiga: `EnemyEnergyTracker` mantém hipóteses discretas por Fast Move legal, energia residual, turns, contagem e confiança; não converte spam de toques em energia.
+- `ChargedMovePredictor` calcula antecipadamente, para todos os Charged Moves legais da espécie/forma, FAST restantes, turns, janela mais cedo/provável, READY possível/certo, dois Chargeds armazenados, EPT/DPT/DPE, bait, pressão de escudo e risco de KO/farm-down.
+- Ataque carregado revelado corrige o estado futuro: hipóteses impossíveis são eliminadas, custo é descontado só das compatíveis e Charged não identificado ramifica pelos custos legalmente possíveis.
+- Lacunas de captura e Fast Moves possivelmente perdidos não são convertidos em certeza: o estado é alargado com hipóteses conservadoras, inclusive durante a sequência do Charged do próprio jogador.
+- Energia por Pokémon continua preservada através de trocas; uma nova batalha limpa o estado e stages de Attack/Defense zeram ao sair de campo.
+- `ReactionWindowEstimator` mede latência captura→análise, usa p95 quando há amostras e soma orçamento explícito de render, reação humana e margem de segurança para avisar PREPARE-SE antes do Charged.
+- Overlay do inimigo mostra energia preditiva compacta e até duas ameaças (READY / +N FAST / tempo aproximado), sem transformar o HUD em planilha.
+- Preview fantasma de HP pode aparecer antes da animação do Charged, mostrando a faixa estimada de dano sem escudo e HP restante.
+- `DamageForecastEngine` integrado ao predictor com STAB, efetividade, Shadow, stages -4..+4 e o método PvPoke `percentMaxHP`; dano observado continua tendo prioridade.
+- Game Master passa a ler buffs/debuffs, chance, alvo, archetype e movepools legais completos; proc probabilístico vira faixa de stages em vez de falsa certeza.
+- CMP permanece separado dos buffs, usando Attack de batalha para desempate como na implementação atual do PvPoke.
+- Histórico periódico guarda energia preditiva, hipóteses, lead time, ameaça, READY, bait, shield pressure e risco de KO para análise pós-batalha.
+- Padrões de batalhas anteriores permanecem locais; nenhum histórico do usuário é enviado automaticamente a servidor/IA.
+- Snapshot PvPoke fixado no commit `f627e89e53c0c7b903fff097df7a0ad0ac95decc`; metadados do build registram data, turn=500 ms, settings de buffs e SHA-256 dos datasets.
+- Performance reforçada com cache de movepools e stats e atualização incremental por evento, com limite de hipóteses.
+- Gravador interno mantém confirmação por quadro realmente codificado e fallback AVC conservador; captura stale pausa recomendações em vez de continuar sobre frames antigos.
+- Histórico tem checkpoint de sessão ativa e recuperação curta após interrupção, além de resumo de time/momentos-chave.
+- Testes determinísticos adicionados/expandidos para Fast 1/2/3/4 turns, energia residual, overfarm, Chargeds consecutivos, hipóteses, deduplicação, lag/evento perdido, switch/restore, nova batalha, buffs/debuffs, CMP, Shadow, shields e dano.
+
+
 ## 0.5.22
 
 - Corrigido o início do overlay no APK padrão após a separação do modo Recorder Compat.
