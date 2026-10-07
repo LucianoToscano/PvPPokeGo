@@ -77,6 +77,16 @@ jobs:
           } > audit/todo-fixme.txt
           cat audit/todo-fixme.txt
 
+      - name: Snapshot current PvPoke assets for diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit/pvpoke-before
+          cp app/src/main/assets/gamemaster.json audit/pvpoke-before/ 2>/dev/null || true
+          cp app/src/main/assets/rankings-1500.json audit/pvpoke-before/ 2>/dev/null || true
+          cp app/src/main/assets/rankings-2500.json audit/pvpoke-before/ 2>/dev/null || true
+          cp app/src/main/assets/rankings-10000.json audit/pvpoke-before/ 2>/dev/null || true
+
       - name: Package offline PvPoke snapshot
         run: |
           set -euo pipefail
@@ -99,6 +109,8 @@ jobs:
           assert len(p["sha256"]["rankings"]) == 3
           print("PvPoke snapshot:", p["pvpokeRef"], p["generatedAtUtc"])
           PY
+          python3 tools/pvpoke_snapshot_diff.py audit/pvpoke-before app/src/main/assets --output audit/pvpoke-data-diff.txt
+          test -s audit/pvpoke-data-diff.txt
 
       - name: Build visual fingerprint bank and offline icon atlas
         run: |
