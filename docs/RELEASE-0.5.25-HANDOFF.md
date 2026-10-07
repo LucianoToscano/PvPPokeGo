@@ -2,6 +2,8 @@
 
 Data da consolidação: 2026-10-07
 
+PR de consolidação: #30 (`release/0.5.25` → `release/0.5.24`)
+
 ## Linha de desenvolvimento auditada
 
 - Baseline congelada: `release/0.5.20` @ `7099bee91ec728b7c7df6cff930c6b75b7ec69b0`. Não foi alterada.
