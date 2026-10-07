@@ -1095,10 +1095,23 @@ class BattleEngine(private val repo: GameDataRepository) {
                         ((inference.probability >= .72f && inference.margin >= .18f) ||
                             inference.probability >= .88f)
                     if (strongEnough) {
-                        fast = inference.move
-                        activeState?.fastMoveId = inference.move.moveId
-                        enemyFastPhase.confirmMove(inference.move)
-                        lastAutoSource = source + "+cadencia/dano:" + inference.move.moveId
+                        val inferredFast = inference.move
+                        fast = inferredFast
+                        activeState?.fastMoveId = inferredFast.moveId
+                        if (inferredFast.moveId != f.moveId) {
+                            // Re-anchor this same observed completion to the newly identified
+                            // legal Fast Move instead of losing phase until the next event.
+                            enemyFastPhase.observeCompletion(
+                                candidate = inferredFast,
+                                count = count,
+                                nowMs = nowMs,
+                                detectorConfidence = confidence,
+                                observedIntervalMs = observedInterval
+                            )
+                        } else {
+                            enemyFastPhase.confirmMove(inferredFast)
+                        }
+                        lastAutoSource = source + "+cadencia/dano:" + inferredFast.moveId
                     }
                 }
             }
