@@ -2,6 +2,10 @@
 
 ## 0.5.25
 
+- Nesta etapa, a validação/build foi reduzida ao APK `standard`; gravação interna e Recorder Compat permanecem no código, sem remoção, mas ficam para uma etapa posterior conforme decisão do projeto.
+- Adicionada configuração de assinatura permanente também no Gradle/Android Studio via `keystore.properties` local ou variáveis `PVPPG_*`; o repositório continua sem armazenar a chave privada.
+- Adicionados scripts reproduzíveis para `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug` e verificação da integridade/assets do APK.
+
 - Consolidação criada a partir de `release/0.5.24` sem alterar a baseline congelada `release/0.5.20`.
 - Corrigida a divergência de versionamento: a linha mais nova estava na branch 0.5.24, mas ainda declarava `versionName 0.5.23`; a entrega consolidada passa a `versionName 0.5.25` e `versionCode 30`.
 - Restaurado, de forma seletiva, o thumbnail ao vivo dos dois cards de reserva que existia na linha 0.5.23 e havia sido perdido na 0.5.24. O atlas offline continua sendo a fonte visual principal quando espécie/forma está confirmada; o crop ao vivo é apenas fallback de apresentação.
