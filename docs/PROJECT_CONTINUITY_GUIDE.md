@@ -799,6 +799,33 @@ PRÓXIMO PASSO:
 - Comparados os métodos removidos da versão 0.5.27: `drawReservePokemonIcon`, `reserveMatchupLabel`, `reserveMatchupColor` e `fitReserveText` não têm chamadas pendentes após a restauração.
 - Status: compilação e entrega APK 0.5.28 ainda pendentes neste checkpoint.
 
+
+### 2026-10-07 — APK Standard QA 0.5.28 gerado e verificado
+
+CONTINUIDADE DO RELATO "VEJA AQUI COMO ERA": usamos a fonte `release/0.5.17` e o APK fornecido para restaurar visual sem rollback de engine.
+
+RESULTADO REAL:
+- Novo APK `PvPPokeGo-0.5.28-QA-debug.apk`, 79.193.451 bytes, com versionCode 33/versionName 0.5.28.
+- Run final: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37716045867 — **SUCCESS**.
+- Commit público compilado: `491106a928efd810c9351c8e356d3513ad03c6f2`.
+- Testes Standard unitários `:app:testStandardDebugUnitTest`, assemble APK `:app:assembleStandardDebug`, verificação do launcher e dados PvPoke/atlas: PASS.
+- `unzip -t` dentro do APK: PASS; `assets/gamemaster.json`, `assets/pvpoke_snapshot.json`, `assets/pokemon_icon_atlas.png`, `assets/pokemon_icon_atlas.json` e `res/drawable-nodpi-v4/pvppokego_launcher.png` presentes.
+- Assinatura `apksigner verify`: v2 **true**, 1 signatário QA/debug, não assinatura permanente de release.
+- SHA-256 APK: `504643fe67f08ab599f35d74b8cf3cf1f7f079324badae9024712d59c54c359d`, idêntico ao manifest de checksums do runner.
+- PNG oficial transparente no APK: SHA-256 `f8d4f45922e6af0022e3eaad1d255fedd2b790650f542e62315042f8bd1dbf51`, idêntico ao fornecido pelo usuário.
+- Artefato público: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37716045867
+- ZIP de distribuição e verificação, armazenado na pasta oficial Drive: https://drive.google.com/file/d/1sPMZZMsKpWukN0J3yxhBYVGYeJHu4RYe/view?usp=drivesdk
+- Checklist final 0.5.28 atualizado no commit `d24c905f7487035f4658a33ad0a3402797ce7cd3`.
+
+COMPROMISSO DE QUALIDADE:
+- Foram recuperados traçados HUD 0.5.17 de reservas e escolhas de troca (pequenos badges e ícones de tipo, sem grandes cards) e disposição clássica de ataques/energia. Debug mantém novas previsões. Nem a engine nem o ícone transparente oficial foram revertidos.
+- **Não houve teste visual no Samsung**. A restauração está validada como código/build, NÃO como correspondência perfeita no dispositivo.
+- APK 0.5.28 QA/debug pode não atualizar 0.5.27 devido a certificado de debug; recomendar exportar dados/posições antes de desinstalação.
+
+PENDÊNCIAS:
+- Usuário instalar e validar a aparência da 0.5.28 lado a lado com a 0.5.17, incluindo reservas, trocas, tipos, cadeado, olho, ataque inimigo e posição dos controles.
+- Ajustar com evidência visual qualquer diferença residual, sem nova reformulação desnecessária.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
