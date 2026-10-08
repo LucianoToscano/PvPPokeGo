@@ -509,7 +509,6 @@ class BattleOverlayView(
         val spread=rx(74f)*bs; val fastRadius=31f*u()*bs; val chargedRadius=41f*u()*bs
         state.fastMove?.let { m ->
             drawMoveCircle(canvas,centerX,fastY,fastRadius,m)
-            drawObservedDamageBadge(canvas, centerX, fastY-fastRadius-10f*u()*bs, state.incomingFastDamage)
             drawMoveLabel(
                 canvas,
                 centerX,
@@ -520,7 +519,6 @@ class BattleOverlayView(
         state.charged1?.let { p ->
             val cx=centerX-spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
-            drawObservedDamageBadge(canvas, cx, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged1Damage)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged1Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
@@ -528,77 +526,35 @@ class BattleOverlayView(
         state.charged2?.let { p ->
             val cx=centerX+spread
             drawCharged(canvas,cx,chargedY,chargedRadius,p)
-            drawObservedDamageBadge(canvas, cx, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged2Damage)
             val labelY=chargedY+chargedRadius+22f*u()
             drawMoveLabel(canvas,cx,labelY,shortMoveName(p.move.name)+" "+knowledgeMark(state.charged2Knowledge)+" ▼")
             drawEnemySuperEffectiveText(canvas,cx,labelY+17f*u(),p.move)
         }
         if (settings.showHudText) {
-            val predictive = state.enemyEnergyForecast
-            if (predictive != null) {
-                val energyText = if (predictive.energyMin == predictive.energyMax) {
-                    "⚡ " + predictive.energyLikely + " E"
-                } else {
-                    "⚡ " + predictive.energyMin + "-" + predictive.energyMax + " E"
+            val p = state.charged1 ?: state.charged2
+            if (p != null) {
+                val energyText = when (p.confidence) {
+                    EnergyConfidence.CONFIRMED -> "ENERGIA ${p.currentEnergy} • CONFIRMADA"
+                    EnergyConfidence.ESTIMATED -> "ENERGIA ~${p.currentEnergy} • ESTIMADA"
+                    EnergyConfidence.RANGE -> "ENERGIA ${p.minEnergy}-${p.maxEnergy} • FAIXA"
                 }
-                val fastHypothesis = if (predictive.fastMoveNames.size > 1) {
-                    " • " + predictive.fastMoveNames.size + " FAST possíveis"
-                } else ""
-                val phaseText = predictive.fastPhase?.takeIf { it.confidence >= .45f }?.let {
-                    " • Fase " + it.phaseTurn + "/" + it.moveTurns
-                }.orEmpty()
-                val qualityText = " • C" + (predictive.consistencyScore * 100f).toInt().coerceIn(0, 100) + "%"
-                val cmpText = when (state.cmpForecast?.outcome) {
-                    com.lucianotoscano.pvppokego.data.CmpOutcome.WIN -> " • CMP+"
-                    com.lucianotoscano.pvppokego.data.CmpOutcome.LOSE -> " • CMP-"
-                    com.lucianotoscano.pvppokego.data.CmpOutcome.UNCERTAIN -> " • CMP?"
-                    else -> ""
-                }
-                paint.color=hudColor(Color.WHITE,.84f)
-                paint.textAlign=Paint.Align.CENTER
-                paint.textSize=9.4f*u()*bs
-                paint.typeface=Typeface.DEFAULT_BOLD
-                paint.setShadowLayer(2f,0f,1f,Color.BLACK)
-                canvas.drawText(
-                    energyText + fastHypothesis + phaseText + qualityText + cmpText,
-                    centerX,
-                    chargedY+chargedRadius+53f*u()*bs,
-                    paint
-                )
-                paint.clearShadowLayer()
-                drawPredictiveThreatRows(
-                    canvas,
-                    centerX,
-                    chargedY+chargedRadius+69f*u()*bs,
-                    bs,
-                    predictive
-                )
-            } else {
-                val p = state.charged1 ?: state.charged2
-                if (p != null) {
-                    val energyText = when (p.confidence) {
-                        EnergyConfidence.CONFIRMED -> "ENERGIA " + p.currentEnergy + " • CONFIRMADA"
-                        EnergyConfidence.ESTIMATED -> "ENERGIA ~" + p.currentEnergy + " • ESTIMADA"
-                        EnergyConfidence.RANGE -> "ENERGIA " + p.minEnergy + "-" + p.maxEnergy + " • FAIXA"
-                    }
-                    paint.color=hudColor(Color.WHITE,.82f)
-                    paint.textAlign=Paint.Align.CENTER
-                    paint.textSize=9.5f*u()*bs
-                    paint.typeface=Typeface.DEFAULT_BOLD
-                    paint.setShadowLayer(2f,0f,1f,Color.BLACK)
-                    canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint)
-                    paint.clearShadowLayer()
-                }
+                paint.color=hudColor(Color.WHITE,.82f); paint.textAlign=Paint.Align.CENTER; paint.textSize=9.5f*u()*bs; paint.typeface=Typeface.DEFAULT_BOLD
+                paint.setShadowLayer(2f,0f,1f,Color.BLACK); canvas.drawText(energyText,centerX,chargedY+chargedRadius+54f*u()*bs,paint); paint.clearShadowLayer()
             }
         }
-        drawEditSelection(
-            canvas,
-            BLOCK_ENEMY_MOVES,
-            centerX,
-            (fastY+chargedY)/2f + 11f*u()*bs,
-            142f*u()*bs,
-            148f*u()*bs
-        )
+
+        // Keep 0.5.17's readable normal HUD; diagnostics remain available in debug.
+        if (settings.debugMode) {
+            state.fastMove?.let { drawObservedDamageBadge(canvas,
+                centerX, fastY-fastRadius-10f*u()*bs, state.incomingFastDamage) }
+            state.charged1?.let { drawObservedDamageBadge(canvas,
+                centerX-spread, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged1Damage) }
+            state.charged2?.let { drawObservedDamageBadge(canvas,
+                centerX+spread, chargedY-chargedRadius-10f*u()*bs, state.incomingCharged2Damage) }
+            state.enemyEnergyForecast?.let { drawPredictiveThreatRows(canvas,
+                centerX, chargedY+chargedRadius+70f*u()*bs, bs, it) }
+        }
+        drawEditSelection(canvas, BLOCK_ENEMY_MOVES, centerX, (fastY+chargedY)/2f, 138f*u()*bs, 122f*u()*bs)
     }
 
     private fun drawPredictiveThreatRows(
