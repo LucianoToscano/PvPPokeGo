@@ -746,6 +746,50 @@ STATUS:
 PRÓXIMO PASSO:
 - Instalar, validar o PNG oficial na tela inicial, reservas (PC, tipos, retratos e HP), modo de troca/continuidade e ícones de controle no Samsung. Registrar feedback e evoluir para próximo versionCode em nova entrega.
 
+
+### 2026-10-07 — 0.5.28: restauração visual baseada no APK 0.5.17
+
+RELATO:
+- Usuário disse que 0.5.27 estava "tudo bugado" e enviou o APK **PvPPokeGo-0.5.17.apk** como referência visual aprovada.
+- O arquivo fornecido foi verificado como ZIP/APK íntegro (9 dex, 27 assets, SHA-256 `928fa6cfb64be14842721ce248a055f7aee1a7f9c40d7d3eaeb7b1045ddfbbd6`). Não foi executado em emulador/celular; a análise de HUD usa também a branch fonte preservada `release/0.5.17` (HEAD `d5c3be748b54eb10cd73bb116d6eda1e8acdbf85`).
+- Comparação com 0.5.27 provou mudança de apresentação: a 0.5.17 tinha indicadores pequenos de matchup, tipos e recomendação, sem cards retangulares grandes, retratos ou barra de HP no bloco de reservas. A 0.5.27 inseriu esses cards e textos, alterando o layout original.
+- Outro desvio: a seção de ataques 0.5.27 mostrava previsão extensa e indicadores de dano mesmo no HUD normal; 0.5.17 mostrava círculos dos moves, nomes, eficácia e texto simples de energia.
+
+DECISÃO:
+- A **0.5.17 é referência canônica para a aparência do HUD**, não para a lógica de batalhas.
+- Preservar toda a implementação avançada de engine/capture/reconhecimento e ícone do app transparente fornecido pelo usuário em 0.5.27; NÃO fazer rollback geral.
+
+ALTERAÇÕES REALIZADAS:
+- Criada branch privada `release/0.5.28` baseada em `release/0.5.27` (`09d12f524652cd8fd106fda029a24f8c4bee2ced`).
+- `BattleOverlayView.kt` em `33878a17a904953c2ce91aa1e50390bccbb31d5b`: restauradas as rotinas `drawReserves` e `drawSwitchChoiceIndicators` da branch 0.5.17; removidos os cards grandes, retratos decorativos e texto extra do HUD normal. Única salvaguarda adicional: não ocultar automaticamente o indicador quando OCR não encontra nome; manter "IDENTIFICANDO". Indicador de switch mantém ícones pequenos da 0.5.17 e fallback quando dados do chooser estão incompletos.
+- `BattleOverlayView.kt` em `c03ff271a9bf727f9df8973ac775d738c7d8c27d`: restaurado desenho tradicional de `drawMoveTriangle` (nome dos 3 ataques, counter, energia resumida, espaçamento original); dados e funções preditivas continuam na engine e as anotações avançadas ainda podem ser vistas com `settings.debugMode`.
+- `app/build.gradle.kts` em `0ad039f11b7deb39c35ef564dcbcab15c0df9900`: `versionName = 0.5.28`, `versionCode = 33`.
+- Ícone do launcher **não revertido** ao arquivo antigo: mantido exatamente o PNG oficial transparente de 0.5.27 solicitado pelo usuário.
+- A cópia pública isolada para compilação foi atualizada no commit `c1432f2b316c06baf40083db5d3f40f94a03bef5`, sem exposição do histórico privado.
+- Workflow: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37715432893
+
+ARQUIVOS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayView.kt`
+- `app/build.gradle.kts`
+- Espelho de build público: `.github/workflows/build-standard-apk.yml`, `README.md`.
+
+VALIDAÇÃO:
+- Integridade ZIP do APK enviado 0.5.17: PASS.
+- Revisão estática do código fonte 0.5.17 vs 0.5.27: o traçado de olho/cadeado, indicadores, chips de tipo e posições padrão já eram idênticos; não houve razão para substituir esses controles.
+- A versão Standard 0.5.28 aguardava build/tests ao escrever este registro. NÃO marcar APK disponível sem artefato e assinatura reais.
+
+STATUS:
+- Código 0.5.28 com visual legacy restaurado, build em andamento.
+- QA real de tela em Samsung ainda obrigatório; nenhuma garantia de que efeitos de layouts personalizados antigos/PGSharp sejam resolvidos apenas pelo desenho.
+
+PENDÊNCIAS:
+- Verificar `:app:testStandardDebugUnitTest` + `:app:assembleStandardDebug`; conferir assinatura v2, hash e artefato.
+- Testar em dispositivo: olho, cadeado, ataque inimigo, indicador de reservas, opção de troca, posições salvas e ícone transparente do launcher.
+- Se o usuário ainda reportar diferença, pedir captura da 0.5.17 executando, além do APK, para comparar áreas e dimensões reais.
+
+PRÓXIMO PASSO:
+- Finalizar QA/debug 0.5.28, entregar APK verdadeiro e registrar entrega no Guia Mestre/checklist.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
