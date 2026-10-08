@@ -640,6 +640,54 @@ PARCIAL — aguardando resultado do teste e compile Android da nova execução.
 PRÓXIMO PASSO:
 - Revisar `37707859527`; em sucesso verificar integrity, assinatura, SHA-256 e disponibilizar artifact, registrar link/checksum. Se falhar, corrigir apenas o erro real indicado pelo novo log.
 
+
+### 2026-10-07 — APK Standard 0.5.26 QA/debug REAL entregue
+
+Versão: `0.5.26` (versionCode 31)  
+Branch privada canônica: `release/0.5.26`  
+Build público isolado: https://github.com/LucianoToscano/PvPPokeGo-APK-Build
+Commit compilado: `0b1c453add6e838c4de06eb07e5792481bb884d2`
+Run: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37707859527
+
+OBJETIVO:
+- Gerar pela primeira vez o APK 0.5.26 real com os recursos de launcher/reserva e correções Kotlin, preservando repositório original privado e Recorder Compat adiado.
+
+ALTERAÇÕES E RESULTADOS:
+- SDK Android 36, Gradle, PvPoke empacotado offline e banco visual de fingerprints/atlas executados com sucesso no runner público.
+- Os três erros Kotlin revelados na execução anterior foram corrigidos primeiro no original privado (`9e395f5c`, `c9295962`, `2a98de56`) e depois copiados sem divergências para a branch pública (`0b1c453`).
+- Workflow `37707859527` terminou `success`: `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, validação de integridade e assinatura.
+- Artefato produzido: `PvPPokeGo-0.5.26-QA-debug.apk`, 78.046.047 bytes.
+- Assinatura APK v2 debug verificada. **Não é certificado permanente/release**, e pode não atualizar um APK antigo assinado de outra forma.
+- ZIP GitHub artifact extraído em ambiente de entrega, `unzip -t` do APK passou; foram confirmados `assets/gamemaster.json`, `assets/pokemon_icon_atlas.png`, `assets/pvpoke_snapshot.json`, `res/drawable-nodpi-v4/pvppokego_launcher.png`.
+- SHA-256 publicado pelo workflow e reconfirmado após download: `461815c2b8c9078f8fcd617145f1abeefb3a0be03f2376114227f44594708932` (match exato).
+- Upload para Google Drive concluído e verificado via metadados (tamanho idêntico):
+  https://drive.google.com/file/d/1bcbP8WJ7sWgd9lUTvqb0NzV9MSXq_nCH/view?usp=drivesdk
+  Pasta: `12g6IITrn64y0D40YsIdzl-sN9alZty8Q`.
+- Checklist atualizado com entrega QA no commit `f3d5ab0c7d86f9d8d9a5e77f20d2de67603dd3af`.
+
+ARQUIVOS PRINCIPAIS:
+- `BattleFrameEventDetector.kt`, `BattleEngine.kt`, `BattleOverlayService.kt` (correções Kotlin)
+- `docs/CHECKLIST-PvPPokeGo-0.5.26.md`
+- Na cópia pública: `.github/workflows/build-standard-apk.yml`, 104 arquivos de snapshot de build (sem histórico privado, segredos e docs internas)
+
+TESTES:
+- Compilação Android Standard e testes unitários de Gradle concluídos no CI (workflow SUCCESS).
+- Validação de assinatura, integridade ZIP e checksums: PASS.
+- Sem QA visual em aparelho nesta etapa.
+
+STATUS:
+CONCLUÍDO — geração e entrega QA/debug do APK Standard 0.5.26.  
+PARCIAL — validação física dos ícones de reservas e launcher Samsung e assinatura permanente.
+
+PENDÊNCIAS:
+- Usuário instalar e verificar reservas 2/3, troca, ícone Samsung, telas com CP duplicado, e informar eventuais regressões.
+- Se o certificado instalado diferir, exportar ajustes antes de desinstalar versão anterior.
+- Release permanente só com keystore conhecida; não renomear QA/debug como release final.
+- Cópia pública build-only é snapshot e requer sincronização explícita das alterações futuras.
+
+PRÓXIMO PASSO:
+- Reproduzir visualmente os bugs em dispositivo usando o APK entregue; aplicar correção na branch privada canônica, transferir snapshot revisado ao build público, registrar novo checkpoint e subir numeração para próxima entrega.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
