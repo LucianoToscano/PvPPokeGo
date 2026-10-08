@@ -790,6 +790,15 @@ PENDÊNCIAS:
 PRÓXIMO PASSO:
 - Finalizar QA/debug 0.5.28, entregar APK verdadeiro e registrar entrega no Guia Mestre/checklist.
 
+### 2026-10-07 — Correção de compilação no HUD restaurado
+
+- Run público `37715432893`: falhou na compilação Kotlin; log apontou `BattleOverlayView.kt:873:22 Unresolved reference 'stableBattleAdvice'`.
+- Causa: no recorte de código visual da 0.5.17, o helper novo `stableBattleAdvice` da 0.5.27 foi removido junto com o bloco da UI moderna, mas `drawBattleAssist` ainda depende dele.
+- Corrigido no privado `f1de2771f5a0e88a840d8864134ea5424cdd8d5a`: recuperado exatamente o helper, mantendo a estabilização dos conselhos.
+- Espelhado no repo público `491106a928efd810c9351c8e356d3513ad03c6f2`; novo run `37716045867` iniciado.
+- Comparados os métodos removidos da versão 0.5.27: `drawReservePokemonIcon`, `reserveMatchupLabel`, `reserveMatchupColor` e `fitReserveText` não têm chamadas pendentes após a restauração.
+- Status: compilação e entrega APK 0.5.28 ainda pendentes neste checkpoint.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
