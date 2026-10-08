@@ -10,10 +10,23 @@ Referência funcional dos aliados: [código 0.5.17](https://github.com/LucianoTo
 - [x] Cadência OCR de seleção ajustada para 1550 ms.
 - [x] Testes unitários para reconhecimento OCR nome+PC, baixa confiança e dados ausentes.
 - [x] Build Standard isolado configurado para 0.5.29.
-- [ ] Build 0.5.29 com testes de regressão concluídos.
-- [ ] APK validado/assinado e SHA256 registrado.
+- [x] Build 0.5.29 com testes de regressão concluídos.
+- [x] APK validado/assinado (QA/debug) e SHA256 registrado.
 - [ ] Teste em aparelho Samsung: os 3 Pokémon são encontrados ANTES de entrar na batalha.
 - [ ] Teste em aparelho Samsung: reservas seguem corretamente após troca, sem misturar PC/espécie.
 - [ ] Revisar log de diagnóstico caso algum dos três não seja reconhecido.
 
 Build público: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37719025048
+
+## Build Standard QA 0.5.29 — entregue
+
+- Run público: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37719025048 — **SUCCESS**.
+- Commit público compilado: `008993b11f9299fc4a88cfeb7fde9f8ff7e9efc2`.
+- `:app:testStandardDebugUnitTest` + `:app:assembleStandardDebug`: PASS.
+- Artefato `PvPPokeGo-0.5.29-QA-debug.apk`: **79.193.455 bytes**.
+- SHA-256 `b79c41f58e6fe846f7a62497cd91e1d64f15e377bdee1d8dcc4e2369e1199e3a`, hash do arquivo baixado corresponde ao `SHA256SUMS.txt` do CI.
+- `unzip -t`: PASS; `gamemaster.json`, `pvpoke_snapshot.json`, `pokemon_icon_atlas.png/json` presentes.
+- `apksigner verify`: APK Signature Scheme v2 **true**, 1 signatário QA/debug (não é assinatura permanente).
+- Launcher transparente enviado pelo usuário presente: SHA256 `f8d4f45922e6af0022e3eaad1d255fedd2b790650f542e62315042f8bd1dbf51`, idêntico à versão 0.5.27/0.5.28.
+- Google Drive oficial, ZIP com APK + checksum: https://drive.google.com/file/d/1Pw9RuiruLHrP4f7tkCFDLG8NnGhMuxFO/view?usp=drivesdk
+- PENDENTE: QA de detecção efetiva no aparelho Samsung, não inferir que todos os aliados aparecem a partir de BUILD SUCCESS.
