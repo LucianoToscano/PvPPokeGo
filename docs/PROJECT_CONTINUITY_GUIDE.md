@@ -718,6 +718,34 @@ STATUS: IMPLEMENTADO NO CÓDIGO; APK/QA EM ANDAMENTO.
 PENDÊNCIAS: confirmar `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, artefato APK 0.5.27 com hash/assinatura, e testar launcher/reservas/troca no Samsung. Não declarar reparo visual validado sem prova.
 PRÓXIMO PASSO: conferir o resultado do run público, ajustar qualquer erro de compilação, entregar APK QA se passar e registrar checksum/URL no Guia Mestre.
 
+
+### 2026-10-07 — Entrega QA 0.5.27 concluída e hash da arte conferido
+
+BRANCH CANÔNICA: `release/0.5.27`  
+REPO ORIGINAL: privado; espelho público apenas para build, sem histórico privado.  
+COMMIT FONTE COM CORREÇÕES: `cb00b81607706df99fcd9837dd27fc6e4fc4c4bb`.  
+COMMIT DE BUILD: `71a849787cfad9aead891cabd6e48b7772dce4e8`.  
+EXECUÇÃO SUCCESS: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37712804512
+
+RESULTADO:
+- `PvPPokeGo-0.5.27-QA-debug.apk` gerado, 79.193.451 bytes (versionCode 32, versionName 0.5.27).
+- Testes e build `:app:testStandardDebugUnitTest` + `:app:assembleStandardDebug`: **PASS**.
+- ZIP APK verificado sem erros, assinatura APK Signature Scheme v2 **PASS** (certificado QA/debug, não release permanente).
+- SHA-256 do APK: `cbf336cddfa31bf0639df41491b4e1cc0019b3bc4403a6c394a3bfa5966d3025` (arquivo baixado bate exatamente com SHA256SUMS do CI).
+- `res/drawable-nodpi-v4/pvppokego_launcher.png` extraído do APK tem 1.453.830 bytes e SHA-256 `f8d4f45922e6af0022e3eaad1d255fedd2b790650f542e62315042f8bd1dbf51`, **exatamente igual ao PNG RGBA transparente enviado pelo usuário**.
+- `pokemon_icon_atlas.png` e `gamemaster.json` presentes dentro do APK.
+- Arquivo ZIP de distribuição contendo APK + SHA256SUMS e verificação de assinatura foi armazenado e conferido na pasta oficial do Google Drive:
+  https://drive.google.com/file/d/1KIvivodofc3QA72oS0zeUTJPplFUkUb3/view?usp=drivesdk
+- Checklist 0.5.27 atualizado: commit `c12bdec830797e21009ebaa0951d15b7d285d040`.
+
+STATUS:
+- CONCLUÍDO: correção no código, build e validação técnica do APK QA 0.5.27.
+- PENDENTE: teste visual no Samsung; não afirmar que aparência do launcher ou cards foi aprovada pelo usuário.
+- IMPORTANTE: assinatura debug nova pode impedir instalação por cima da 0.5.26 devido a certificado diferente. Exportar configurações antes de desinstalar, se necessário.
+
+PRÓXIMO PASSO:
+- Instalar, validar o PNG oficial na tela inicial, reservas (PC, tipos, retratos e HP), modo de troca/continuidade e ícones de controle no Samsung. Registrar feedback e evoluir para próximo versionCode em nova entrega.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
