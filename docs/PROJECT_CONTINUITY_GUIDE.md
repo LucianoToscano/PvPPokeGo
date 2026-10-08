@@ -688,6 +688,36 @@ PENDÊNCIAS:
 PRÓXIMO PASSO:
 - Reproduzir visualmente os bugs em dispositivo usando o APK entregue; aplicar correção na branch privada canônica, transferir snapshot revisado ao build público, registrar novo checkpoint e subir numeração para próxima entrega.
 
+
+### 2026-10-07 — 0.5.27: reversão do visual poluído das reservas e ícone oficial transparente
+
+BASE: 0.5.26 validado no Actions `37707859527`.  
+BRANCH CANÔNICA: `release/0.5.27`, criada de `release/0.5.26` no commit `0faf11d2227c4a4ddc17990d6fd476832526d2b8`.  
+COMMIT DA CORREÇÃO: `cb00b81607706df99fcd9837dd27fc6e4fc4c4bb`.  
+ESPÊLHO PÚBLICO: `LucianoToscano/PvPPokeGo-APK-Build`, commit `71a849787cfad9aead891cabd6e48b7772dce4e8`.
+
+PROBLEMAS REPORTADOS PELO USUÁRIO NA CAPTURA DA VERSÃO 0.5.26:
+- Cards das duas reservas na direita visualmente poluídos, retratos com halos/círculos, textos e CP muito comprimidos.
+- Elementos de HUD pareciam desaparecer, especialmente durante troca em que a identidade dos dois cards nem sempre está confirmada.
+- Launcher instalado diferente da arte transparente enviada explicitamente.
+
+ALTERAÇÕES:
+- `BattleOverlayView.kt`: cards com fundo escuro arredondado compacto, indicador menor, retrato quadrado arredondado sem halo circular, nome/CP/status em linhas separadas, texto limitado à largura disponível, tipos menores e HP barra discreta, mantendo posições personalizáveis individuais das duas reservas.
+- Em switch chooser só são desenhados indicadores especiais quando ambos os cards têm correspondência confirmada; nos demais casos o HUD de reservas continua visível sem esconder os elementos estabelecidos.
+- Prioridade de sprite por speciesId/form do atlas, depois retrato de slot estável e só então crop card confirmado; a correção de correspondência não foi removida.
+- `app/src/main/res/drawable-nodpi/pvppokego_launcher.png`: substituído pelos bytes EXATOS do PNG RGBA transparente enviado pelo usuário (1254×1254, 1.453.830 bytes, Git blob `95797dfe8b1fe4e4db0fe07d1f35c2a4e49ae695`).
+- `colors.xml`: fundo do adaptive icon transparente `#00000000`; foreground mantém a logo original com inset de 16dp para evitar corte pela máscara; `mipmap-anydpi` e `mipmap-anydpi-v26` existentes permanecem referindo o mesmo recurso sem criar ícone alternativo.
+- `app/build.gradle.kts`: versionCode 32, versionName 0.5.27.
+- Repositório privado permanece privado; cópia pública isolada atualizada e configurada para build 0.5.27.
+
+TESTES/BUILD:
+- GitHub Actions do espelho público: `37712804512` disparado; status ainda por confirmar neste registro.
+- Não foi executado teste visual em Samsung nesta etapa; layout novo requer QA físico.
+
+STATUS: IMPLEMENTADO NO CÓDIGO; APK/QA EM ANDAMENTO.
+PENDÊNCIAS: confirmar `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, artefato APK 0.5.27 com hash/assinatura, e testar launcher/reservas/troca no Samsung. Não declarar reparo visual validado sem prova.
+PRÓXIMO PASSO: conferir o resultado do run público, ajustar qualquer erro de compilação, entregar APK QA se passar e registrar checksum/URL no Guia Mestre.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
