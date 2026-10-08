@@ -1012,6 +1012,132 @@ A numeração corresponde às anotações manuais das capturas, não necessariam
 **PRÓXIMO PASSO:** ler Guia Mestre/Checklist em release/0.5.29 e auditar as implementações existentes contra esta lista, classificando cada função como EXISTENTE-VALIDADA / EXISTENTE-COM-FALHA / PARCIAL / NOVA / BLOQUEADA. Implementar apenas deltas necessários, testes e documentação incremental na branch ativa, preservando visual e recursos anteriores. Somente depois compilar/QA físico/publicar artefato real e registrar commit, SHA-256 e link.
 
 
+
+### 2026-10-08 — Inventário complementar dos MENUS: menu rápido na batalha + configurações da tela inicial (0.5.29)
+
+**Origem:** sequência de capturas de tela do usuário da versão 0.5.29, seguida de inventários textuais aprovados durante a conversa. Este trecho complementa (não substitui) o adendo anterior de 2026-10-08 sobre a interface de batalha, energia e OCR. **Estado de evidência: identificado VISUALMENTE; não confundir controle visível/toggle ligado com função tecnicamente validada no APK.** Nenhum código foi alterado como consequência desta especificação.
+
+**HEADs vistos antes da edição documental:** release/0.5.26 = `550fa08c8be1beb20bce4884d3a4c8c650c1dd62` e release/0.5.29 = `df26f33ed7dbdc6282eec5e65b9d77a0071aba52`. Branch default `main` não é a release ativa. A entrega técnica está identificada como 0.5.29 nas capturas. Atualizar as duas cópias do guia para evitar perda de contexto, mantendo 0.5.26 como referência histórica e 0.5.29 como continuação ativa. Estes SHA são PRÉ-COMMIT e deverão ser substituídos, na conferência final, pelos HEAD novos.
+
+#### H. Menu rápido ABERTO sobre o Pokémon GO (HUD / batalha; inventário completo observado)
+
+**Acesso:** pelo controle do PvPPokeGo (chave inglesa/engrenagem). O menu pode aparecer sobre a tela normal do mapa fora de batalha e deve manter o Pokémon GO completamente funcional. Capturas mostram segmentos diferentes da mesma lista rolável e visualização com opções avançadas expandidas/recolhidas. Não confundir o ícone de estrela **da opção textual no nosso MENU** com a **estrela amarela do PGSharp sobre a cena de batalha**, que NÃO é nossa.
+
+| Grupo | Ícone observado | Rótulo literal / estado | Contrato funcional para auditar |
+|---|---|---|---|
+| BATALHA | ◉ | Ocultar HUD | Esconde HUD de batalha e mantém mecanismo seguro de recuperação/mostrar. Diferenciar da opção global Overlay no app. |
+| BATALHA | ★ | Modo batalha assistido | Alterna recomendações táticas e alertas visuais; NÃO envia cliques/comandos ao Pokémon GO. |
+| BATALHA | △ | Liga: Automático | Alterna/seleciona modo de liga; respetivo valor deve sincronizar com escolha da tela inicial. |
+| BATALHA | ↔ | Editar posições do HUD | Abre modo de reposicionamento do HUD e controles de edição; não mover controles nativos. |
+| HUD / VISUAL | T | Textos do HUD | Alternar legendas/textos visíveis do HUD, respeitando modo somente ícones. |
+| HUD / VISUAL | S | Escala 80% ou 90% (observada) | Ajuste de escala; dois valores observados em capturas diferentes, não duas opções distintas. Persistir mudanças. |
+| HUD / VISUAL | ◐ | Opacidade 90% ou 100% (observada) | Ajuste de opacidade; valores variáveis, não duplicatas. Persistir mudanças. |
+| HUD / VISUAL | ↺ | Restaurar posições/layout | Restabelecer layout padrão com confirmação adequada e possibilidade de recuperar backup; evitar reset acidental. |
+| ANÁLISE | A | Reconhecimento automático | Liga/desliga pipeline de visão/OCR sem alterar o jogo. |
+| ANÁLISE | ◇ | Fraquezas do inimigo | Chips/indicadores dos tipos e suas fraquezas no topo do overlay. |
+| ANÁLISE | ✓ | Indicador Pokémon atual | Avaliação do confronto do Pokémon ativo (melhor, neutro, evitar) com 3 estados. |
+| ANÁLISE | 2 | Analisar reservas | Avaliação dos dois aliados de reserva, separada dos cards nativos. |
+| ANÁLISE | T | Tipos das reservas | Tipos/ícones dos aliados reservas; não modificar sprites/cards originais. |
+| ANÁLISE | ⚔ | Ataques do inimigo | Monitor com golpe ágil, até dois carregados e seleção manual/OCR. |
+| ANÁLISE | •• | Contagem de carregados | Exibir pontos/cargas/contagem para ataques do inimigo; sinônimo potencial de “Pontos de carregamento” na tela inicial; validar se a configuração compartilhada é a mesma. |
+| ANÁLISE | ⚡ | Progresso de energia | Energia residual prevista por Pokémon adversário, duas camadas visuais no carregamento e conservação após troca. |
+| ANÁLISE | HP | HP e previsão de dano | HP conhecido/estimado e prévia de dano provável, respeitando incerteza e estado de escudo. |
+| ANÁLISE | ↻ | Timer de troca | Cronômetro de cooldown de troca, separado de temporizador de escudo e troca forçada. |
+| ANÁLISE | H | Histórico do inimigo | Informação resumida das observações/moves/energia dos inimigos; distinta do Histórico de batalhas completo na tela inicial. |
+| ANÁLISE | D | Diagnóstico / DEBUG | Telemetria técnica / OCR para depuração (sem poluir interface padrão). |
+| EXPANSÃO | ••• / ‹ | Mostrar opções avançadas / Ocultar opções avançadas | **UM** controle de dois estados; expande/recolhe opções do menu e modifica quais grupos ficam visíveis. |
+| SISTEMA | ● | Gravar tela com PvPPokeGo | Capturar gravação interna com permissões adequadas, sem interferir na captura usada para OCR. |
+| SISTEMA | Ⅱ | Pausar visão/análise | Congela/pausa processamento; deve distinguir de ocultar HUD, remover overlay e parar serviço. |
+| SISTEMA | × | Remover sobreposição | Retira somente overlay sem fingir que todo serviço foi interrompido; funcionalidade real a validar. |
+| SISTEMA | ■ | Parar serviço PvPPokeGo | Interrompe serviço e recursos/captura necessários; diferente de remover apenas a HUD. |
+| SISTEMA | ▦ | Modo somente ícones | Oculta legendas/textos extensos mantendo ícones corretos. |
+| SISTEMA | × | Fechar menu | Fecha apenas menu rápido, não encerra app ou batalha. |
+
+**Contagem do inventário do MENU:** 4 (Batalha) + 4 (HUD/Visual) + 12 (Análise) + 1 (controle de expansão com dois estados) + 6 (Sistema) = **27 opções/controles distintos** nas capturas combinadas; não necessariamente todos aparecem simultaneamente devido a rolagem, modo expandido e contexto. **Elementos auxiliares do próprio HUD** também vistos com menu aberto: olho ocultar/mostrar e cadeado travar/destravar, além do status HP% e marcador `?`; não contabilizar esses como novas opções da lista. O ícone cadeado VERDE circulado pelo usuário representa o estado do CONTROLE DO PvPPokeGo, e não um ícone original do Pokémon GO.
+
+**Comportamentos especiais e erros a evitar:** não atribuir “fechar aplicativo” ao × de “Fechar menu”; não confundir remover overlay com parar serviço; não trocar a arte oficial delicada do olho/cadeado por emojis; preservar áreas de toque associadas aos próprios ícones, sem hitboxes invisíveis distantes; menu deve ser exibido e editável com ou sem batalha; controles não devem cobrir o toque no jogo; exportação de posições antes de “restaurar layout”.
+
+#### I. Tela INICIAL do aplicativo PvPPokeGo 0.5.29 — inventário integral das quatro capturas
+
+**Título/descrição visível:** PvPPokeGo — “Assistente visual de batalhas PvP”; “Analisa a tela e mostra informações em tempo real sem enviar comandos ao Pokémon GO”. A tela mostra status “Pronto para iniciar o HUD”, instrução resumida “HUD: 🔓 mover • 🔒 travar • ◉ mostrar/ocultar • ⚙ menu rápido”, pasta interna de gravações `Movies/PvPPokeGo` e versão **0.5.29**. O texto de apresentação é a intenção de funcionamento: ausência de comandos automáticos ao jogo permanece regra inviolável.
+
+**Seção BATALHA — 4 botões visíveis:**
+
+| Controle | Texto | Função pretendida / validação necessária |
+|---|---|---|
+| 1 | Iniciar | Iniciar serviço/HUD, obter permissões necessárias e sincronizar toggles sem iniciar duas sessões em duplicidade. |
+| 2 | Parar | Encerrar serviço/HUD; verificar diferenças em relação a Pausar ou Remover sobreposição. |
+| 3 | Gravar | Começar/parar gravação local conforme estado real; revisar permissões e localização `Movies/PvPPokeGo`. |
+| 4 | Nova batalha | Inicializar novo registro cronológico e estado de combate, com política explícita para sessão anterior. |
+
+**Seção ASSISTÊNCIA E HUD — 3 toggles:**
+
+1. **Overlay** — liga/desliga camada sobre outras aplicações; nas capturas aparece LIGADO (roxo).
+2. **Reconhecimento automático** — liga/desliga reconhecimento visual/OCR; na captura aparece LIGADO.
+3. **Modo Batalha Assistido** — mostra previsões/recomendações “CONTINUE FAST”, “TROQUE”, “ESCUDO”, “NÃO ESCUDE” e alerta de Charged, **sem tocar/enviar comandos** ao Pokémon GO; na captura aparece LIGADO.
+
+**Seção LIGA E ANÁLISE — 4 botões de seleção de liga + 11 toggles:**
+
+**Seleção “Liga / ranking PvP”:** `Automático` (selecionado na captura) / `Liga Grande` / `Liga Ultra` / `Liga Mestra`. Texto de status: “Automático: ler o lobby. Última detectada: Liga Grande”. A seleção manual/automática deve sincronizar com a opção `Liga: Automático` do menu rápido. Identificação de copas/edições especiais exige regra própria, não inferir só por PC.
+
+| # | Toggle literal da tela inicial | Status visual no print | Mapeamento desejado ao menu rápido |
+|---|---|---|---|
+| 1 | Fraquezas do inimigo no topo | LIGADO | “Fraquezas do inimigo” |
+| 2 | Indicador do Pokémon atual | LIGADO | “Indicador Pokémon atual” |
+| 3 | Analisar reservas | LIGADO | “Analisar reservas” |
+| 4 | Mostrar tipos das reservas | LIGADO | “Tipos das reservas” |
+| 5 | Ataques do inimigo | LIGADO | “Ataques do inimigo” |
+| 6 | Pontos de carregamento | LIGADO | “Contagem de carregados” — confirmar flag compartilhada |
+| 7 | Progresso de energia | LIGADO | “Progresso de energia” |
+| 8 | HP e previsão de dano sem escudo | LIGADO | “HP e previsão de dano” — texto pode ser mais completo no menu rápido |
+| 9 | Timer de troca | DESLIGADO | “Timer de troca” |
+| 10 | Modo edição — segure e arraste | DESLIGADO | “Editar posições do HUD” — verificar semântica/segurança do bloqueio |
+| 11 | DEBUG | DESLIGADO | “Diagnóstico / DEBUG” |
+
+Textos de ajuda nas capturas:
+- Energia: “A previsão inimiga usa turnos de 0,5 s, energia residual e hipóteses de Fast Move. Quando há incerteza, mostra faixa/READY? em vez de inventar um valor exato.”
+- HP: “Mostra HP estimado e uma faixa fantasma sobre a barra quando um carregado inimigo pode chegar. Dano observado tem prioridade; sem amostras, usa o modelo offline PvPoke como estimativa.” A parte final da descrição aparece parcialmente cortada nas capturas, então auditar implementação antes de ampliar a promessa.
+
+**Seção APARÊNCIA / PERSONALIZAÇÃO — 2 sliders dentro de LIGA E ANÁLISE/aba inicial:**
+
+1. `Escala: 80%` — no exemplo, controle deslizante; outras capturas do menu rápido exibem 90%. A escala é ajustável, não duas funções separadas.
+2. `Opacidade: 90%` — slider; outros prints do menu rápido exibem 100%. A opacidade é ajustável, não duas funções separadas.
+Ambos devem persistir, exportar/importar e atualizar imediatamente o menu rápido; limites reais exigem auditoria.
+
+**Seção BACKUP E DIAGNÓSTICO — 3 ações visíveis:**
+
+1. `Exportar` (configurações e posições): salva toggles/opções, escala, opacidade e posições personalizadas de ícones, blocos e menus do HUD. Evitar perda de posições já aprovadas.
+2. `Importar` (configurações e posições): restaura um backup; texto original informa que **o layout fica travado por segurança ao importar**. Verificar versão de esquema/backward compatibility antes de sobrescrever.
+3. `Exportar diagnóstico (.zip)`: pacote contendo configurações, posições, histórico, confiança/origem dos eventos e dados do aparelho. Consentimento e minimização de dados importantes ao compartilhar.
+
+**Seção HISTÓRICO DE BATALHAS — 3 controles visíveis:**
+
+1. `Atualizar`: atualizar/recarregar a lista.
+2. `Exportar ZIP`: exportar histórico quando houver batalhas. Formatos anunciados no próprio texto: **.txt legível, .json completo e .csv em tabela**.
+3. `Limpar histórico`: apagar registros, idealmente confirmar ação destrutiva. Na captura, exportar e limpar aparecem **desabilitados**, com “Nenhuma batalha registrada ainda”.
+- Modelo de apresentação especificado: **conversa cronológica** com balões separados para “você”, “inimigo” e “assistente”; validar ligação aos registros reais antes de alegar funcionalidade.
+
+**Seção SOBRE — informações, não controles configuráveis:**
+- Crédito exibido no app: “Desenvolvimento PvPPokGo by: LucianoToscano”; contato de suporte **(84) 99131-9021**; versão 0.5.29.
+- Texto: “Base visual V03 preservada. O HUD protege a interface nativa do Pokémon GO, permite reposicionar blocos no modo edição e mantém o botão de olho no topo.”
+- Conferir ortografia e consistência entre marca `PvPPokeGo` e créditos `PvPPokGo`, sem remover crédito do desenvolvedor.
+
+**Contagem da TELA INICIAL:** 4 (Batalha) + 3 (Assistência e HUD) + 4 (Seleção da liga) + 11 (Ligações de análise) + 2 (Escala/Opacidade) + 3 (Backup e diagnóstico) + 3 (Histórico) = **30 controles/opções** visíveis nas capturas, além de textos de descrição e seção “Sobre”. Valores ou estados roxos/cinzas são evidência visual da captura, NÃO teste automatizado de toggle nem garantia de persistência.
+
+#### J. Regra de sincronização dos 2 caminhos de configuração e checklist de QA
+
+- **Uma única configuração persistida por funcionalidade**, independentemente do caminho (tela inicial versus menu rápido). Ajustar escala/opacity, liga, reconhecer automático, modo assistido, fraquezas, matchup ativo, reservas, tipos, ataques, carga, energia, HP/previsão, timer, edição e DEBUG em um lugar deve refletir no outro sem reiniciar tudo.
+- Normalizar rótulos inconsistentes SEM mudar semântica: `Pontos de carregamento` ↔ `Contagem de carregados`; `HP e previsão de dano sem escudo` ↔ `HP e previsão de dano`; `Reconhecimento automático` aparece nas duas interfaces; `Editar posições do HUD` ↔ `Modo edição — segure e arraste`; `Fraquezas do inimigo no topo` ↔ `Fraquezas do inimigo`.
+- Garantir diferenciação de estado e comandos: `Overlay` global ≠ `Ocultar HUD` temporariamente ≠ `Modo somente ícones` ≠ `Pausar visão/análise` ≠ `Remover sobreposição` ≠ `Parar serviço`. Mostrar a ação correta e não quebrar o fluxo de retomada.
+- Na interface inicial, botões `Iniciar`, `Parar`, `Gravar`, `Nova batalha` devem refletir estado real e permissões; evitar botões semanticamente ativos mas inoperantes. História/diagnóstico devem oferecer exportações realmente legíveis; exportar/limpar desabilitados quando não houver histórico.
+- Ao importar backup de configurações, manter locks seguros e reconstituir posições tanto fora como dentro da batalha; não deslocar olhinho/cadeado/engrenagem. Validar formato e migrations em upgrades; restaurar só com ação explícita.
+- Funcionalidade desligada no menu inicial não deve reaparecer por padrão no HUD; e configuração escondida por “Opções avançadas” não deve perder valor ao recolher menu.
+- Respeitar a distinção já documentada entre **controles externos do PGSharp**, **elementos nativos do Pokémon GO somente para leitura**, e controles desenhados pelo próprio PvPPokeGo.
+- Para QA: capturar (1) tela inicial inteira com scroll e modos on/off, (2) menu rápido completo e recolhido, (3) transição para edição/layout, (4) backup/restauração com posições personalizadas, (5) OCR em batalha real, (6) comportamento quando outro overlay está presente, (7) exportação do histórico com e sem registros; comparar resultado com prints antes de considerar “funcionando”.
+
+**STATUS:** este inventário/contrato visual está **REGISTRADO NO GUIA**, mas a auditoria dos toggles, sincronização, testes de Android e APK com novas correções **NÃO FOI FEITA NESTA ETAPA**. Este commit é SOMENTE de documentação; não é build/release nova. Toda mudança futura nos menus deve gerar novo registro cronológico no guia da branch ativa e (quando relevante) no espelho histórico solicitado, incluindo branch/HEAD real, arquivos alterados, teste, pendências e links de artefatos verificados.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
