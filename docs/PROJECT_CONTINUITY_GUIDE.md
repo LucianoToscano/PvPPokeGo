@@ -826,6 +826,36 @@ PENDÊNCIAS:
 - Usuário instalar e validar a aparência da 0.5.28 lado a lado com a 0.5.17, incluindo reservas, trocas, tipos, cadeado, olho, ataque inimigo e posição dos controles.
 - Ajustar com evidência visual qualquer diferença residual, sem nova reformulação desnecessária.
 
+
+### 2026-10-07 — Correção funcional do reconhecimento dos três aliados (0.5.29)
+
+CONTEXTO:
+- Após entregar 0.5.28 com HUD visual restaurado de 0.5.17, usuário informou que o SISTEMA não funcionava; detalhou que o reconhecimento dos Pokémon aliados piorou comparado com 0.5.17.
+- Branch base privada `release/0.5.28` preservada; nova branch `release/0.5.29` criada, versionCode 34.
+- A análise confirmou uma regressão concreta: `BattleOcrDetector.fuseTeamSlotEvidence` da 0.5.28 retornava null para nome e PC válidos quando não havia match de imagem, ao contrário do detector 0.5.17 que reconhecia aliados por OCR.
+- A 0.5.17 varria uma área ampla 4–96% largura / 10–93% altura. A nova implementação só usava três regiões fixas estreitas, potencialmente perdendo outras proporções de layout.
+- O motor interrompia buscas se havia três slots com PC, ainda que identidade fosse incerta.
+
+MUDANÇAS:
+- `BattleOcrDetector.kt` commit `d37d3fe484bda3a8d120d47ed9763530f85a3c97`: OCR puro nome válido + PC 10..10000 e confiança ≥0.90 recuperado independentemente da existência de sprite. Não substitui identificação visual para formas/variantes quando disponível. Se per-slot identifica menos que os 3, usa leitura ampla da tela de seleção 0.5.17. Este fallback só retorna um time completo de 3 pares distintos de espécie/PC reconhecidos, evitando introduzir falsas identidades de tela sem time.
+- `AllyOcrRecoveryPolicy.kt` commit `17f68e42a663e6fcf8b8e895ff789749ef0ca11f`: regra pura para reconhecimento OCR.
+- `AllyOcrRecoveryPolicyTest.kt` commit `062cbb3b62059bf48eaf8822582aa7d025d1534d`: regressões de nome+PC com visual ausente e rejeição de PC/nome inválidos e baixa confiança.
+- `BattleEngine.kt` commit `73029729981e308bac1c6990e91ca796da997e5d`: `needsOwnTeamScan` só interrompe depois que os três slots têm PC, espécie e confiança ≥0.90, evitando que palpites incompletos congelem o time.
+- `BattleOverlayService.kt` commit `ba1668ac8244911fec9c22272b84eadb0e0b99be`: cadência OCR da equipe 1550ms, próxima ao detector amplo da 0.5.17, para reduzir carga no aparelho.
+- `app/build.gradle.kts` commit `1e45dec7dfc80eebc1a6eddffda3df78b7a0bdc2`: versionName 0.5.29, versionCode 34.
+- Copiado só o snapshot necessário para `LucianoToscano/PvPPokeGo-APK-Build` público, commit `008993b11f9299fc4a88cfeb7fde9f8ff7e9efc2`, preservando original privado e visual de 0.5.17 restaurado na 0.5.28.
+
+VALIDAÇÃO:
+- Build Standard CI iniciado: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37719025048
+- STATUS NESTE CHECKPOINT: teste compilação em andamento. Ainda não declarar reconhecimento validado no Samsung.
+- Sem captura bruta de tela / arquivo de diagnóstico do usuário para testar a exatidão da identificação de espécies e PC no dispositivo real.
+- A regra OCR+PC recupera comportamento antigo, mas a leitura ampla é deliberadamente conservadora e não resolve automaticamente todos os layouts.
+
+PENDÊNCIAS:
+- Confirmar testes unitários, compile e APK 0.5.29. Verificar assinatura v2/sha256/ícone ao entregar.
+- QA físico na tela de seleção 3 aliados e continuidade das reservas durante trocas; solicitar exportação de diagnóstico se continuar falhando.
+- Não alterar ícone transparente e layout de referência 0.5.17 nem perder motor de batalha.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
