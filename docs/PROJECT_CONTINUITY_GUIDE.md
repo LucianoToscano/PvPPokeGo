@@ -688,6 +688,11 @@ PENDÊNCIAS:
 PRÓXIMO PASSO:
 - Reproduzir visualmente os bugs em dispositivo usando o APK entregue; aplicar correção na branch privada canônica, transferir snapshot revisado ao build público, registrar novo checkpoint e subir numeração para próxima entrega.
 
+
+### Continuidade oficial após QA 0.5.26 — avançou para release/0.5.27
+
+A partir do relato visual do usuário em 2026-10-07 (cards das reservas poluídos, ícones ocultos durante troca, launcher diferente), o desenvolvimento ativo está em **`release/0.5.27`**. Ler primeiro o novo [Guia Mestre 0.5.27](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.27/docs/PROJECT_CONTINUITY_GUIDE.md) e o [Checklist 0.5.27](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.27/docs/CHECKLIST-PvPPokeGo-0.5.27.md). O histórico desta branch 0.5.26 permanece preservado, sem reset ou mudanças no código.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
