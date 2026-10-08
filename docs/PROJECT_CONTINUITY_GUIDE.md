@@ -746,6 +746,11 @@ STATUS:
 PRÓXIMO PASSO:
 - Instalar, validar o PNG oficial na tela inicial, reservas (PC, tipos, retratos e HP), modo de troca/continuidade e ícones de controle no Samsung. Registrar feedback e evoluir para próximo versionCode em nova entrega.
 
+
+### Continuidade após feedback da versão 0.5.27 — agora release/0.5.28
+
+Após o usuário indicar bugs na 0.5.27 e fornecer `PvPPokeGo-0.5.17.apk` como referência visual, a versão ativa passou a ser **`release/0.5.28`** (layout de reservas/ataques restaurado da referência, sem perder motor atual). Consultar primeiro o [Guia Mestre ativo](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.28/docs/PROJECT_CONTINUITY_GUIDE.md) e o [Checklist 0.5.28](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.28/docs/CHECKLIST-PvPPokeGo-0.5.28.md). Build QA 0.5.28 confirmado no run [37716045867](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37716045867); o estado 0.5.27 foi preservado sem reset.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
