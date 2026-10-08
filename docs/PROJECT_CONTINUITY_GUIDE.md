@@ -693,6 +693,137 @@ PRÓXIMO PASSO:
 
 A partir do relato visual do usuário em 2026-10-07 (cards das reservas poluídos, ícones ocultos durante troca, launcher diferente), o desenvolvimento ativo está em **`release/0.5.27`**. Ler primeiro o novo [Guia Mestre 0.5.27](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.27/docs/PROJECT_CONTINUITY_GUIDE.md) e o [Checklist 0.5.27](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.27/docs/CHECKLIST-PvPPokeGo-0.5.27.md). O histórico desta branch 0.5.26 permanece preservado, sem reset ou mudanças no código.
 
+
+### 2026-10-08 — Adendo canônico: inventário visual, OCR, energia, HP e previsões da batalha
+
+**Natureza:** decisão de produto + especificação funcional e visual derivada das capturas e correções feitas pelo usuário nesta conversa. **Registro documental, NÃO alegação de implementação no APK**. Base visual historicamente aprovada: HUD compacto no estilo 0.5.17/0.5.28, preservando o motor evoluído; não fazer rollback de código. Regra permanente: **MELHORAR E ORGANIZAR, NUNCA EMPOBRECER**.
+
+**Referências e branch/HEAD verificados em 2026-10-08, antes deste adendo:**
+- Repositório privado: https://github.com/LucianoToscano/PvPPokeGo ; branch padrão main, não confundir com branch ativa.
+- Guia solicitado: release/0.5.26, HEAD observado 88d675f516e370dd0f684bd16c4f2c9c6fb5210d; essa branch é histórica, preservada.
+- release/0.5.27, HEAD observado d88ccb84e7bc582aed49bb99a7c223fc903567f1; histórica.
+- release/0.5.28, HEAD observado c184c3b39318eb00d6ede6bed6b32fd998291d80; referência visual mais recente, histórica.
+- **Branch ativa real release/0.5.29**, HEAD observado 60f5a87ed71886831e676d7b1b1f0745a67d3754. Guia ativo: https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.29/docs/PROJECT_CONTINUITY_GUIDE.md . Não voltar para 0.5.26 apenas porque o link foi citado.
+- Objetivo desta edição: acrescentar registro integral tanto ao guia histórico explicitamente apontado quanto ao guia ativo; código, versão, workflow, release e APK não alterados. Os HEAD acima são **pré-edição**, não se confundem com os commits documentais novos.
+
+#### A. Limites de propriedade e integridade da interface — REGRA INVIOLÁVEL
+
+1. **Interface original do Pokémon GO é intocável**. Jamais modificar, reposicionar, redimensionar, substituir, tapar ou interferir nos controles originais. O PvPPokeGo pode observá-los por OCR/visão, construir estado e desenhar um overlay independente que não bloqueie toques necessários.
+2. Fontes NATIVAS, **não contam como ícones/funções próprios do PvPPokeGo**: cartões superiores de cada Pokémon com nome, PC, Pokébolas e escudos; barras originais de HP; personagens, cena e animações; botão nativo de desistir/trocar; cartões nativos dos dois aliados reservas com sprites/PC/HP; grandes botões dos ataques carregados com seu preenchimento e nomes; textos nativos de eficácia (SUPER EFICAZ!, NÃO É MUITO EFICAZ); mensagens de ataque (ex.: “Sneasel usou Jogo Sujo!”), BLOQUEADO!, ATAQUE/DEFESA AUMENTOU ou DIMINUIU; tela de escolha de escudo, botão AGORA NÃO, contador de decisão; modal de substituição obrigatória e contador; telas pré-batalha, escolha de liga/equipe e seus emblemas. **São entradas de leitura, não componentes a redesenhar**.
+3. **PGSharp não é PvPPokeGo.** Excluir do inventário próprio: estrela amarela e barra cinza/botões “Ataques ágeis”, “Ataques carregados” e “Shield”, assim como outros controles atribuídos ao PGSharp pelo usuário. Não transformar supostos botões externos em funcionalidades implementadas.
+4. Distinguir explicitamente o texto nativo de eficácia perto do HP/botões próprios do Pokémon GO do **indicador adicional de eficácia do inimigo desenhado junto dos círculos do PvPPokeGo** (item #15 das marcações). Nunca documentar esses dois como o mesmo recurso.
+5. Ícones circulares de tipos com aparência no estilo Pokémon GO, cor por tipo, contorno fino, escala pequena e alinhamento horizontal **já foram aprovados** pelo usuário; **preservar exatamente o conceito e evitar redesenho gratuito**.
+
+#### B. Inventário visual consolidado do PvPPokeGo (numeração das capturas e correções do usuário)
+
+A numeração corresponde às anotações manuais das capturas, não necessariamente a IDs de código. Ícones sobre cards nativos são overlays informativos; cards/HP/PC nativos NÃO são propriedade nossa.
+
+| # | Elemento próprio ou leitura | Função / estados / observações |
+|---|---|---|
+| 1 | Olho riscado / olho aberto | Alternar visibilidade da HUD; com HUD oculta permanece controle mínimo para reexibir. Dois estados visuais observados. |
+| 2 | Cadeado fechado / aberto verde | Travar posições / destravar para editar e arrastar HUD. Não interceptar controles do jogo. |
+| 3 | Chave inglesa / engrenagem | Acesso ao menu rápido/visual/sistema do overlay; controle visível dentro e fora da batalha. |
+| 4 | Badge acima do emblema: ✓ verde, círculo cinza, × vermelho | Matchup do Pokémon ATIVO: favorável, neutro ou desfavorável (tipos, golpes e contexto; não só PC). **Não é botão de fechar**. |
+| 5 | Emblema triangular do PvPPokeGo | Identificação visual do overlay e referência para status de matchup; não presumir ação ao toque sem confirmar no código. |
+| 6 | Caixa de decisão tática | Estados registrados: CONTINUE FAST, ATENÇÃO, ESCUDO, TROQUE → Pokémon, PREPARE-SE, ANALISANDO ATAQUE. Explicações resumidas: pressão, golpe possível, proteção, alternativa de troca, ataques/tempo até carregado, dano sem/com escudo, faixa de HP/KO; estimativa, não certeza. |
+| 7 | Triângulo de três círculos dos golpes do INIMIGO | Superior = ágil identificado/provável; dois inferiores = carregados prováveis; nomes, tipo, setas de seleção, eficácia, contador/pontos, preenchimento energético compartilhado e texto ENERGIA ... ESTIMADA. |
+| 8 | Chips pequenos de tipos no topo | Exibem tipos próprios, tipos adversários e/ou tipos ofensivos relevantes/supereficazes conforme posição; manter os símbolos/cores aprovados e rotular a semântica sem confundir tipo real com fraqueza calculada. |
+| 9 | Badge na reserva aliada 1 | MELHOR ✓, NEUTRO ○ ou EVITAR × para matchup de troca com Pokémon inimigo ativo; é overlay separado do card nativo. |
+| 10 | Badge na reserva aliada 2 | Mesma análise independente do slot 1, com atualização em mudanças de oponente/estado. |
+| 11 | Identificação do primeiro Pokémon reserva | O card com sprite, PC e barra HP é **nativo Pokémon GO e só pode ser lido**; o PvPPokeGo adiciona apenas avaliação/ícones próprios adjacentes. |
+| 12 | Pequenos indicadores de tipo da segunda reserva | Overlay de tipos/matchup associado ao segundo slot sem alterar o card nativo. |
+| 13 | Pequenos valores numéricos laterais (ex.: 8, 25, 32, 46) | **Hipótese a verificar**, possivelmente temporizador de troca/reentrada após switch e memória de inimigo vivo. Não classificar como nível ou contador de turnos sem auditar código e capturas sequenciais. |
+| 14 | Telemetria compacta perto da arena | Textos por espécie/golpe e abreviações F/E; possível contagem de Fast e energia estimada. Decodificar unidades no código antes de afirmar sua precisão. Considerar modo diagnóstico recolhível. |
+| 15 | SUPER EFICAZ! **próprio sob os carregados do inimigo** | Classificação de eficácia do golpe adversário contra Pokémon ativo; diferente do texto do Pokémon GO. Pode alimentar ameaça, dano e ESCUDO. Ex.: Dive (Água) contra Houndoom (Sombrio/Fogo) é supereficaz. |
+| 16 | Setas ▼ ao lado dos nomes dos golpes inimigos | Abrem seletor manual AUTO · PvPoke/OCR: lista #1...#5 de possíveis carregados, tipo, dano base, custo E e ✓ do selecionado. Capturas: Vaporeon Surfar/Pancada Corporal/Raio Aurora/Pulso d’Água/Retorno; Sealeo Avalanche/Jogo Sujo/Soco de Gelo/Pinote Triplo/Retorno. Seleção manual substitui hipótese de move, sem zerar automaticamente energia armazenada. |
+| 17 | Pequeno monitor HP 100% acima do centro | Indicação de percentual HP própria do overlay; **qual lado ele representa e acurácia dependem de auditoria**, não assumir que seja valor exato. |
+| 18 | PREVIEW textual/numérico de dano à esquerda | Ex.: SEM ESC, dano em faixa percentual, HP sobrevivente, COM ESC, KO POSSÍVEL e MODELO. Previsão deve exibir faixa/confiança, não inventar certeza. |
+
+**Outros elementos de overlay observados, fora da numeração:** cronômetro de sessão 0:00:00 e ícone pessoa/engrenagem associados (finalidade exata pendente); botão de fechar lista de golpes; lista de movimentos no modo AUTO · PvPoke/OCR; textos de tipo/energia/dano; pequenas bolinhas indicando geração/cargas e energia restante; indicação de seleção de golpe; menu de configuração; modo editar HUD; menu de apenas ícones; estados de gravação/visão. NÃO incluir barra PGSharp “Ataques ágeis / Ataques carregados / Shield” nem estrela PGSharp.
+
+**Menu rápido global (capturas fora da batalha também):** Editar posições do HUD; Textos do HUD; Escala (ex. 80%); Opacidade (ex. 90%); Restaurar posições/layout; Mostrar opções avançadas; Gravar tela com PvPPokeGo; Pausar visão/análise; Remover sobreposição; Parar serviço PvPPokeGo; Modo somente ícones; Fechar menu. Em edição, controles inferiores observados: –, +, ◐, L, H, desfazer, ✓ confirmar, restaurar/reciclar; significado exato de ◐/L/H exige leitura do código. Não atribuir a esses controles ações não verificadas.
+
+**Preferência visual:** HUD clean, profissional, minimalista, pequeno, translúcido, ajustável/travável, sem texto redundante, indicadores de tipo originais aprovados, desenhos de círculos compactos, componentes expansíveis só sob demanda, alertas temporários; exibir previsões sem poluir nem obstruir telas nativas de escudo/troca. Visual de reserva 0.5.17/0.5.28 como referência, mantendo todas as capacidades atuais.
+
+#### C. Nova função especificada — três slots inteligentes do time AD-versário (PENDENTE DE IMPLEMENTAÇÃO/QA)
+
+- Exibir **três slots fixos “? ? ?”** inicialmente; à medida que Pokémon adversários forem reconhecidos por nome/OCR/sprite/PC/troca, substituir somente o slot correspondente pelo **sprite correto da espécie/forma**, sem inventar identidade. Manter slots fixos por identidade/revelação; não reordenar a cada troca.
+- Slot ativo tem borda/destaque discreto; reserva viva permanece visível com HP/energia armazenados; desmaiado tem tratamento cinza/X, com histórico guardado. Estado desconhecido não recebe nome inferido como fato.
+- O usuário aprovou **brilho de energia**: sem brilho = sem carregado pronto confirmado/estimado; brilho suave/cor 1 = energia estimada para **ao menos uma** utilização de carregado; brilho cor 2 = energia estimada para **dois** carregados consecutivos. Pode complementar com • / •• para acessibilidade e evitar ambiguidade. Indicar confiança se move ainda não confirmado.
+- **Não confundir dois carregados diferentes equipados com energia para executar duas vezes um carregado.** Cálculo de prontidão baseado na única energia compartilhada, custo de cada golpe e quantidade de utilizações consecutivas realmente possível até limite 100E. Não brilhar se o Pokémon estiver nocauteado, mesmo com energia residual histórica.
+- Ícone continua armazenando seus dados quando adversário troca, e retorna ao estado anterior quando ele reaparece; energia e HP **não resetam na troca**.
+- Não criar cartões grandes adicionais sobre Pokémon GO; preferir faixa compacta independente sem cobrir componentes críticos.
+
+#### D. Motor de energia e turnos: equações e regras determinísticas
+
+- Um turno de PvP = **0,5 s**; cada ágil tem duração em turnos, dano e energia por utilização próprios. **Não generalizar 10E por ágil nem converter valores de Ginásios/Reides para PvP**.
+- Cada Pokémon dos dois lados precisa de registro independente: ID de slot/forma, ativo/reserva/desmaiado, espécie/PC, moves ágeis/carregados e confiança, intervalo de HP, escudos relevantes, energia como intervalo min/provável/max, último evento/turno, buffs/debuffs ativos, histórico.
+- Atualização ao reconhecer ágil uma vez: E_nova = min(100, E_anterior + geração_do_golpe); atualizar AMBOS os medidores carregados conforme a **mesma reserva**; primeira cor até custo de uma utilização, segunda cor quando continua guardando para segunda. Se o golpe custar 40E, uma utilização fica disponível em 40E e duas em 80E; se custar 55E, duas não cabem em 100E.
+- Ao reconhecer carregado usado: E_nova = max(0, E_anterior − custo_identificado), uma única vez por evento, inclusive se bloqueado. Nunca zerar automaticamente saldo, e nunca descontar em dobro por OCR repetido/câmera/escudo; em evento de golpe desconhecido, preservar intervalo de hipóteses até identificação, não subtrair custo arbitrário.
+- Exemplo HIPOTÉTICO de ágil +10E, carregado 40E: 4 usos → 40E, anel cor 1; mais quatro → 80E, segunda cor; gastar 40 → 40E restante. Exemplo REAL a auditar no dataset PvP vigente: Raichu com Trovoada de Choques não deve assumir +10E sem olhar a tabela correta; valores da aba “Ginásios e Reides” não são os do PvP.
+- HP caindo na barra nativa é **sinal de dano, não prova isolada de um ágil**: sincronizar duração/animação do golpe, intervalo entre impactos, dano sem outros eventos, fase da batalha e OCR. Dano pode vir de carregado, lag, frames perdidos ou mais de um golpe entre leituras. Priorizar estado e deduplicação de evento.
+- A câmera mudar/focar defensor, tela de escudo, texto “X usou Y!” e retorno de câmera são pistas de **fase de carregado**. Mudança de câmera sozinha não prova golpe/custo; texto confirmado + eventos associados permitem descontar e voltar à contagem de ágeis.
+- Troca de inimigo: preservar energia e HP individuais, moves, histórico, percentuais de confiança; restaurar no retorno; **resetar estágios temporários de Ataque/Defesa ao sair de campo**, de acordo com regra PvP, sem apagar energia. Pokémon nocauteado é marcado inativo até fim da luta e não reassumido por OCR incorreto.
+- Corrigir/aprender a partir dos resultados observados; matemática determinística tem precedência sobre probabilidade de comportamento. Evitar suposições de intenção (“vai usar carregado” significa **pode usar** se energia suficiente).
+
+#### E. OCR/visão e máquina de estados da batalha (somente leitura)
+
+**Telas pré-batalha/seleção de liga/equipe:** ler liga atual (Grande, Ultra, Mestra), variações como Megaedição/copas, limite PC 1500/2500/sem limite, nome da equipe, seleção recomendada/manual, sprites, espécies, CP e ordem dos 3 aliados. Esses componentes são NATIVOS e não se redesenham. Preparar time próprio e regra de ranking/moves, mas validar disponibilidade real do formato.
+
+**Durante batalha, ROIs adaptativas por posição:** cabeçalho sup. esquerdo/direito (nomes, PC, shields e Pokébolas); HP nativo esquerdo/direito (preenchimento, cores, perdas e desmaio); dois cartões nativos aliados à direita (sprite, PC e HP); botões nativos carregados inferiores (nome, tipo, disponibilidade/preenchimento, eficácia exibida); centro (mensagens de ataques/status); contador superior (contexto e tempo); modais de escudo e troca forçada. Suportar proporções/resoluções diferentes e overlays externos sem confundir controles do PGSharp.
+
+**Eventos observáveis:** “Sneasel usou Jogo Sujo!”, “BLOQUEADO!”, “ATAQUE AUMENTOU!”, “ATAQUE DIMINUIU!”, “DEFESA AUMENTOU!”, “DEFESA DIMINUIU!”, qualificadores “MUITO”, “SUPER EFICAZ!”, “NÃO É MUITO EFICAZ”, tela “Quer usar um escudo protetor?”, “AGORA NÃO”, contadores, modal “Quer trocar por um Pokémon novo?”, troca voluntária, nocaute, HP e opções de time. Associar sempre ator, alvo, timestamp/turno, confiabilidade, efeito do escudo e estágio exato quando suportado. Alterações de status podem ocorrer **mesmo se o carregado for bloqueado**; registrar golpe, shield, dano, modificador e resultado em eventos separados.
+  
+**FSM recomendada:** PRE_BATTLE → BATTLE_FAST → CHARGED_PENDING → SHIELD_DECISION → CHARGED_RESOLUTION → BATTLE_FAST; ramo FAINT → FORCED_SWITCH → BATTLE_FAST; SWITCH → sincronizar estado e atualizar matchup. Os contadores de escudo, substituição obrigatória e cooldown da troca comum são temporizadores DIFERENTES. Eventos OCR mantidos em frames consecutivos não devem ser contabilizados múltiplas vezes.
+
+**Prioridades de leitura:** 1) golpe identificado/HP/shield/status/troca, 2) CP/espécie/energia/contadores e equipe, 3) metadados auxiliares. Sempre distinguir CONFIRMADO vs ESTIMADO vs INCERTO; permitir correção manual de moves sem apagar a energia corretamente acumulada. OCR observa elementos nativos; **sem comandos automáticos/toques nos controles do jogo**.
+
+#### F. HP real, estimativa de dano, bônus e fontes
+
+- **HP exato do aliado via tela de detalhes** quando disponível: captura do Houndoom PC 1499 mostrava **120/120 PS = 120 HP máximos**, 100%. Vincular espécie/forma/PC/IV/nível/identidade do indivíduo, não apenas nome da espécie, e aproveitar na seleção da equipe. HP em batalha = leitura do preenchimento × HP máximo conhecido, com tolerância de pixels/arredondamento; calibrar por perdas sucessivas.
+- Observação do overlay em outra captura: **Houndoom HP: 35**, **Sealeo HP: 245**; valores não devem ser assumidos exatos só por aparecerem. Se 245 for HP real do Sealeo, **provável inconsistência** com limites válidos da espécie/nível; investigar associação ao Pokémon errado, stats desatualizados, OCR, unidades e fórmula; validar contra Game Master atual.
+- Para inimigos com CP conhecido e IVs/nível desconhecidos, gerar candidatos de nível+IV (e forma) compatíveis, obter faixa de HP máximo e inferir HP atual pela barra. Não afirmar HP exato por CP isolado; exemplos anteriores com “Raichu 1499 ~104–118 HP” são **ilustrativos e devem ser revalidados** com stats, níveis/CPM e forma atuais. Valores “ginásio/reides” na tela de golpes (por exemplo Raichu Trovão de Choques, Soco Trovoada, Desbravar) NÃO são diretamente o dano PvP nem o custo de energia PvP.
+- Fórmulas básicas de referência, sob dados vigentes do jogo: HP_max = floor((Stamina_base_GO + IV_stamina) × CPM_nível), com piso aplicável; CP = floor[(Atk_base+IV_A) × sqrt(Def_base+IV_D) × sqrt(Stamina_base+IV_S) × CPM² / 10]. Usar níveis, formas, CP multipliers, buffs e tabelas atuais; não copiar HP-base das gerações principais como se fosse HP no GO.
+- Dano PvP exige poder PvP, Ataque efetivo do atacante, Defesa efetiva do defensor, bônus STAB (~1,2), eficácia de tipos (por multiplicadores oficiais; supereficaz ~1,6; pouco eficaz ~0,625), Sombroso/clima/condições aplicáveis e estágios de Ataque/Defesa (aprox. +1 ×1,25; +2 ×1,5; −1 ×0,8; demais via fórmula oficial), com floor/arredondamento do jogo. **Poder base 50 ou 60 mostrado fora da aba PvP NÃO equivale a −50/−60 HP.** Clima geralmente não modifica dano em batalhas de treinador GBL: validar modo antes de aplicar “bônus do momento”.
+- Comparar dano observado (ΔHP) com dano previsto, atualizar intervalos de estatísticas possíveis e confiança; não inferir um ágil apenas de cada variação da barra. Preview nº 18: faixas de dano/HP com escudo e sem escudo, aviso possível KO, plano de mitigação; nº 17 percentual de HP com origem clara. Mostrar “aprox.” e confiança na previsão.
+- Diferenciar matchup e eficácia do golpe específico: ✓ verde/○ neutro/× vermelho refere-se à avaliação do confronto; chips de tipos/círculos individuais mostram eficácia dos golpes adversários e indicadores nos carregados do próprio jogador são nativos e apenas lidos.
+
+**Fontes fornecidas para auditoria de HP/CP/moves e comentários (verificar qualidade/data, não adotar fórmulas antigas sem revisão):**
+- Reddit curto: https://www.reddit.com/r/TheSilphRoad/s/LnqUPTcmfI
+- Reddit curto: https://www.reddit.com/r/TheSilphRoad/s/NUhsqaEbna
+- Reddit curto: https://www.reddit.com/r/TheSilphRoad/s/SsREfbHowZ
+- Reddit curto: https://www.reddit.com/r/TheSilphRoad/s/96212SI7pC
+- Reddit curto: https://www.reddit.com/r/TheSilphRoad/s/hzvOylwaIB
+- Bulbapedia fornecida: https://bulbapedia.bulbagarden.net/wiki/List_of_Pok%C3%A9mon_by_base_stats_(Generation_VI-present))_(as_%60HP%60 (URL a normalizar/conferir; stats dos jogos principais ≠ base de GO).
+- Planilha histórica: https://docs.google.com/spreadsheets/d/1xZ1daunztOgvOZxO7ABfJPF41-2mqMDzY1Qs_0OWwq8/edit#gid=399231321 ; abas: Pokemon CP/HP, Leveling Info, Go Base Stats, Type Advantage Chart, Move sets, Pokemon Science 2.0 data e outras. São dados históricos, NÃO Game Master atual.
+- https://pokemongo.gishan.net/o/hp
+- https://db.pokemongohub.net/tools/cp-calculator
+- Referências históricas listadas na própria planilha: Reddit “how hp/maxstamina is calculated”, “exact pokemon cp formula”, “pokemon hp tier list” etc. Não afirmar ter lido todos os comentários de links curtos quando inacessíveis; validar diretamente antes de citar achados como fatos.
+- Bancos por versão com Game Master GO + snapshot PvPoke, tipagem/forma/IV/CPM e data de atualização, com testes e licenças.
+
+#### G. Recomendações de UX/QA e estados de entrega
+
+**Fluxo de HUD preferido:** sempre visível e compacto apenas matchup principal, chips de tipos aprovados, monitor de golpes/energia, conselho tático, badges de reservas e (futuramente) três slots inimigos; mostrar PREPARE-SE/ESCUDO/KO/dano como alertas transitórios; listas de movimentos, telemetria, OCR confidence/histórico, cronômetro e configurações apenas sob demanda. Durante modais NATIVOS de escudo e escolha forçada, recolher menus grandes para não encobrir botões; permitir que o jogo mantenha todos os toques.
+
+**Critérios de aceitação futuros:**
+1. Diferenciar visualmente componentes GO × PGSharp × PvPPokeGo em capturas, sem alterar região nativa.
+2. Estados olho/cadeado/ferramenta e modo edição funcionam dentro e fora de batalha, com escala/posição/opacidade persistidos.
+3. Matchup ativo 3 estados, chips de tipo e eficácia inimiga nº 15 corretos em trocas.
+4. Monitor ágil+2 carregados utiliza energia compartilhada, custo e geração PvP corretos, dupla carga, desconto residual e deduplicação.
+5. Pokémon adversário saiu e voltou: mantém energia/HP/moves; buffs/debuffs resetam em troca; após KO ele fica desmaiado.
+6. Reconhecimento de tela de escudo, OCR de golpe, BLOQUEADO, buff/debuff, tela de troca, contadores e câmera, com confiança/estados coerentes.
+7. Novo painel de três inimigos começa ???, revela sem swap de identidade, tem 0/1/2 brilhos matematicamente possíveis, ativo/reserva/desmaiado e mantém posição fixa.
+8. HP do aliado exato vindo de ficha quando conhecido; inimigo por faixa; rejeitar HP físico impossível; avaliar exemplo Houndoom 120/120 e Sealeo 245 suspeito.
+9. Preview de dano/sobrevivência com ranges; sem confundir poder de golpe, energia e HP, nem aplicar modificadores PvE ao PvP.
+10. Verificar legibilidade e ausência de sobreposição em aparelho Android/Samsung, modal de escudo, escolha de equipe, troca forçada, configurações PGSharp presentes e diferentes resoluções.
+11. Não remover funções existentes, não reintroduzir cards de reserva grandes nem UI carregada; comparar com referência visual 0.5.17.
+12. Escrever testes unitários de estado/energia/dano + testes com sequência de screenshots/vídeo reais; não marcar como concluído só pelas capturas.
+
+**STATUS EM 2026-10-08:** documentação de requisitos visuais, mecanismos e sugestões = **CONCLUÍDO (neste guia)**. **Implementação, teste de regressão, APK e QA visual no Samsung para os novos requisitos = NÃO VERIFICADOS/PENDENTES**. A entrega técnica anterior 0.5.29 permanece o último build conhecido no histórico, sem confundir este adendo com novo build. Não alterar código/Gradle/versionCode/workflows nem sincronizar APK sem pedido específico.
+
+**PRÓXIMO PASSO:** ler Guia Mestre/Checklist em release/0.5.29 e auditar as implementações existentes contra esta lista, classificando cada função como EXISTENTE-VALIDADA / EXISTENTE-COM-FALHA / PARCIAL / NOVA / BLOQUEADA. Implementar apenas deltas necessários, testes e documentação incremental na branch ativa, preservando visual e recursos anteriores. Somente depois compilar/QA físico/publicar artefato real e registrar commit, SHA-256 e link.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
