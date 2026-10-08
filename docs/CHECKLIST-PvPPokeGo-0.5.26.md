@@ -352,3 +352,18 @@ Commit de código: `fd66d553fc37148c6ab53d96c040b047e01c3bb4` (base `fdd78ab2998
 - Workflow Standard valida os fallbacks (commit `7fe575e6`). Ícone instalado no Samsung ainda **não validado**.
 - GitHub Actions run `37702558022` terminou com `steps=null` antes do build; **não há APK real 0.5.26 gerado**. Não marcar como concluído ou renomear APK antigo.
 - Próximo passo: desbloquear execução de runner, rodar suíte/assemble Standard e QA dos retratos de reserva/ícone, conferindo SHA-256.
+
+
+## Entrega Standard QA 0.5.26 — build público validado
+
+- Data: 2026-10-07 (build GitHub Actions 2026-10-08 UTC).
+- Origem do código: `release/0.5.26` (privado); correções Kotlin reais: `9e395f5c`, `c9295962`, `2a98de56`.
+- Snapshot público build-only: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/commit/0b1c453add6e838c4de06eb07e5792481bb884d2
+- Workflow concluído: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37707859527
+- Artefato: `PvPPokeGo-0.5.26-QA-debug.apk` (78.046.047 bytes), assinado em debug para QA.
+- SHA-256: `461815c2b8c9078f8fcd617145f1abeefb3a0be03f2376114227f44594708932`.
+- Checks: `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, integridade ZIP APK, presença de atlas/Game Master/launcher, verificação de assinatura v2, SHA-256: **PASS** no build; checksum local pós-download corresponde.
+- Download no Google Drive: https://drive.google.com/file/d/1bcbP8WJ7sWgd9lUTvqb0NzV9MSXq_nCH/view?usp=drivesdk
+- A entrega QA debug está concluída como artefato; **não** afirmar que correções dos ícones foram validadas em Samsung sem teste no aparelho. #14 e requisitos visuais permanecem 🟡, e #77 continua 🟡 até processo de entrega/release permanente e QA final.
+- APK QA/debug pode ter certificado diferente do instalado anteriormente. Exportar configurações antes de desinstalar.
+- Recorder Compat adiado como antes; compilada apenas variante Standard.
