@@ -606,6 +606,40 @@ PENDÊNCIAS:
 PRÓXIMO PASSO:
 - Concluir build público e realizar validação de artefato sem modificar a branch privada de código.
 
+
+### 2026-10-07 — Erros Kotlin de compilação Standard revelados pelo runner público
+
+Versão: 0.5.26  
+Branch privada: `release/0.5.26`
+Compilação pública: `LucianoToscano/PvPPokeGo-APK-Build`
+
+PROBLEMA:
+- Primeiro build completo com Gradle na cópia pública (run `37706823681`) passou pelo SDK, dependências PvPoke e atlas de sprites; falhou em `:app:compileStandardDebugKotlin`.
+- Logs mostram 3 causas concretas: retorno Boolean onde se esperava `HpFill?`, expressão de pontuação misturando tipos numéricos e falta de import `CaptureHealth` no serviço do overlay.
+
+CORREÇÕES APLICADAS NO CÓDIGO CANÔNICO:
+1. `BattleFrameEventDetector.kt`: ROI inválida do HP das reservas retorna `null`, não `false`; commit `9e395f5c8492bfac0ea4ce79e1eaa45ab174966b`.
+2. `BattleEngine.kt`: `hpAdjustment: Double` calculado com conversão explícita para preservar aritmética do reserveScore sem ambiguidades; commit `c9295962d7d2caac67869dffc36b123ccaa442f5`.
+3. `BattleOverlayService.kt`: import de `com.lucianotoscano.pvppokego.data.CaptureHealth` para chamadas já existentes; commit `2a98de5621de5f80e4ed1bc22a4c7db3f9f92b89`.
+
+BUILD PÚBLICO:
+- Mesmos três arquivos copiados do código canônico, em um único commit público `0b1c453add6e838c4de06eb07e5792481bb884d2`.
+- Nova execução pública: `37707859527`.
+
+TESTES:
+- Erros fundamentados no log real da execução `37706823681`. Não houve ainda novo resultado de compilação confirmando as três correções.
+- Sem regressão intencional: funções e lógica de batalha preservadas.
+
+RESULTADO:
+- Código-fonte atualizado nas duas branches e build público disparado.
+- Não existe ainda APK 0.5.26 validado.
+
+STATUS:
+PARCIAL — aguardando resultado do teste e compile Android da nova execução.
+
+PRÓXIMO PASSO:
+- Revisar `37707859527`; em sucesso verificar integrity, assinatura, SHA-256 e disponibilizar artifact, registrar link/checksum. Se falhar, corrigir apenas o erro real indicado pelo novo log.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
