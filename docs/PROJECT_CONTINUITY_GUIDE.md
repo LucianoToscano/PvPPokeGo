@@ -856,6 +856,31 @@ PENDÊNCIAS:
 - QA físico na tela de seleção 3 aliados e continuidade das reservas durante trocas; solicitar exportação de diagnóstico se continuar falhando.
 - Não alterar ícone transparente e layout de referência 0.5.17 nem perder motor de batalha.
 
+
+### 2026-10-07 — APK 0.5.29 com recuperação de aliados: entrega técnica concluída
+
+COMMIT DO ESPELHO DE BUILD: `008993b11f9299fc4a88cfeb7fde9f8ff7e9efc2`  
+RUN: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37719025048
+
+RESULTADO:
+- Run público concluiu com **success** em `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug` e validação do APK.
+- APK de QA: `PvPPokeGo-0.5.29-QA-debug.apk`, 79.193.455 bytes, versão 0.5.29, versionCode 34.
+- SHA-256 do APK validado localmente contra `SHA256SUMS.txt` do build: `b79c41f58e6fe846f7a62497cd91e1d64f15e377bdee1d8dcc4e2369e1199e3a`.
+- `unzip -t` verificou arquivo sem erros; atlas, gamemaster e snapshot PvPoke encontrados no APK.
+- Assinatura v2 debug verificou **true** (1 signer); não confundir com certificado de release/permanente.
+- Logo PNG transparente oficial no APK: SHA256 `f8d4f45922e6af0022e3eaad1d255fedd2b790650f542e62315042f8bd1dbf51`.
+- Pacote ZIP armazenado no Google Drive oficial, com APK, assinatura e hashes:
+  https://drive.google.com/file/d/1Pw9RuiruLHrP4f7tkCFDLG8NnGhMuxFO/view?usp=drivesdk
+- Checklist atualizado no commit `3862b9b4ca9285f0e4e7f1c3bfd08076483fd9b4`.
+
+STATUS:
+- CONCLUÍDO: correção-fonte do fallback OCR nome/PC + região ampla da versão 0.5.17, testes automatizados, APK Standard QA 0.5.29 gerado/assinado e distribuído.
+- PENDENTE: confirmação de reconhecimento correto dos 3 aliados na seleção pré-batalha no Samsung e preservação após trocas. Nenhum teste em aparelho foi executado pelo assistente.
+- Se continuar falhando, obter screenshot e `Configurações > Exportar diagnóstico` para analisar layout/captura/OCR e não voltar a modificar apenas a aparência.
+- Se a assinatura instalada divergir, exportar configurações antes de desinstalar para testar o APK QA/debug.
+
+PRÓXIMO PASSO: QA de reconhecimento no aparelho; investigar código de captura e pipeline usando diagnóstico caso espécies/PC não sejam detectados.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
