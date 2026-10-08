@@ -573,6 +573,39 @@ RESULTADO:
 PRÓXIMO PASSO:
 - Após o GitHub indicar faturamento/budget normalizado, reexecutar o workflow de build Standard, verificar execução real de steps, testes, manifest, ícones, assinatura e SHA-256, e só então entregar o APK.
 
+
+### 2026-10-07 — Espelho público isolado de compilação Standard
+
+Versão: 0.5.26  
+Branch privada canônica: `release/0.5.26`  
+Repositório de build público: https://github.com/LucianoToscano/PvPPokeGo-APK-Build  
+Snapshot original: `ec8610ba16ea8528e2f9c0268170d5a869d0387c`
+
+OBJETIVO:
+- Contornar bloqueio do GitHub Actions em repositório privado sem contratar serviço pago, preservando histórico e acesso privado ao projeto original.
+
+ALTERAÇÕES:
+- Foi confirmado repositório público de build separado `LucianoToscano/PvPPokeGo-APK-Build`, com permissões de edição.
+- Criado snapshot novo sem histórico privado, contendo 104 arquivos pertinentes ao app Standard, testes, workflow, assets essenciais e avisos de licença.
+- Excluídos scripts antigos, `.build/`, documentos internos, Recorder Compat, histórico e chaves de assinatura/credenciais.
+- Arte oficial PNG copiada com SHA Git idêntico ao original; lógica de reservas preservada.
+- Commit inicial público de código: `21ed3da78944407563e546280715ea950394261c`; trigger README: `9d265d8c807c89a56e27936cfe0510ffae4a6eb1`.
+- Workflow público `.github/workflows/build-standard-apk.yml`: empacotar PvPoke offline e atlas, executar testes, gerar Standard debug, validar integridade e SHA-256, publicar artifact QA.
+- Primeira tentativa pública `37706678401` executou runner (faturamento não bloqueou) mas falhou na ação `android-actions/setup-android@v3`, que tentou instalar pacote SDK obsoleto `tools`.
+- Corrigido workflow para usar `sdkmanager` do runner; commit `1139a2fc256dddcaa05e0d3695db432a34725349`, nova tentativa `37706765046`.
+
+STATUS:
+PARCIAL — repositório público e workflow criados, build novo em andamento. Não afirmar APK concluído antes de teste e artifact real.
+
+PENDÊNCIAS:
+- Verificar desfecho da execução pública, corrigir eventuais falhas reais de compilação e confirmar artifact APK Standard e assinatura debug.
+- A cópia pública é snapshot manual, não sincroniza alterações automaticamente com branch privada.
+- O código dos créditos do aplicativo preserva contato previamente definido pelo projeto; código exposto na cópia pública.
+- Registrar SHA-256 e link de entrega quando efetivamente disponíveis.
+
+PRÓXIMO PASSO:
+- Concluir build público e realizar validação de artefato sem modificar a branch privada de código.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
