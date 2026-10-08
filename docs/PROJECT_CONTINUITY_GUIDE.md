@@ -826,6 +826,10 @@ PENDÊNCIAS:
 - Usuário instalar e validar a aparência da 0.5.28 lado a lado com a 0.5.17, incluindo reservas, trocas, tipos, cadeado, olho, ataque inimigo e posição dos controles.
 - Ajustar com evidência visual qualquer diferença residual, sem nova reformulação desnecessária.
 
+### Continuidade após relato de falha de reconhecimento dos aliados — versão 0.5.29
+
+Após o APK 0.5.28, o usuário confirmou que o sistema de identificação dos aliados já não reconhecia seus Pokémon como na 0.5.17. A nova branch canônica é [`release/0.5.29`](https://github.com/LucianoToscano/PvPPokeGo/tree/release/0.5.29). Consultar o [Guia Mestre 0.5.29](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.29/docs/PROJECT_CONTINUITY_GUIDE.md) e o [Checklist 0.5.29](https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.29/docs/CHECKLIST-PvPPokeGo-0.5.29.md) antes de mudanças. A branch 0.5.28 permanece preservada como referência de layout, não como versão ativa para reconhecimento.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
