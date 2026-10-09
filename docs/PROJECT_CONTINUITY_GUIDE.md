@@ -1431,6 +1431,7 @@ PRÓXIMO PASSO:
 
 ORIGEM:
 - Novo print fornecido pelo usuário: tela de "Configurações" contendo **Gerais, PvP IV, Gerador de Nomes, Formato da Data Pego, Simulador de Batalha**, campo **Nível do Treinador** e seleção **Equipe**.
+- Captura preservada para consultas futuras no Google Drive oficial: https://drive.google.com/file/d/14EgQT-TBmqzOC0vdIThI9nuzcTa1_P0L/view?usp=drivesdk
 - Os valores `54` e `Mystic` no print **não são necessariamente informações do usuário**; não copiá-los como padrão para o perfil.
 - Consulta prévia do guia canônico `release/0.5.29` e referência histórica `release/0.5.26`. Contrato principal: preservar tudo, implementar em branch, registrar, **não compilar/não gerar APK até nova ordem**.
 
