@@ -91,3 +91,9 @@ Pontos de XP ou OCR não autorizam premiação e nunca devem ser usados para fab
 - Ainda necessários: execução real da suíte Android, teste de renderização/legibilidade no Samsung, QA do apelido após reinício, persistência e exclusão do histórico, testes de ataque ao serviço futuro, carga de ranking e moderação.
 - **Status global nesta etapa: PARCIAL**. Código de fundação implantado na feature branch; ranking global, competições reais, pagamentos/prêmios e APK não foram entregues.
 
+
+## Teste automatizado realizado em 2026-10-08
+
+- Cópia de código e testes idêntica nos repositórios privado e público (comparação por Git blob SHA em seis arquivos).
+- CI público separado, run [37873242217](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242217), comando `gradle --no-daemon --stacktrace :app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.arena.*'`: **SUCCESS / BUILD SUCCESSFUL**.
+- A suíte completa, empacotamento do APK 0.5.30, apksigner/SHA e teste em aparelho permanecem separados e não devem ser inferidos do teste direcionado.
