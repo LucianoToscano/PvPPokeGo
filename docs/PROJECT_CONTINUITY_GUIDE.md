@@ -1623,3 +1623,9 @@ Sempre que o usuário pedir:
 a resposta deve incluir obrigatoriamente o link para este arquivo e instruir o novo chat a lê-lo primeiro.
 
 **Este documento deve crescer junto com o projeto. Não é descartável e não deve ser substituído silenciosamente por um resumo novo.**
+
+### 2026-10-09 — Diagnóstico confirmado pelo print da execução do GitHub Actions
+
+O usuário enviou screenshot da execução nº 7 do workflow `PvPPokeGo 0.5.33 QA APK`, com anotação vermelha **"O serviço não foi iniciado porque houve falhas nos pagamentos recentes da sua conta o..."** (o restante só aparece em "Mostrar mais"). Este é um **bloqueio administrativo de faturamento/limite no GitHub Actions antes do job**, não um erro demonstrado de Gradle ou Kotlin; NÃO é possível inferir do print se há cobrança efetivamente pendente ou só orçamento/limite esgotado. A anotação Ubuntu 26.04 é apenas um aviso informativo e não explica o bloqueio.
+
+Próximos passos sem contratar serviço automaticamente: perfil GitHub > Settings > Billing & Licensing > consultar Payment history, Payment information, Usage e Budgets and alerts. Verificar erro completo com "Mostrar mais". Não adicionar cartão nem elevar limites automaticamente: ambas são decisões do proprietário. Se a conta for regularizada e o runner iniciar, reexecutar `.github/workflows/pvppokego-0533-qa.yml` e conferir `testStandardDebugUnitTest`, `assembleStandardDebug`, SHA256 e APK real. Alternativa sem GitHub-hosted runner: build local com Android SDK/Gradle em ambiente devidamente configurado e com acesso autorizado ao repositório privado. NÃO tornar código privado público sem autorização específica.
