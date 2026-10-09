@@ -1,3 +1,13 @@
+## 2026-10-09 — 0.5.34 CI SUCCESS e APK QA verificado
+
+**Compilação da fase 1 do Scanner de Equipe 0.5.34 concluída em run real:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37917670306 `completed/success` job `113777712647`. Repo público compilador existente `LucianoToscano/PvPPokeGo-APK-Build` branch `preview/team-scan-0.5.34-20261009`, SHA `1dc7a4ba2d9e073f53523392cbd4fb5356bbd8ea`, snapshot sanitizado da fonte privada commit `286523513cc0d6fc7c310b2cb06027e79124f966`. `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, assets offline, atlas, testes de integridade e assinatura passaram.
+
+**APK real entregue:** `PvPPokeGo-0.5.34-QA-debug.apk`, **79.660.114 bytes**, SHA-256 `45e24fdf5d6c9a3c899bda7e08cec8a826231201c1f07f30604c99d3f7bc6d3e` (confere com SHA256SUMS.txt do Actions), assinatura v2 válida, único assinante; artifact ID `11611096799`, extraído após download. Link da sessão: `sandbox:/mnt/data/PvPPokeGo-0.5.34-QA-debug.apk` e backup ZIP de artifact também acessível durante sessão.
+
+**CÓDIGO realmente incluído:** importação da foto da ficha para cada vaga, OCR de espécie/PC/PS/golpes com confirmação manual, cálculo IV rank 4096 combinações + PC nível 50, análise energética dos golpes e histórico de scan local/backup. **Não concluído:** interpretação geométrica efetiva das três barras de Avaliar (botão existe mas não produz IV confiável), captura automática ao vivo do Pokémon GO, custos de poeira/doces, QA físico; não afirmar que todos os cinco subprojetos estão completos. Revisar [`IMPLEMENTACAO_SCANNER_EQUIPE_0.5.34.md`](IMPLEMENTACAO_SCANNER_EQUIPE_0.5.34.md) e checklist. Preservar base e layout 0.5.33 e continuar em branch de implementação, não repetir CI sem necessidade.
+
+---
+
 ## 2026-10-09 — Implementação REAL iniciada: Scanner de Equipe 0.5.34 (não confundir com planejamento)
 
 **Branch de implementação isolada:** `feature/team-scan-0.5.34-implementation` derivada de `feature/team-scan-0.5.34-planning`. Fontes modificados/criados: `ui/TeamBuilderPanel.kt`, `data/TeamScanParser.kt`, `detect/TeamScreenshotScanner.kt`, `data/TeamPvpTools.kt`, `data/TeamScanHistoryRepository.kt`, `data/SettingsRepository.kt`, `app/build.gradle.kts`, 2 testes unitários.
