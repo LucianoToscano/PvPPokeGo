@@ -1510,6 +1510,39 @@ STATUS / TESTES / PENDÊNCIAS:
 - **NÃO executar testes/Gradle, disparar workflows, gerar APK, assinatura ou release** até solicitação expressa do usuário. A `0.5.31` permanece a última versão QA realmente compilada; `0.5.32` segue desenvolvimento em branch isolada.
 - Em próximos turnos, iniciar pela leitura do guia e checklist, HEAD real, inventário de snapshot e critérios de validade dos cálculos; desenvolver em etapas sem perda de OCR/HUD e documentar resultados reais.
 
+### 2026-10-09 — Análise consolidada das imagens PvPoke/Calcy/Team Builder/Train e DOIS CSV; documentação, SEM CÓDIGO/SEM APK
+
+PEDIDO: após diversas levas de referências visuais e URLs, o usuário pediu "Ok pode analisar". A instrução anterior de **não compilar nem gerar APK até novo pedido** permanece válida. Esta rodada analisa e documenta; não muda funcionalidade.
+
+ESTADO CONFIRMADO ANTES DAS ALTERAÇÕES:
+- Guia canônico lido em `release/0.5.29`, histórico em `release/0.5.26`.
+- Branch autoritativa em desenvolvimento `feature/team-recognition-modes-0.5.32`, HEAD inicial `7480d7b340784b48416ac7d72f10ba1290da38e2`. `release/0.5.29` em `952ff14e5f97fb461619946473a42c144cdc2caa`, intacta.
+- Reutilizar o que já existe em `GameDataRepository` (Game Master, CP multipliers, rankings), `Models`, `TypeChart`, `BattleEngine`, `TeamBuilderPanel`, `TrainerSettingsPanel`; evitar duplicatas e não afirmar simulador completo já implementado.
+
+DOCUMENTO INTEGRAL: `docs/ANALISE_CONSOLIDADA_PVP_2026-10-09.md`.
+DOIS CSV REAIS INSPECIONADOS (bytes originais, sem conversão):
+1. `Team vs. All Pokemon.csv` → 51.369 bytes, **1.152 adversários**, 6 colunas, 0 linhas inválidas, 0 rótulos repetidos; Altaria/Houndoom/Rillaboom, Threat Score, Overall Rating. Hash SHA-256 `d704a831d54ccad2fb4818c1767131fc17adedf29ef1bb8e2468fc3cf066b1a1`. Original preservado no Drive: https://drive.google.com/file/d/1bUjTtGHH36wyojFrLqlG7JI4kOgC40K7/view?usp=drivesdk
+2. `_vs .csv` → 370 bytes, 3×3, 8 colunas, W/L/D e diferenças médias verificadas; hash SHA-256 `bfc98fe13870a4b795466454a1bdfd114143c6f21ed10ff49d3206e09fdf3dc1`. Original também preservado no Drive: https://drive.google.com/file/d/1W1XYj4gOAOjG9-Gz1GsA_fgk-Lo9SMpd/view?usp=drivesdk
+- Scores do Team Builder/Threat Score e `Overall Rating` NÃO são Elo de jogador, PvP IV Rank nem porcentagem de vitória. Differences do outro CSV também NÃO são Battle Rating. Importação futura deve armazenar proveniência, versão e cenários (liga, golpes, shields, IV), ausentes nos arquivos.
+
+CONCLUSÕES:
+- Pilar 1 Assistente de Batalha: preservar OCR/overlay vivo, CP/HP/energia/escudos, reclassificação conservadora, recomendações apenas com confiança e sem toque automático no jogo.
+- Pilar 2 Laboratório PvP: botão `Analisar equipe` sobre CÓPIA do time atual, cobertura/bulk/safety/consistency, scorecard 3×N, threats, substitutes, counters, simulação por turnos offline, CMP/timing/breakpoints/bulkpoints, rankings/pesquisa, estatísticas distintas corretamente rotuladas.
+- Pilar 3 Academia PvP: batalha SIMULADA 3×3 contra IA, escolhas próprias, dificuldades, escudos, troca, HP/energia, replay, erros e acertos, gráficos Damage/Shields/Energy, evolução de treino SEPARADA de ranking Arena/campeonato.
+- *Top Performers* PvPoke Train usa amostra de jogadores e bots; estatística externa não equivale a partida GO verificada. Leaderboard competitivo/prêmios exigem antifraude e consentimento.
+- *Tera Raid Calculator* https://pvpoke.com/tera/altaria/dragon/dragon-flying corresponde a Scarlet/Violet e **NÃO deve entrar como mecânica PvP do Pokémon GO**. Somente ideia de seleção de counters pode inspirar futuro módulo separado Raides/PvE do GO.
+- Licença MIT do código PvPoke não deve ser confundida com direitos sobre marcas/arte/sprites de terceiros. Visual do PvPPokeGo deve permanecer próprio, clean, sem clonagem.
+
+PRIORIZAÇÃO / NÃO EXECUTADO:
+- P0 integridade da branch 0.5.32 e QA antes de build (apenas quando autorizado).
+- P1 versionamento de dados, parser seguro dos dois formatos CSV, relatórios de equipes e motor de cálculo puro validado.
+- P2 simulador 1×1/matriz/CMP/Academia offline depois dos testes de matemática, sem interferência no OCR.
+- P3 Arena pública, premiação/campeonatos, raides GO separadas, se autorizados e tecnicamente sustentáveis.
+- **Nenhum código de produção alterado neste turno; nenhum teste, Gradle, Android, CI, assinatura ou APK executado**.
+- Arquivos desta rodada: NOVO `docs/ANALISE_CONSOLIDADA_PVP_2026-10-09.md`; ATUALIZADO `docs/CHECKLIST-PvPPokeGo-0.5.29.md`; ATUALIZADO este Guia Mestre; Drive recebeu CSV originais, e registro de continuidade deve conter link para esta análise.
+
+PRÓXIMO CHAT: abrir esta análise e o último registro do Guia, verificar HEAD real, preservar todas as versões e NÃO iniciar build/apk espontaneamente.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
