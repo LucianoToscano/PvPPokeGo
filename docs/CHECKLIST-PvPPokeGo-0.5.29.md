@@ -431,3 +431,16 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [x] Preservar overlay, HUD e ícones por reuso de atlas com SHA verificado, sem copiar dados privados ao mirror.
 - [ ] Instalação/QA visual real no Samsung Android16: equipe e reservas 3x3, regional, OCR, ligação escudos, HP, modo Auto/Manual, histórico e posição HUD.
 - [ ] Calibração Avaliar IV 0–15 e funcionalidades sociais/raid online ainda NÃO implementadas.
+
+
+## CONCLUSÃO DO CI / APK 0.5.36 — 2026-10-09
+
+**Run definitiva:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37992092526 — `completed/success` e **15 etapas aprovadas**, incluindo Android SDK36, geração do Game Master offline e atlas, `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, integridade, assinatura e upload.
+
+**Snapshot público do código canônico:** `LucianoToscano/PvPPokeGo-APK-Build@preview/battle-correspondence-0.5.36-20261009`, commit `41a83803e213503af19d99342acd0b80d1be0d2e`; comparação por blob SHA: 129 arquivos necessários à compilação idênticos aos da fonte privada. Mirror não inclui dados pessoais/backups privados.
+
+**Artifact verificado:** `PvPPokeGo-0.5.36-QA-debug` (ID `11644874837`), com `PvPPokeGo-0.5.36-QA-debug.apk`, `SHA256SUMS.txt` e `signature-verification.txt`. ZIP tem integridade válida; APK tem 79.676.502 bytes, SHA256 **`0afeb9c9f1039dc0f4cfe34f2939f5c70d8c46561bab68b62c373bb736e4c36b`**, conferido com o SHA256SUMS gerado no CI e recalculado no arquivo extraído. O APK extraído também passou `ZipFile.testzip()`; possui gamemaster.json, pokemon_icon_atlas.png/json e DEX. `apksigner verify` no CI: v2 true, 1 signatário (QA debug). Links exatos da sessão: `sandbox:/mnt/data/PvPPokeGo-0.5.36-QA-debug.apk` e `sandbox:/mnt/data/PvPPokeGo-0.5.36-QA-debug.zip`.
+
+**Limitação não resolvida no CI:** teste automatizado de Kotlin/Android e integridade do APK não substitui uso real no Samsung Android 16. OCR de escudos/HP, resultado vitória/derrota, capturas reais e persistência dos slots precisam de QA físico; não inventar teste em celular. Pode haver incompatibilidade de assinatura com o APK instalado: exportar backup do HUD/equipe/histórico antes de reinstalar. A continuação de funcionalidades sociais/outros APKs não foi implementada nesta versão específica.
+
+**Pendência operacional:** pedir retorno com screenshots e export de diagnóstico 0.5.36 após batalhas de teste. Não redistribuir backup sensível em repositório público. A versão prévia 0.5.35 permanece preservada.
