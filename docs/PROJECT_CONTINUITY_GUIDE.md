@@ -1138,6 +1138,138 @@ Ambos devem persistir, exportar/importar e atualizar imediatamente o menu rápid
 **STATUS:** este inventário/contrato visual está **REGISTRADO NO GUIA**, mas a auditoria dos toggles, sincronização, testes de Android e APK com novas correções **NÃO FOI FEITA NESTA ETAPA**. Este commit é SOMENTE de documentação; não é build/release nova. Toda mudança futura nos menus deve gerar novo registro cronológico no guia da branch ativa e (quando relevante) no espelho histórico solicitado, incluindo branch/HEAD real, arquivos alterados, teste, pendências e links de artefatos verificados.
 
 
+
+### 2026-10-08 — Arena: fundação de ranking, campeonato, medalhas e recompensas
+
+Versão-base: `0.5.29` (`versionCode 34`, **inalterados**)  
+Branch de implementação isolada: `feature/arena-foundation-20261008`  
+Branch base histórica/ativa conferida: `release/0.5.29` (HEAD inicial `952ff14e5f97fb461619946473a42c144cdc2caa`)  
+Referência histórica lida: `release/0.5.26`, sem rollback nem edição nesta etapa.  
+Commits de implementação: `9aba3959`, `23e2235e`, `b15cce50`, `869144ca`, `8f62fad7`, `b3d18557`.  
+Especificação: `docs/ARENA_RANKING_TOURNAMENTS_REWARDS.md`.
+
+OBJETIVO/PROBLEMA:
+- Solicitação expressa do usuário para incorporar ranking do PvPPokeGo, XP, perfis, torneios, recompensas e medalhas tomando o mockup recebido como inspiração.
+- Preservar a aparência compacta do HUD da 0.5.17, a recuperação OCR 0.5.29, launcher, backups e todas as funções atuais.
+
+ALTERAÇÕES:
+- Adicionado painel `ArenaDashboard` expansível na tela inicial do app, sem modificar nenhuma rotina do HUD, OCR, captura, reconhecimento, histórico ou motor de batalha.
+- Criados apelido editável local, resumo do histórico **disponível**, XP cosmético e faixas de atividade Bronze/Prata/Ouro/Platina/Diamante/Mestre e cinco medalhas com progresso real. Não confundir essas faixas com ranking global.
+- Criadas regras puras de aprovação **provisória** de resultados com dois relatos complementares, Elo inicial K=32/base 1000 por temporada/liga, rejeição de duplicatas, gerador de primeira rodada eliminatória para número de inscritos potência de dois.
+- Seções Ranking, Campeonatos e Recompensas identificam explicitamente funções online não ativadas; sem usuários fictícios, vitórias imaginárias, promessas de PokéCoins/passes, prêmios distribuídos ou upload implícito.
+- Criado documento de regras, etapas, integridade competitiva, moderação e critérios de aceite; checklist atualizado.
+- Mudanças feitas somente na branch de feature para não interferir em trabalhos/branches de releases em paralelo.
+
+ARQUIVOS PRINCIPAIS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaProgress.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngine.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/ArenaDashboard.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaProgressTest.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngineTest.kt`
+- `docs/ARENA_RANKING_TOURNAMENTS_REWARDS.md`
+- `docs/CHECKLIST-PvPPokeGo-0.5.29.md`
+- `docs/PROJECT_CONTINUITY_GUIDE.md`
+
+TESTES:
+- Arquivos de teste JUnit adicionados, cobrindo resultado explícito, XP/idempotência, streak, três ligas, relatos conflitantes e únicos, rating e chave.
+- **Não afirmar que passaram até executar**. Build Android, renderização Compose e Samsung/QA físico ainda não realizados nesta etapa.
+- APK não foi produzido e `versionName/versionCode` não foram alterados.
+
+RESULTADO:
+- MVP local de perfil/progresso/medalhas e fundação matemática do ranking/torneios, isolados do HUD existente; backend competitivo e prêmios permanecem por fazer.
+
+STATUS:
+**PARCIAL** — código e especificação no branch de feature; sem Android QA/APK.
+
+PENDÊNCIAS:
+- Testar compilar e tela real, revisar medidas no celular.
+- Online exige autenticação, servidor autoritativo, banco, monitor antifraude, moderação e consentimento.
+- Histórico existente é limitado a 50 partidas: números locais são referentes aos registros ainda salvos e não são contadores vitalícios.
+- Implementar campeonatos operacionais, desafios, medalhas persistentes, inventário e premiação conforme checklist; requisitos legais/fornecedores para prêmios reais.
+
+PRÓXIMO PASSO:
+- Rodar testes/assemble Standard e QA da interface; corrigir falhas antes de merge; só então versionar novo APK legítimo.
+- Evoluir backend e eventos verificados em etapa separada; a captura proposta pelo usuário é referência visual de produto, não evidência de funções já operantes.
+
+
+### 2026-10-08 — Arena: testes Kotlin direcionados aprovados
+
+Branch de fonte: `feature/arena-foundation-20261008` (base `release/0.5.29`).  
+Branch de build isolada: `LucianoToscano/PvPPokeGo-APK-Build:preview/arena-0.5.30-20261008`.  
+PR: https://github.com/LucianoToscano/PvPPokeGo/pull/35 (draft).  
+Run direcionado: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242217 .
+
+RESULTADO:
+- Arquivos de código/testes da Arena e SettingsScreen conferidos idênticos por SHA de blob entre fonte privada e snapshot público.
+- Android SDK 36 + Gradle 8.11.1 + JDK 17, tarefa `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.arena.*'`: **SUCCESS**.
+- Painel Arena movido para perto do topo da tela inicial, antes do card Batalha; resumo de faixa/XP visível mesmo recolhido. Nenhuma alteração em tela nativa do Pokémon GO nem HUD de batalha.
+- Checklist e especificação atualizados para refletir evidência real; testes novos não apenas adicionados, agora executados.
+- Build completo de preview 0.5.30 permanece PENDENTE. Não afirmar APK entregável, assinatura ou teste Samsung.
+
+STATUS: **PARCIAL — testes direcionados concluídos; APK/QA aguardando.**
+
+PRÓXIMO PASSO: conferir `:app:testStandardDebugUnitTest` integral, `:app:assembleStandardDebug`, `apksigner`, SHA-256 e resultado do artifact; corrigir erros de CI se houver.
+
+### 2026-10-08/09 — PvPPokeGo Arena 0.5.30: APK Standard QA gerado e verificado
+
+Versão de prévia: `0.5.30` (`versionCode = 35`)  
+Branch privada de desenvolvimento: `feature/arena-foundation-20261008` (originada em `release/0.5.29`, HEAD inicial `952ff14e5f97fb461619946473a42c144cdc2caa`)  
+PR de integração: https://github.com/LucianoToscano/PvPPokeGo/pull/35 (**draft**, sem merge para a release)  
+Branch pública de CI: `LucianoToscano/PvPPokeGo-APK-Build:preview/arena-0.5.30-20261008`  
+HEAD compilado da cópia de build: `8fc87cce058bfe23e505e5b9dffb18162f65a651`  
+Run completo: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242187  
+Run testes isolados: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242217
+
+OBJETIVO/PROBLEMA:
+- Entregar QA local da primeira implementação de perfil, XP/medalhas, regras de pontuação e torneios PvPPokeGo sem interferir em HUD e OCR da 0.5.29.
+- Corrigir o versionamento da branch privada para corresponder ao APK efetivamente compilado.
+
+ALTERAÇÕES:
+- Introduzidos `ArenaProgress`, `ArenaCompetitionEngine`, `ArenaDashboard`, integração mínima no topo de `SettingsScreen`, testes JUnit e documentação Arena/Checklist.
+- Alterado `app/build.gradle.kts` na branch de feature para `versionName 0.5.30` e `versionCode 35` após êxito do snapshot público.
+- Registro espelhado no Google Drive do Guia Mestre (espelho, não substituto do arquivo GitHub).
+
+ARQUIVOS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaProgress.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngine.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/ArenaDashboard.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaProgressTest.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngineTest.kt`
+- `app/build.gradle.kts`
+- `docs/ARENA_RANKING_TOURNAMENTS_REWARDS.md`
+- `docs/CHECKLIST-PvPPokeGo-0.5.29.md`
+- `docs/PROJECT_CONTINUITY_GUIDE.md`
+
+TESTES:
+- `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.arena.*'` no run 37873242217: **SUCCESS**.
+- `:app:testStandardDebugUnitTest :app:assembleStandardDebug` no run 37873242187: **SUCCESS / BUILD SUCCESSFUL in 46s**.
+- Pacote offline PvPoke e atlas visual gerados pelo workflow: PASS.
+- ZIP do artifact e arquivo APK: integridade `unzip -t` PASS; assinatura APK v2 debug: true, um signatário.
+- SHA-256 computado no CI e reconfirmado após extração: **`4069ced7db03ea6e5d104b8d13826438802a671853b4b228784a3ad225ac5e7a`**.
+- Tamanho real do APK: **79.283.282 bytes**.
+- Artifact GitHub `PvPPokeGo-0.5.30-QA-debug`, ID `11591126817`; inclui APK, `SHA256SUMS.txt` e relatório `apksigner`.
+- ZIP final de distribuição no Google Drive oficial, upload aceito e metadados verificados (35.770.210 bytes): https://drive.google.com/file/d/1lMFVEQrq6sc37iDdFrw2upCAfaZrDDp9/view?usp=drivesdk
+- **Nenhum teste visual/físico em Samsung nesta etapa**. Assinatura QA/debug pode divergir do APK instalado; exportar configurações antes de desinstalar e não sugerir update in-place garantido.
+
+RESULTADO:
+- Primeira implementação local de Arena com APK de QA disponível, mantendo exclusivamente na feature branch até aceite visual; OCR/energia/HUD/launcher base não modificados pela feature.
+
+STATUS:
+**CONCLUÍDO** para código inicial, testes, build, integridade, assinatura v2 e disponibilização do artifact QA.  
+**PARCIAL** para o módulo completo: falta backend, contas, ranking vivo, competições operacionais, histórico vitalício, premiações virtuais persistidas, prêmios reais e QA Samsung.
+
+PENDÊNCIAS:
+- Instalar e testar APK no Samsung: botão Arena no topo, expansão, apelido após reinício, medalhas, velocidade de rolagem, histórico e funções anteriores; preservar exportação de configurações/HUD.
+- Não conceder pontos competitivos por OCR/histórico autoestimado; histórico de batalhas atual limitado a 50 registros.
+- Futuro serviço autoritativo e aprovação contra fraudes antes de posicionamento em ranking e resgate de prêmio.
+
+PRÓXIMO PASSO:
+- Receber captura e relato de QA do usuário, corrigir defeitos em branch, repetir CI, finalizar PR#35 somente após validação.
+- Evoluir infraestrutura de torneios/ranking e recompensas em etapas rastreáveis no Guia Mestre e checklist, sem substituir matemáticas de batalha nem modificar controles nativos.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:

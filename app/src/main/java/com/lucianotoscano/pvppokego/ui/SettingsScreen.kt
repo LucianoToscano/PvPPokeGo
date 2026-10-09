@@ -110,6 +110,8 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                ArenaDashboard(history = history)
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
