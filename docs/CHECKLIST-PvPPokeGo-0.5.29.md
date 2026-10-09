@@ -210,3 +210,21 @@ Documento técnico com hash de origem, evidências e plano conservador: [DIAGNOS
 - [ ] Executar QA em Samsung + testes Kotlin/Gradle/Android **somente quando usuário autorizar**.
 
 **STATUS: somente inspeção estática e documentação sanitizada; nenhum código funcional, teste compilado ou APK modificado.**
+
+
+## Caixa-Preta / Diagnóstico Avançado — proposta pós-exports 0.5.31 — 2026-10-09 (SOMENTE DOC)
+
+Especificação: [PROPOSTA_CAIXA_PRETA_DIAGNOSTICO_0.5.32.md](PROPOSTA_CAIXA_PRETA_DIAGNOSTICO_0.5.32.md).
+
+- [x] Conferir exportador atual na `MainActivity.kt`: ZIP básico com configurações, histórico, device, README; ZIP de histórico separado com JSON/TXT/CSV.
+- [x] Registrar limitações Android: Logcat completo do sistema não é acessível silenciosamente por app comum; usar relatório de bugs oficial/ADB **externamente**, e telemetria própria do aplicativo.
+- [x] Especificar Caixa-Preta: trace de OCR, rejeições por thresholds, matcher manual/automático, continuidade das sessões, captura/FPS/rotação, energia/escudos, resultados, exceções próprias e warnings de integridade.
+- [x] Estabelecer proposta de ZIP versionado e compatível, linha do tempo com seq e tempo monotônico, privacidade opt-in, redação de PII e limites de armazenamento/performance.
+- [ ] Implementar coleta interna **desligada por padrão**, sem screenshot automático nem coleta de outros apps.
+- [ ] Implementar botão `Marcar problema agora` e exportador avançado SAF sem quebrar o exportador existente.
+- [ ] Implementar alerta antirregressão de equipe 3×3, resultados sem evidência, regressão de tempos, frames stale e inconsistência OCR/PC/visual, sem auto-corrigir silenciosamente.
+- [ ] Testes unitários/parsers, integridade ZIP, compatibilidade e desempenho Android; inspeção manual de vazamento de dados/PII.
+- [ ] Validar com sessão anotada em Samsung e dois exports 0.5.31; testar modo manual/automático e `auto_recognition`.
+- [ ] Não compilar nem gerar APK até ordem explícita.
+
+**Estado: registrada PROPOSTA; nenhuma implementação/compilação/teste.**
