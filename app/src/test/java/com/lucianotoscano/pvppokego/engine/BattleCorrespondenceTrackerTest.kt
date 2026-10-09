@@ -54,7 +54,23 @@ class BattleCorrespondenceTrackerTest {
             ),
             20_000
         )
-        assertEquals(BattleCorrespondenceTracker.Decision.SWITCH_WITHIN_BATTLE, decision)
+        assertEquals(BattleCorrespondenceTracker.Decision.HOLD_CURRENT, decision)
+        val confirmed = tracker.observe(
+            BattleCorrespondenceTracker.Context(
+                activePlayer = team[0],
+                activeOpponent = id("Sneasel", 1465, "sneasel"),
+                ownTeam = team,
+                knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+                inactiveForMs = 400,
+                sessionAgeMs = 30_000
+            ),
+            BattleCorrespondenceTracker.Observation(
+                player = team[2], opponent = id("Magcargo", 1486, "magcargo"),
+                pairedCards = true
+            ),
+            20_500
+        )
+        assertEquals(BattleCorrespondenceTracker.Decision.SWITCH_WITHIN_BATTLE, confirmed)
     }
 
     @Test
