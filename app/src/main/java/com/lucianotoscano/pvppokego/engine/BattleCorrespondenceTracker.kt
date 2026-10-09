@@ -214,13 +214,20 @@ internal class BattleCorrespondenceTracker {
         // Candidate new match:
         // 1) player is incompatible with the already-known team and opponent is new, or
         // 2) after a meaningful visibility gap, both sides are new.
+        // Two unfamiliar cards can also appear during simultaneous switches.
+        // Never split a match on a CP/name pair alone while gameplay is continuous.
+        // Require a meaningful evidence gap PLUS repeated stable paired identities.
+        if (playerIncompatible && context.inactiveForMs < LONG_GAP_NEW_MATCH_MS) {
+            resetNewCandidateOnly()
+            return Decision.HOLD_CURRENT
+        }
         val newCandidate =
-            (playerIncompatible && opponentNew) ||
-                (context.inactiveForMs >= LONG_GAP_NEW_MATCH_MS && opponentNew)
+            context.inactiveForMs >= LONG_GAP_NEW_MATCH_MS && opponentNew &&
+                (playerIncompatible || !playerKnownTeam)
 
         if (!newCandidate) {
-            reset()
-            return Decision.SWITCH_WITHIN_BATTLE
+            resetNewCandidateOnly()
+            return if (playerIncompatible) Decision.HOLD_CURRENT else Decision.SWITCH_WITHIN_BATTLE
         }
 
         val signature = listOf(
