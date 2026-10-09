@@ -263,3 +263,11 @@ Relatório exato de código/QA: [IMPLEMENTACAO_0.5.33_LOGCAT_HP_UI.md](IMPLEMENT
 - [ ] Entregar APK real 0.5.33 ao usuário após sucesso, com ressalva de assinatura QA/debug e QA físico ainda pendente.
 - [ ] Registrar resultado final no Guia Mestre e Drive (run, commit, SHA256, testes, artifact, pendências).
 - [x] Regra permanente introduzida no início do Guia Mestre: **consultar sempre o espelho público já aprovado antes de alegar que build é impossível**, manter original privado e sincronização revisada somente para compilação.
+
+
+### Status final do APK 0.5.33 no espelho público — 2026-10-09
+- [x] Workflow público `37903983424` **success**: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37903983424.
+- [x] Gradle `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug` e validações de assets e assinatura executados com sucesso.
+- [x] APK 0.5.33 descarregado de artifact `11603767382`, extraído e validado. Tamanho 79.561.814 bytes; SHA-256 `9de20e578d02e56dc11652d0b9f639293b99852cfa123f15aa600d0a0a6eb1d8` confere com checksum do CI.
+- [x] Disponibilizar `PvPPokeGo-0.5.33-QA-debug.apk` real no chat, sem renomear builds antigos.
+- [ ] QA físico Samsung: instalação/atualização compatível com chave de assinatura, botões de settings ativados/brancos e inativos/cinzas, funções HP, Logcat/exportação, overlay/reservas/reconhecimento/posição dos controles. Não atribuir status de QA físico antes dos testes.
