@@ -1250,6 +1250,7 @@ TESTES:
 - SHA-256 computado no CI e reconfirmado após extração: **`4069ced7db03ea6e5d104b8d13826438802a671853b4b228784a3ad225ac5e7a`**.
 - Tamanho real do APK: **79.283.282 bytes**.
 - Artifact GitHub `PvPPokeGo-0.5.30-QA-debug`, ID `11591126817`; inclui APK, `SHA256SUMS.txt` e relatório `apksigner`.
+- ZIP final de distribuição no Google Drive oficial, upload aceito e metadados verificados (35.770.210 bytes): https://drive.google.com/file/d/1lMFVEQrq6sc37iDdFrw2upCAfaZrDDp9/view?usp=drivesdk
 - **Nenhum teste visual/físico em Samsung nesta etapa**. Assinatura QA/debug pode divergir do APK instalado; exportar configurações antes de desinstalar e não sugerir update in-place garantido.
 
 RESULTADO:
