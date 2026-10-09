@@ -777,8 +777,9 @@ class BattleEngine(private val repo: GameDataRepository) {
                     name = slot.name,
                     speciesId = slot.speciesId ?: slotDefinition(slot)?.speciesId,
                     cp = slot.cp,
+                    // Never promote an OCR hypothesis into a trusted team member.
+                    // Manually selected slots are already initialized with confidence 1.
                     confidence = slot.identityConfidence
-                        .coerceAtLeast(IdentityThresholds.MIN_STABLE_TEAM_CONFIDENCE)
                 )
             }
         } else {
@@ -2298,6 +2299,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             team = members,
             activeName = playerName,
             activeCp = playerCp,
+            activeSpeciesId = playerSpeciesId,
             cardCps = reserveCardCps.toList(),
             cardDexes = reserveCardDexes.toList(),
             cardSpeciesIds = reserveCardSpeciesIds.toList()
