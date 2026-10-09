@@ -1378,6 +1378,55 @@ PRÓXIMO PASSO:
 - Corrigir eventuais falhas ou diferenças visuais, depois desenvolver uso dos dados manuais como hints sujeitos a confirmação por OCR/matcher e incorporar pontuação PvPoke somente com dados validados.
 
 
+### 2026-10-09 — SUA EQUIPE: modos Automático/Manual integrados em código; SEM APK/SEM BUILD
+
+VERSÃO DE DESENVOLVIMENTO: **0.5.32**, `versionCode 37`, **não compilada** nesta etapa.  
+GUIA BASE LIDO: `release/0.5.29` `docs/PROJECT_CONTINUITY_GUIDE.md` e histórico `release/0.5.26`.  
+BRANCH ORIGEM: `feature/team-builder-0.5.31-20261008` no HEAD `79d3372c77a3d1cff31c21847e648ea50b03725e`.  
+BRANCH ATUAL: `feature/team-recognition-modes-0.5.32` (preservar sem merge automático).  
+REFERÊNCIA DE GUIA/REGRAS: `docs/TEAM_RECOGNITION_MODES_0.5.32.md`.  
+REFERÊNCIAS VISUAIS: mockups enviados pelo usuário da homepage e 3 cartões Sua Equipe, mantendo HUD V03/0.5.17 e ícones do jogo.
+
+OBJETIVO DO PEDIDO:
+- Dar escolha entre **Automático** (o detector tenta reconhecer/aplicar os membros reais do time) e **Manual** (jogador cadastra/seleciona seus três Pokémon e eles passam imediatamente a ser a equipe atual declarada para o motor).
+- Em Manual, a câmera segue identificando qual dos três está ativo e quais são reservas; cadastro não deve falsificar evidência OCR.
+- Preservar tudo de Arena 0.5.30, cadastro 0.5.31 e rotina OCR/contadores/HUD anteriores; **não compilar nem gerar APK agora**.
+
+ALTERAÇÕES EFETIVADAS EM ARQUIVOS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/TeamSetupRepository.kt`: `TeamRecognitionMode.AUTOMATIC/MANUAL`, preferência `team_recognition_mode_v1`, seleção apenas com time completo e CP da liga.
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt`: incluir nova preferência no backup JSON sem perder configurações e posições anteriores.
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/TeamBuilderPanel.kt`: botões de modo, rótulo de equipe atual declarada e explicação quando o reconhecimento automático global está OFF. Três vagas e opções do editor 0.5.31 preservadas.
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt`: informar estado do reconhecimento geral ao novo card, mantendo seletor de liga único.
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/ManualTeamMatchPolicy.kt`: matcher puro por imagem de espécie confiável/CP/OCR, rejeitando contradição de identidade e ambiguidades.
+- `app/src/main/java/com/lucianotoscano/pvppokego/engine/BattleEngine.kt`: equipe manual no próprio motor; não sobrescrever com scan de roster; pré-carregar três membros sem presumir ativo; preservar identidade conservadora no tracker de continuidade; impedir reutilização automática de HP/energia do ativo anterior ao trocar equipe.
+- `app/src/main/java/com/lucianotoscano/pvppokego/overlay/BattleOverlayService.kt`: sincronizar o modo/time do painel ao motor vivo e reaplicar seleção após reset/término de batalha, mantendo OCR de adversário e análise de combate separados.
+- `app/src/test/java/com/lucianotoscano/pvppokego/data/ManualTeamMatchPolicyTest.kt`: casos de correspondência por CP, visual, contradições, espécie ausente, duplicidade e nova composição; arquivo existe, **ainda não foi executado**.
+- `app/build.gradle.kts`: versão de desenvolvimento `0.5.32` (code37), NÃO implica APK entregue.
+- `docs/TEAM_RECOGNITION_MODES_0.5.32.md` e `docs/CHECKLIST-PvPPokeGo-0.5.29.md`: escopo, riscos, etapas e QA pendente.
+- `docs/PROJECT_CONTINUITY_GUIDE.md`: este novo registro cronológico, preservando todos os anteriores.
+
+REGRAS E CASOS IMPORTANTES:
+- Automático segue sendo padrão e usa a lógica já existente de time, trocas e reservas; sem confiança suficiente, resultado é incerto, não inventado.
+- Manual completo e compatível com a liga significa `equipe atual declarada`, não `detectada visualmente/confirmada`. Ao voltar para Automático, manter cadastro salvo para o futuro mas retirar sobreposição manual do motor.
+- A ordem dos slots não é necessariamente a ordem das reservas no jogo; CP e imagem confirmam o slot de cada carta.
+- Conflito imagem confiável x CP não deve piná-los ao Pokémon errado. Evitar copiar HP, energia ou histórico da espécie anterior.
+- O toggle de equipe Manual é distinto do toggle global de reconhecimento de imagem: se global estiver OFF, time declarado pode estar pré-carregado mas o ativo não pode ser afirmado visualmente.
+- Sem perda/alteração de launcher, olho, cadeado, tamanho/posição de elementos HUD, Arena ou reconhecimento inimigo.
+- Mostrar o time detectado AUTOMATICAMENTE na homepage continua como tarefa de UI pendente; não armazenar palpite de OCR como cadastro manual.
+
+TESTES E BUILD:
+- **NÃO foram rodados testes JUnit, Gradle, Android, compilação Kotlin, APK, assinatura, instalação nem QA Samsung relativos a 0.5.32**, seguindo ordem expressa do usuário. Não marcar sucesso, não usar APK de versões anteriores renomeado.
+- Branch `PvPPokeGo-APK-Build:preview/team-recognition-0.5.32-20261009` havia sido criada parcialmente durante preparação interrompida; **não é snapshot validado nem fonte de APK**. Não iniciar pipeline.
+- 0.5.31 continua sendo a última versão com APK QA efetivamente compilado e checksum registrado, sem afirmar homologação Samsung.
+
+STATUS: **PARCIAL: código em branch + guia atualizado; testes/QA/compilação conscientemente adiados.**
+
+PRÓXIMO PASSO:
+- Continuar planejando/aplicando alterações em branch com documentação cronológica, sem compilar até pedido explícito.
+- Ao autorizar testes: executar `ManualTeamMatchPolicyTest`, casos de continuidade/mesma espécie/PC, suíte Android, inspeção de UI com time real, backup import/export e validade de forma; depois avaliar novo APK e somente então considerar merge.
+- Sempre reler este guia, checklist e último HEAD real antes de mexer em código, preservar histórico em releases anteriores.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
