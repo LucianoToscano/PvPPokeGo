@@ -139,3 +139,23 @@ Referência: captura de Configurações enviada pelo usuário, com **Gerais / Pv
 - [ ] Polir proporções e ícones do card conforme referências clean antes de considerar o design final.
 
 **STATUS: CÓDIGO E DOCUMENTAÇÃO ADICIONADOS À MESMA BRANCH 0.5.32; NENHUM TESTE/BUILD/APK EXECUTADO.**
+
+
+## Referências PvPoke avançadas + exportação CSV de matriz — 2026-10-09 (SEM BUILD)
+
+Documento técnico, fontes, nove imagens arquivadas e CSV original: [PVP_ANALYTICS_REFERENCES_2026-10-09.md](PVP_ANALYTICS_REFERENCES_2026-10-09.md).
+
+- [x] Receber e organizar referências de Rankings, faixas CMP, simulação 1v1, estados de energia/HP e escudos, breakpoints, bulkpoints, timing, battle ratings, matriz, diferenças e Team Builder.
+- [x] Conferir URLs públicas do PvPoke fornecidas e apontar ao repositório `pvpoke/pvpoke` (fonte de arquitetura/licenciamento, não projeto espelhado).
+- [x] Preservar **nove imagens** e o CSV original no Google Drive do projeto, com links estáveis no documento técnico.
+- [x] Inspecionar CSV `_vs .csv`: 3×3 confrontos, W/L/D e média por linha; os números assinados são diferenças de matriz, **não** rating/percentual/Elo/rank IV.
+- [x] Confirmar reutilização de `GameDataRepository`, `GameMaster`, `TypeChart`, `BattleEngine` e painel de equipe/treinador já existentes, sem confundir a simulação offline com estado de batalha atual.
+- [x] Descrever fases e critérios de QA no documento técnico, mantendo origem, versão do snapshot e incerteza explícita.
+- [ ] Implementar cálculo verdadeiro e versionado de CP/IV/rank, timing, turnos/dano/energia, CMP, breakpoints e bulkpoints por algoritmo testado.
+- [ ] Implementar simulador local 1×1 e matrizes com rankings/battle rating, relatórios e parser CSV (differences separados de ratings), com testes de equivalência.
+- [ ] Criar UI clean Central de Consulta PvP com Rankings, Simular, Equipes/Matrix, CMP, Tipos e Golpes sem copiar UI de terceiro.
+- [ ] Integrar análise simulada ao perfil de equipe **sem** substituir OCR/matcher e sem escrever palpites em histórico observado.
+- [ ] Validar licença/atribuição, versões Game Master e regras atuais antes de redistribuir/adaptar códigos de terceiros.
+- [ ] Executar testes e gerar APK **somente quando o usuário pedir**; evitar qualquer alteração de release/0.5.29 ou regressão do HUD V03.
+
+**STATUS: REFERÊNCIAS E CSV ARQUIVADOS + ESPECIFICAÇÃO/CHECKLIST REGISTRADOS. NOVOS MÓDULOS NÃO IMPLEMENTADOS; NENHUM TESTE, BUILD OU APK.**
