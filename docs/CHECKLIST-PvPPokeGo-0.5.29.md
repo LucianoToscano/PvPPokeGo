@@ -414,3 +414,15 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] CI QA2: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37990550678 — confirmar testes Kotlin+Gradle, versão, checksum, assinatura e artefato após terminar.
 - [ ] QA físico Samsung Android16: transições entre duas partidas, swaps, time 3x3, OCR de formas, CP plausível, escudos e temporização de HP.
 - [ ] Não declarar implementação concluída de rede social/raid/integrações de apps externos sem backend/licença/QA.
+
+
+### Continuidade de batalha / matcher — reforço QA3 0.5.35 (2026-10-09)
+- [x] Gate de OCR com confiança mínima aplicado **antes** do tracker e `onDetection` no `BattleOverlayService`.
+- [x] `BattleCorrespondenceTracker`: exigir 2 frames para oponente novo sozinho ou troca simultânea completa; não abrir nova partida no prompt de troca; não dividir sem par de identidades anteriores; apenas membros confiáveis (>=0,90) compõem âncora da equipe, protegendo continuidade.
+- [x] `BattleEngine`: não permitir que evidência visual de baixa confiança ou forma de PC impossível sobreponha espécie validada; manter confiança real dos slots provisórios.
+- [x] `ReserveCardMatcher`: receber `activeSpeciesId` opcional (retrocompatível) para resolver forma regional ativa sem PC, evitando confundir a própria carta com uma reserva; `BattleEngine` passa sua identidade ativa.
+- [x] Testes unitários adicionados: 6 casos de continuidade + 2 casos de reservas por forma compartilhando nome/PC desconhecido; teste antigo de troca simultânea adaptado à confirmação em 2 frames.
+- [x] Código privado sincronizado com mirror público de build em commit `d63f24b08053955802d4ab3a5b492d688983ae0a`, run QA3 https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37991257400 .
+- [ ] CI QA3 gradle testes, compile, checksum e assinatura: consultar resultado REAL antes de marcar pronto.
+- [ ] QA no Samsung Android16 com partidas e capturas reais; em especial reserva em após troca/forma, escudos/HP, falsos ataques, sem injetores.
+- [ ] Não chamar propostas sociais online, scanner IV Avaliar calibrado e atividades PvE automatizadas de implementadas.
