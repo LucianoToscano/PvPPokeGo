@@ -1193,6 +1193,24 @@ PRÓXIMO PASSO:
 - Evoluir backend e eventos verificados em etapa separada; a captura proposta pelo usuário é referência visual de produto, não evidência de funções já operantes.
 
 
+### 2026-10-08 — Arena: testes Kotlin direcionados aprovados
+
+Branch de fonte: `feature/arena-foundation-20261008` (base `release/0.5.29`).  
+Branch de build isolada: `LucianoToscano/PvPPokeGo-APK-Build:preview/arena-0.5.30-20261008`.  
+PR: https://github.com/LucianoToscano/PvPPokeGo/pull/35 (draft).  
+Run direcionado: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242217 .
+
+RESULTADO:
+- Arquivos de código/testes da Arena e SettingsScreen conferidos idênticos por SHA de blob entre fonte privada e snapshot público.
+- Android SDK 36 + Gradle 8.11.1 + JDK 17, tarefa `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.arena.*'`: **SUCCESS**.
+- Painel Arena movido para perto do topo da tela inicial, antes do card Batalha; resumo de faixa/XP visível mesmo recolhido. Nenhuma alteração em tela nativa do Pokémon GO nem HUD de batalha.
+- Checklist e especificação atualizados para refletir evidência real; testes novos não apenas adicionados, agora executados.
+- Build completo de preview 0.5.30 permanece PENDENTE. Não afirmar APK entregável, assinatura ou teste Samsung.
+
+STATUS: **PARCIAL — testes direcionados concluídos; APK/QA aguardando.**
+
+PRÓXIMO PASSO: conferir `:app:testStandardDebugUnitTest` integral, `:app:assembleStandardDebug`, `apksigner`, SHA-256 e resultado do artifact; corrigir erros de CI se houver.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
