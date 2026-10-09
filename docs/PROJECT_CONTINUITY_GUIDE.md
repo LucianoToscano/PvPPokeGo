@@ -1,3 +1,17 @@
+## 2026-10-09 — ESTUDO DOS XAPK CALCY IV 3.44, POKERAID 0.48.16 E GO HUB (SOMENTE PESQUISA)
+
+O usuário forneceu os dois arquivos XAPK originais deste chat e seis screenshots de PokeRaid (Amizade, Seus Clãs, Trocar/lista desejos/ofertas, scanner). Os pacotes foram inspecionados **ESTATICAMENTE (sem instalar/executar)** e o site https://db.pokemongohub.net/pt e páginas de tier lists, DPS/TDO, bônus Mega e disclaimer foram consultadas online. **Relatório completo obrigatório:** [`ESTUDO_CALCY_POKERAID_GOHUB_0.5.35.md`](ESTUDO_CALCY_POKERAID_GOHUB_0.5.35.md). Integra-se ao backlog [`PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md`](PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md).
+
+**Fatos verificados:** Calcy `tesmath.calcy` v3.44 XAPK SHA256 `fe98aa69446630bf526326bdc723de67db678f2e90055aff6e30235586dabeb5`, splits base/arm64/xxhdpi; contém OCR Tesseract, tela/overlay de scan, PvP IV/meta e SQLite `gamestats.db` com tabelas de espécies, movimentos PvE/PvP, evoluções, efeitos, shadow/mega e traduções (inspecionado SOMENTE o esquema). PokeRaid `me.pokeraid` v0.48.16 SHA256 `2dced3bd0a7400acd2cfa7e4b228c8af58c630144f4e01f99f084050d23e241c`, splits base/arm64/pt/xxhdpi; contém recursos ML Kit OCR, layouts de matchmaking PvP, salas/coordenador de reides, clãs, amizade, ofertas/trocas, histórico, notificações e smart IV. Nomes de recursos NÃO comprovam funcionamento e nenhum APK/asset/modelo/dado de terceiros foi copiado para o PvPPokeGo.
+
+**GO Hub:** https://db.pokemongohub.net/pt oferece PvP/PvE tier lists, Pokédex, tipos, moves, CP calculator, Hundo odds, DPS/TDO, Megas e Dinamax. Copyright/aviso legal `https://db.pokemongohub.net/pt/legal/disclaimer` com direitos reservados e créditos PvPoke/Dialgadex; **não interpretar como licença para copiar/scrapear/republicar dados**. Priorizar links/fonte atribuídos, API autorizada e datasets licenciados auditados; sempre distingua Rank IV de tier meta e PvP/PvE.
+
+**NOVOS ITENS do backlog 0.5.35+:** P0 calibrar barras IV de avaliação e corrigir confiança; completar custos de fortalecer/evoluir com fontes autorizadas; enriquecer golpes e efeitos; listas de ofertas/desejos LOCAIS com compartilhamento; P1 guia GO Hub com links, preparador de reide DPS/TDO, duelos/agenda; P2 clãs/chat/salas/torneios/trocas online exigem backend, privacidade, moderação, antiabuso. Não confundir códigos de amizade/Battle Code/grupo. Interface deve evitar títulos cortados do PokeRaid e permanecer clean.
+
+**ESTADO:** o APK 0.5.34 QA e branch de implementação permanecem intocados em código; registro nesta branch privada apenas em `docs/`. Nenhuma nova compilação ou APK feito. O usuário não autorizou implementação integral das ideias nesta mensagem, pediu estudo e sugestões. Preservar toda versão 0.5.34 e anteriores.
+
+---
+
 ## 2026-10-09 — Nova proposta: comunidade, treinador, duelos, reides PvE e eventos (PENDENTE)
 
 Usuário compartilhou capturas reais das telas de perfil e código QR de treinador e pediu aproveitar perfil, código de amigos, duelos, eventos e PvE no PvPPokeGo. **Não confundir com recurso já implementado:** a compilação entregue 0.5.34 **NÃO contém essas funções sociais**.
