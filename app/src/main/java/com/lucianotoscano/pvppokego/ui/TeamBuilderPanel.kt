@@ -173,18 +173,18 @@ fun TeamBuilderPanel(
                     TeamRecognitionMode.MANUAL ->
                         if (manualReady) {
                             "✓ Equipe ATUAL selecionada por você (sem confirmação visual). " +
-                                if (automaticRecognitionEnabled) {
+                                (if (automaticRecognitionEnabled) {
                                     "A câmera ainda identifica o Pokémon ativo e as reservas."
                                 } else {
                                     "Ative Reconhecimento automático geral para identificar o ativo pela imagem."
-                                }
+                                })
                         } else {
                             "Manual: preencha e salve três vagas válidas para a liga. " +
-                                if (automaticRecognitionEnabled) {
+                                (if (automaticRecognitionEnabled) {
                                     "Enquanto incompleta, o app pode continuar detectando a equipe."
                                 } else {
                                     "O reconhecimento visual geral está desligado."
-                                }
+                                })
                         }
                 },
                 style = MaterialTheme.typography.bodySmall,
