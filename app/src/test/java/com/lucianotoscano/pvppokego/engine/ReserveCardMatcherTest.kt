@@ -48,7 +48,7 @@ class ReserveCardMatcherTest {
     }
 
     @Test
-    fun cpWinsEvenWhenVisualEvidenceConflicts() {
+    fun conflictingCpAndVisualEvidenceAreHeldUnconfirmed() {
         val r = ReserveCardMatcher.resolve(
             team = team,
             activeName = "Houndoom",
@@ -56,9 +56,9 @@ class ReserveCardMatcherTest {
             cardCps = listOf(1485, 1500),
             cardDexes = listOf(812, 845)
         )
-        assertEquals(listOf("Cramorant", "Rillaboom"), r.map { it.member.name })
-        assertEquals(listOf("cp", "cp"), r.map { it.source })
-        assertTrue(r.all { it.confirmed })
+        assertEquals(2, r.size)
+        assertTrue(r.all { !it.confirmed })
+        assertEquals(listOf("conflict", "conflict"), r.map { it.source })
     }
 
     @Test
