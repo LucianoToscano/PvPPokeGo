@@ -42,3 +42,17 @@ Permitir ao jogador preparar os três Pokémon na tela inicial antes da partida,
 - `app/src/test/java/com/lucianotoscano/pvppokego/data/ManualTeamPolicyTest.kt`
 
 **Status neste registro inicial:** implementação de código + testes adicionados; Android CI/APK/QA visual ainda aguardam resultados dos workflows para serem declarados.
+
+## QA Standard 0.5.31 validado tecnicamente — 2026-10-09
+
+- **Run fonte**: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124890 — **SUCCESS**.
+- **Commit de código compilado (espelho)**: `fd17818758bb35f54c31a9cd379a42c1af373594`. Os sete arquivos de código/versionamento foram comparados por SHA de blob ao correspondente na feature privada e eram idênticos.
+- **Testes JUnit direcionados**: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124885 — `ManualTeamPolicyTest`, **PASS**.
+- **Suíte Android Standard completa + compile/build**: `:app:testStandardDebugUnitTest :app:assembleStandardDebug` — **BUILD SUCCESSFUL in 1m 17s**.
+- **Artefato GitHub**: `PvPPokeGo-0.5.31-QA-debug` (ID `11592506273`), contém `PvPPokeGo-0.5.31-QA-debug.apk`, `SHA256SUMS.txt`, `signature-verification.txt`.
+- **APK**: 79.430.738 bytes. **SHA-256**: `07d769bdcbbe4a6400ca21fe38f1276ddbb946b3a682c46cb85648d9400f52a0`. O arquivo extraído foi recalculado e comparado com `SHA256SUMS.txt`, idêntico ao CI.
+- ZIP de entrega 35.822.814 bytes; `unzip -t` do ZIP e APK: **PASS**. `apksigner verify`: APK Signature Scheme v2 **true**, 1 signer de QA/debug, NÃO certificado de release permanente.
+- Verificados dentro do APK: `assets/gamemaster.json`, `assets/move_names_ptbr.json`, `assets/pokemon_icon_atlas.json/png`, `assets/pvpoke_snapshot.json` e `res/drawable-nodpi-v4/pvppokego_launcher.png`.
+- ZIP enviado ao Google Drive do projeto e conferido por metadados/tamanho: https://drive.google.com/file/d/1BQP8Zffi9IlwzBHWbN5S0koxbCOtJwvY/view?usp=drivesdk
+- PR #36 permanece **draft**, não mergear antes de QA de campo. Requer teste em Samsung dos três slots, busca, sprites, CP, IV, golpes, múltiplas edições, backup/importação, rolagem/teclado e funcionamento dos controles/overlay originais.
+- **Status**: fundação manual e APK QA **CONCLUÍDOS TECNICAMENTE**; aprovação visual, reconhecimento aliado usando pistas manuais e refinamento visual de mockup **PENDENTES**.
