@@ -363,16 +363,18 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Toggle("Mostrar HP restante previsto", hpRemaining) {
-                    hpRemaining = it
-                    repository.showHpRemainingForecast = it
+                if (hpAssist) {
+                    Toggle("Mostrar HP restante previsto", hpRemaining) {
+                        hpRemaining = it
+                        repository.showHpRemainingForecast = it
+                    }
+                    Text(
+                        "Exibe quanto HP poderá sobrar sem escudo, com intervalo e aviso de nocaute. " +
+                            "Só aparece com leitura de HP e estimativa de dano disponíveis.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Text(
-                    "Exibe quanto HP poderá sobrar sem escudo, com intervalo e aviso de nocaute. " +
-                        "Só aparece com leitura de HP e estimativa de dano disponíveis.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 Toggle("Timer de troca", timer) {
                     timer = it
                     repository.showSwitchTimer = it
