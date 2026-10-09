@@ -70,3 +70,7 @@ Arquivos JSON originais sob `assets/config_schema/`. Todos expõem `schemaVersio
 
 ## Continuidade
 Antes de qualquer desenvolvimento: ler `docs/PROJECT_CONTINUITY_GUIDE.md`, conferir HEAD/branch/checklist e distinguir P0 em andamento das novas ideias. Integrar este estudo ao registro canônico e ao Drive sem mudar funcionalidades existentes. Propostas complementam `docs/ESTUDO_CALCY_POKERAID_GOHUB_0.5.35.md` e `docs/PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md`.
+
+
+## Adendo 2026-10-09 — APK identificado como compilação original entregue pelo Grok
+O usuário enviou o arquivo adicional `Projeto do Regibot_v2.3.3.0 Criação Original.apk`, identificado como a compilação original recebida do Grok. **Comparação local efetiva com `Regibot_v2.3.32.apk`: ambos possuem exatamente 52.937.403 bytes e SHA-256 `6f08a94c19b7d84b42e412d51cbe5f583732606f3681bee5d7b323b344bdb6b7`, e o comando `cmp -s` retornou código 0 (byte a byte iguais).** O ZIP original foi testado sem erro (`testzip=None`, 940 entradas). Portanto, **são a mesma compilação**, com dois nomes externos diferentes. A versão interna do manifesto é **2.3.32** (versionCode 45), apesar do nome do upload mencionar `2.3.3.0`. **Não supor que o código fonte original foi entregue:** é um APK compilado; sem fontes adicionais a engenharia reversa não recupera fielmente o projeto original Grok/Gradle. Todas as análises e riscos anteriores deste documento continuam válidos. Nenhuma alteração de código, APK ou compilação foi feita no PvPPokeGo. Não repetir inspeção estática como se fosse outra versão.
