@@ -403,3 +403,14 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] **P0:** investigar escudos invariáveis e 14/20 carregados inferidos encontrados no histórico 0.5.33 com vídeo/replay para distinguir dados reais de hipóteses.
 - [ ] **P1:** calibração de IVs visuais e captura ao vivo do jogador, sem estimar IV numérico a partir de nickname.
 - [ ] **Backlog/integracão:** comunidade de treinadores, amigos, torneios/duelos/raid/trocas, bases externas e recursos dos APKs estudados; não declarar implantado sem código e backend/testes.
+
+### Correção do matcher e continuidade 0.5.35 — QA2 — 2026-10-09
+- [x] Revisar `BattleCorrespondenceTracker`, `BattleEngine`, `BattleOverlayService` e `ManualTeamMatchPolicy` sem mexer em HUD/posições.
+- [x] Validar CP x espécie antes de aceitar OCR em batalha/seleção, forma/identidade exata, reservas confiáveis e time manual não implica ativo.
+- [x] Tratar adversário novo unilateral como troca somente com 2 frames, e pares simultâneos (próprio/inimigo) dentro da batalha como continuidade protegida.
+- [x] Incompatibilidade forte sem gap de evidência anterior à 1ª observação **não inicia batalha nova** por repetição de OCR; depois de gap a 2ª observação coerente pode iniciar sessão, mesmo que contador do gap seja atualizado entre frames.
+- [x] Adicionar testes JUnit dos três casos acima; preservar testes de regional Ninetales/Alolan, reservas e trio manual.
+- [x] Gerar documentação de invariantes: `docs/CORRESPONDENCIA_BATALHAS_0.5.35_2026-10-09.md`.
+- [ ] CI QA2: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37990550678 — confirmar testes Kotlin+Gradle, versão, checksum, assinatura e artefato após terminar.
+- [ ] QA físico Samsung Android16: transições entre duas partidas, swaps, time 3x3, OCR de formas, CP plausível, escudos e temporização de HP.
+- [ ] Não declarar implementação concluída de rede social/raid/integrações de apps externos sem backend/licença/QA.
