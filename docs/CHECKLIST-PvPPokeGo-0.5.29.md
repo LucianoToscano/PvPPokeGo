@@ -271,3 +271,21 @@ Relatório exato de código/QA: [IMPLEMENTACAO_0.5.33_LOGCAT_HP_UI.md](IMPLEMENT
 - [x] APK 0.5.33 descarregado de artifact `11603767382`, extraído e validado. Tamanho 79.561.814 bytes; SHA-256 `9de20e578d02e56dc11652d0b9f639293b99852cfa123f15aa600d0a0a6eb1d8` confere com checksum do CI.
 - [x] Disponibilizar `PvPPokeGo-0.5.33-QA-debug.apk` real no chat, sem renomear builds antigos.
 - [ ] QA físico Samsung: instalação/atualização compatível com chave de assinatura, botões de settings ativados/brancos e inativos/cinzas, funções HP, Logcat/exportação, overlay/reservas/reconhecimento/posição dos controles. Não atribuir status de QA físico antes dos testes.
+
+
+## Próxima funcionalidade — Scanner de três vagas (proposta 0.5.34, 2026-10-09)
+
+Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_EQUIPE_0.5.34.md).
+
+- [x] Conferir código atual de SUA EQUIPE (3 vagas, PC/HP/IV/sexo/forma/golpes), ML Kit, MediaProjection e guia mestre 0.5.33.
+- [x] Analisar **estaticamente** nomes de recursos/arquivos do APK Poke Genie modificado enviado como referência, sem executar, importar nem redistribuir recursos proprietários.
+- [x] Registrar exemplo Cramorant 1485 PC, 126 PS, Bicada, Mergulho, Voar, fêmea, tipos Voador/Água; IVs no apelido não validados.
+- [x] Propor UI por vaga “Escanear ficha” + “Escanear avaliação” + “Revisar e aplicar” + “Usar time agora”, com confiança por campo.
+- [ ] Implementar importação de screenshot consentida (Android Photo Picker), parser OCR de ficha, validação contra Game Master e merge conservador de duas capturas.
+- [ ] Implementar IV appraisal de barras com tolerâncias/resolução e fallback manual, sem usar IV de apelido como verdade.
+- [ ] Adicionar captura direta a partir de tela do Pokémon GO via MediaProjection ativa/consentida, sem tocar automaticamente no jogo e sem regressões no OCR de batalha.
+- [ ] Rank IV PvP, calculadora de fortalecer/evoluir, moveset, histórico local, apelidos e casos de mudança de forma como Cramorant, com fontes licenciadas.
+- [ ] Testes Android/JUnit, UX e QA do aparelho; depois build no espelho público existente e checksum do APK da versão nova **quando explicitamente pedido**.
+- [ ] Não usar ou distribuir APK “Premium Fixed” de terceiros no PvPPokeGo ou no mirror.
+
+**Status: apenas documentação na branch `feature/team-scan-0.5.34-planning`; sem novo APK.**
