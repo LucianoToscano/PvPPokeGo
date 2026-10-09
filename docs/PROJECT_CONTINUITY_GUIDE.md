@@ -1586,6 +1586,33 @@ ESPECIFICAÇÃO:
 
 Registro no checklist: `docs/CHECKLIST-PvPPokeGo-0.5.29.md`. Próximo chat deve começar pelo Guia Mestre e verificar HEAD real de `feature/team-recognition-modes-0.5.32`, sem retomar versão antiga por engano.
 
+### 2026-10-09 — Implementação 0.5.33 autorizada: Logcat restrito ao app + OFF cinza + HP restante — APK PENDENTE por CI
+
+O usuário explicitamente pediu **implementar Logcat na nova versão, corrigir ícones/controles brancos quando desligados (OFF cinza), adicionar novas funções de HP e enviar novo APK**. Esta ordem supera o bloqueio anterior contra compilar/APK (a geração agora está AUTORIZADA). Foi criada uma branch isolada, sem afetar release/0.5.29 nem o código da feature 0.5.32:
+- Branch: `feature/diagnostics-hp-ui-0.5.33` derivada de `feature/team-recognition-modes-0.5.32`.
+- Versionamento: `app/build.gradle.kts`: 0.5.33, versionCode 38.
+
+Implementação realizada em fonte:
+1. Novo `data/AppDiagnosticLog.kt`: trail privado rotativo de até 128 KiB e Logcat próprio processo/Tag `PvPPokeGo`, com timeout, sem permissão READ_LOGS, sem dados OCR crus.
+2. `MainActivity.kt`: mantém exportador ZIP legado e acrescenta `runtime-events.log`, `logcat-app.txt` e `integrity-warnings.txt`; registros de sessões sem resultado/eventos regressivos **sem mutação do histórico**. O Logcat de outros apps/sistema NÃO é acessível por APK comum; usar bugreport do Android/ADB externamente se necessário.
+3. `BattleOverlayService.kt` + `BattleHistoryRepository.kt`: breadcrumb de início/fim de sessão, stop/reset e diagnósticos do motor com rótulo genérico para evitar vazamento de identificação.
+4. `QuickOverlayMenu.kt`: ON azul/ciano; OFF cinza escuro com texto e ícone também acinzentados, tanto em lista quanto modo somente ícones. Nenhuma mudança nas posições dos controles ou hitboxes.
+5. `SettingsScreen.kt`: switches de configuração OFF cinza e ON ciano, com cartão leve/texto atenuado, além de opção de HP restante previsto e exportação informando Logcat próprio.
+6. `SettingsRepository.kt`: chave booleana `show_hp_remaining_forecast`, padrão true, import/export preservados.
+7. `BattleOverlayView.kt`: faixa de dano existente preservada; prévia de HP após golpe sem escudo (intervalo em %) com mensagem de escudo, KO possível/provável e fallback discreto perto do indicador quando ROI nativa não é localizada. Sem desenhar sob captura STALE/PAUSED.
+8. Novo workflow `.github/workflows/pvppokego-0533-qa.yml` para testes `testStandardDebugUnitTest`, build `assembleStandardDebug`, checksum SHA256 e artefato `PvPPokeGo-0.5.33-APK`.
+
+**BLOQUEADOR CRÍTICO DOCUMENTADO**: GitHub Actions runs https://github.com/LucianoToscano/PvPPokeGo/actions/runs/37901931447 e https://github.com/LucianoToscano/PvPPokeGo/actions/runs/37902276938 terminaram `failure` em segundos e com job sem steps disponíveis, **antes de iniciar compilador/Gradle**. Outros workflows do repo apresentaram falha igual. Não inventar erro de Kotlin, não atribuir definitivamente ao pagamento sem UI de erro. Execução local no ambiente disponível também não tem Android SDK, Gradle, jar Android e não tem acesso de rede a github.com; portanto não é possível compilar nem fornecer arquivo de APK verdadeiro agora. O antigo `PvPPokeGo-0.5.31-QA-debug.apk` **NÃO** contém estas mudanças e não deve ser rebatizado. NÃO afirmar que a compilação/QA passou.
+
+Registro técnico: `docs/IMPLEMENTACAO_0.5.33_LOGCAT_HP_UI.md` e `docs/CHECKLIST-PvPPokeGo-0.5.29.md`.
+
+Pendência:
+- Conferir alerta específico de bloqueio na execução GitHub Actions, habilitar runner/quota/faturamento conforme o caso com ação do proprietário, rerun workflow, verificar testes, checksum e depois enviar APK.
+- QA do Samsung, capturas/cores em light/dark, Logcat PID, previsões HP com ausência de ROI e integridade de estado; log privado, sem capturar dados de terceiros. Somente concluir quando existir build REAL.
+- Preservar HUD, ícones oficiais, backup de posições; sem permissão para tornar repo público/espelhar código privado somente para evitar CI.
+
+**STATUS: 0.5.33 alterada em código-fonte + documentação; NENHUM APK 0.5.33 VALIDADO/Gerado. A última versão de APK QA continua 0.5.31.**
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
