@@ -62,3 +62,27 @@ Planejamento canônico: [Arena — especificação e estado](ARENA_RANKING_TOURN
 - [ ] Gerar e validar APK novo **somente** quando Standard compilar e artifact tiver versão/assinatura/SHA-256 verificados.
 
 **Status:** FUNDAÇÃO NO CÓDIGO / PARCIAL; integração online e premiação NÃO implementadas. APK 0.5.29 QA anteriormente entregue permanece o último verificado. Não aumentar versionCode nem prometer 0.5.30 até build real.
+
+## Continuação isolada 0.5.31 — cadastro manual pré-batalha
+
+Especificação: [TEAM_BUILDER_0.5.31.md](TEAM_BUILDER_0.5.31.md). Branch `feature/team-builder-0.5.31-20261008` criada a partir da 0.5.30.
+
+- [x] Base do Guia Mestre e HEAD de Arena verificados; release/0.5.29 não alterada.
+- [x] Painel SUA EQUIPE integrado no topo da tela inicial, mantendo Arena e controles Batalha.
+- [x] Três vagas editáveis, espécie e forma com busca no Game Master offline.
+- [x] PC, IVs 0-15, HP máximo opcional, sexo, Mega/Sombroso, golpe ágil e dois carregados.
+- [x] Sincronizar seletor de liga ao `SettingsRepository.leagueMode` existente, sem flag concorrente.
+- [x] Persistência local + inclusão `manual_team_v1` no backup JSON existente.
+- [x] Validação pura + testes JUnit para liga, campos inválidos, slots vazios e campos opcionais.
+- [x] CI Kotlin `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.data.ManualTeamPolicyTest'` PASS: [run 37875124885](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124885) — BUILD SUCCESSFUL em 1m 4s.
+- [x] CI Standard integral `:app:testStandardDebugUnitTest :app:assembleStandardDebug` PASS: [run 37875124890](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124890). APK 0.5.31 QA, ZIP e assinatura v2 verificados.
+- [ ] QA real Samsung: editor de 3 slots, busca de formas, persistência, exportar/importar, troca de liga, rolagem, exibição do teclado.
+- [ ] Integrar cadastro como sugestão/hint verificável de reconhecimento, jamais substituir automaticamente OCR com dados antigos.
+- [x] Sprite fiel por `speciesId` usando `PokemonIconAtlas` existente, sem falsificar imagem de forma; carregamento assíncrono e fallback por nome.
+- [ ] Validar visual real dos três cartões e legibilidade no Samsung.
+- [ ] Exibir rank e HP inferidos apenas após cálculo confiável, versão de dados e critério de confiança explícito.
+- [ ] Validar elegibilidade real de Mega/Sombroso por liga e forma; o toggle atual é só declaração do jogador.
+- [x] APK `PvPPokeGo-0.5.31-QA-debug.apk` real (79.430.738 bytes), SHA-256 `07d769bdcbbe4a6400ca21fe38f1276ddbb946b3a682c46cb85648d9400f52a0`. ZIP assinado e com checksums [Drive oficial](https://drive.google.com/file/d/1BQP8Zffi9IlwzBHWbN5S0koxbCOtJwvY/view?usp=drivesdk), 35.822.814 bytes.
+- [ ] Validar em Samsung antes de aprovar visual e PR.
+
+**Status:** Código da funcionalidade implantado em branch de feature; sem confundir esse progresso com validação física.
