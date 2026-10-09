@@ -114,3 +114,28 @@ Branch isolada `feature/team-recognition-modes-0.5.32`; `release/0.5.29` e APKs 
 - [ ] Polir o layout usando imagens originais do atlas, sem remover funcionalidades atuais.
 
 **STATUS REAL: CÓDIGO ALTERADO + DOCUMENTAÇÃO REGISTRADA; NENHUM TESTE/COMPILAÇÃO/APK EXECUTADO NESTA ETAPA POR PEDIDO DO USUÁRIO.**
+
+
+## Configurações do Treinador — adendo visual de 2026-10-09 (SEM BUILD)
+
+Referência: captura de Configurações enviada pelo usuário, com **Gerais / PvP IV / Gerador de Nomes / Formato da Data Pego / Simulador de Batalha**, Nível 54 e Equipe Mystic. **54/Mystic são ilustração da captura, NÃO valores atribuídos à conta do jogador.** Contrato: [TRAINER_SETTINGS_0.5.32.md](TRAINER_SETTINGS_0.5.32.md).
+
+- [x] Verificar Guia Mestre 0.5.29, histórico 0.5.26 e estado real da branch `feature/team-recognition-modes-0.5.32`.
+- [x] Preservar modo Automático/Manual da Sua Equipe, Arena e opções de HUD/overlay sem criar outra preferência de liga.
+- [x] Criar card recolhível Configurações do Treinador com cinco subseções sem sair da tela inicial.
+- [x] Nível editável/opcional, equipe Mystic/Valor/Instinct ou Não informada; persistência local e nenhuma suposição de login.
+- [x] Consultar IVs dos três Pokémon informados em Sua Equipe; campos ausentes ficam ausentes.
+- [x] Gerador de nomes com formatos pré-estabelecidos e cópia real para área de transferência do aparelho, sem comandar Pokémon GO.
+- [x] Escolher formato da data de captura, mostrar exemplo datado, sem fingir ter lido data real do Pokémon GO.
+- [x] Adicionar prévia de vantagens por tipos entre aliado cadastrado e adversário do Game Master offline. **NÃO é simulação completa**.
+- [x] Salvar preferências no arquivo original de configurações e incluir quatro chaves no backup JSON.
+- [x] Criar testes JUnit de validação de nível, preview de nomes/IVs, formato de datas e valores não presumidos (código criado, **não executado**).
+- [x] Registrar arquivos, limites e passos futuros no Guia Mestre + documento de detalhamento.
+- [ ] Construir ranking **verdadeiro** de PvP IV por espécie, forma, nível e liga com algoritmo verificável.
+- [ ] Implementar simulador de batalha por movimentos/energia/escudos/HP/turnos a partir de engine matemático testado.
+- [ ] Integrar data real de captura somente com campo específico ou fonte verificada.
+- [ ] QA Samsung e testes Kotlin/Gradle/Android Standard **adiados por solicitação do usuário**.
+- [ ] QA backup e restore da equipe, preferências, HUD e modos, sem perda de posições.
+- [ ] Polir proporções e ícones do card conforme referências clean antes de considerar o design final.
+
+**STATUS: CÓDIGO E DOCUMENTAÇÃO ADICIONADOS À MESMA BRANCH 0.5.32; NENHUM TESTE/BUILD/APK EXECUTADO.**
