@@ -233,4 +233,45 @@ class BattleCorrespondenceTrackerTest {
         )
     }
 
+
+    @Test
+    fun repeatedIncompatiblePairsDuringContinuousCombatDoNotSplitBattle() {
+        val tracker = BattleCorrespondenceTracker()
+        val context = BattleCorrespondenceTracker.Context(
+            activePlayer = team[0],
+            activeOpponent = id("Sneasel", 1465, "sneasel"),
+            ownTeam = team,
+            knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+            inactiveForMs = 450,
+            sessionAgeMs = 150_000
+        )
+        val falseNew = BattleCorrespondenceTracker.Observation(
+            player = id("Wingull", 875, "wingull"),
+            opponent = id("Vanillite", 1182, "vanillite"),
+            pairedCards = true
+        )
+        repeat(4) { frame ->
+            assertEquals(BattleCorrespondenceTracker.Decision.HOLD_CURRENT,
+                tracker.observe(context, falseNew, 90_000L + frame * 450L))
+        }
+        assertEquals(false, tracker.hasPendingNewBattleCandidate)
+    }
+
+    @Test
+    fun opponentOnlyUnknownNeedsTwoFramesButReturningEnemyIsImmediate() {
+        val tracker = BattleCorrespondenceTracker()
+        val context = BattleCorrespondenceTracker.Context(
+            activePlayer = team[0], activeOpponent = id("Sneasel", 1465, "sneasel"),
+            ownTeam = team, knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+            inactiveForMs = 200, sessionAgeMs = 30_000
+        )
+        val first = BattleCorrespondenceTracker.Observation(
+            player = null, opponent = id("Lanturn", 1498, "lanturn"), pairedCards = false
+        )
+        assertEquals(BattleCorrespondenceTracker.Decision.HOLD_CURRENT,
+            tracker.observe(context, first, 100_000))
+        assertEquals(BattleCorrespondenceTracker.Decision.SWITCH_WITHIN_BATTLE,
+            tracker.observe(context, first, 100_700))
+    }
+
 }
