@@ -291,3 +291,15 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 **Status: apenas documentação na branch `feature/team-scan-0.5.34-planning`; sem novo APK.**
 
 - [x] **Retificação de registro 2026-10-09:** usuário informou que renomeou pessoalmente o arquivo com “Premium” por estética e que é uma versão normal. Removido o rótulo não comprovado “APK modificado” do planejamento. Permissão para usar em análise técnica; autenticidade da assinatura e licença de componentes não verificadas. Nenhum novo APK gerado nesta retificação.
+
+
+## Auditoria técnica complementar do arquivo Poke Genie — 2026-10-09
+- [x] Inspeção estática do APK real enviado: 8.19.0/build 416, pacote `com.cjin.pokegenie.standard`; manifesto, layouts, Tesseract e dados, container ZIP íntegro.
+- [x] Registrar inventário técnico e diferenças em [ESTUDO_APK_POKE_GENIE_0.5.34.md](ESTUDO_APK_POKE_GENIE_0.5.34.md) — sem copiar código/dados de terceiros.
+- [x] Distinguir comprovado por nome de recurso/manifesto vs algoritmo/funcionalidade não verificados; considerar APK aninhado `yrf.apk` evidência de camada de empacotamento, NÃO de adulteração.
+- [x] Comparar código canônico atual: slots e OCR existem; OCR da ficha e Avaliar NÃO implementados.
+- [ ] Implementar prioridade P0: screenshot(s) da ficha, appraisal, revisão/confiança e salvamento independente por vaga 1/2/3.
+- [ ] P1: rank IV, golpes PvP/energia, team scorecard e leitura em overlay consentida com classificador de contexto.
+- [ ] P2: histórico de scans e filtros, CP/poeira/doce e apelidos customizados.
+- [ ] QA e eventual build somente depois de implementação autorizada; não misturar artefatos do Poke Genie ou de distribuidores terceiros no mirror público.
+**Estado: estudo/documentação. Nenhum novo APK ou código Kotlin da versão 0.5.34 foi feito neste checkpoint.**
