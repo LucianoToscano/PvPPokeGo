@@ -1138,6 +1138,61 @@ Ambos devem persistir, exportar/importar e atualizar imediatamente o menu rápid
 **STATUS:** este inventário/contrato visual está **REGISTRADO NO GUIA**, mas a auditoria dos toggles, sincronização, testes de Android e APK com novas correções **NÃO FOI FEITA NESTA ETAPA**. Este commit é SOMENTE de documentação; não é build/release nova. Toda mudança futura nos menus deve gerar novo registro cronológico no guia da branch ativa e (quando relevante) no espelho histórico solicitado, incluindo branch/HEAD real, arquivos alterados, teste, pendências e links de artefatos verificados.
 
 
+
+### 2026-10-08 — Arena: fundação de ranking, campeonato, medalhas e recompensas
+
+Versão-base: `0.5.29` (`versionCode 34`, **inalterados**)  
+Branch de implementação isolada: `feature/arena-foundation-20261008`  
+Branch base histórica/ativa conferida: `release/0.5.29` (HEAD inicial `952ff14e5f97fb461619946473a42c144cdc2caa`)  
+Referência histórica lida: `release/0.5.26`, sem rollback nem edição nesta etapa.  
+Commits de implementação: `9aba3959`, `23e2235e`, `b15cce50`, `869144ca`, `8f62fad7`, `b3d18557`.  
+Especificação: `docs/ARENA_RANKING_TOURNAMENTS_REWARDS.md`.
+
+OBJETIVO/PROBLEMA:
+- Solicitação expressa do usuário para incorporar ranking do PvPPokeGo, XP, perfis, torneios, recompensas e medalhas tomando o mockup recebido como inspiração.
+- Preservar a aparência compacta do HUD da 0.5.17, a recuperação OCR 0.5.29, launcher, backups e todas as funções atuais.
+
+ALTERAÇÕES:
+- Adicionado painel `ArenaDashboard` expansível na tela inicial do app, sem modificar nenhuma rotina do HUD, OCR, captura, reconhecimento, histórico ou motor de batalha.
+- Criados apelido editável local, resumo do histórico **disponível**, XP cosmético e faixas de atividade Bronze/Prata/Ouro/Platina/Diamante/Mestre e cinco medalhas com progresso real. Não confundir essas faixas com ranking global.
+- Criadas regras puras de aprovação **provisória** de resultados com dois relatos complementares, Elo inicial K=32/base 1000 por temporada/liga, rejeição de duplicatas, gerador de primeira rodada eliminatória para número de inscritos potência de dois.
+- Seções Ranking, Campeonatos e Recompensas identificam explicitamente funções online não ativadas; sem usuários fictícios, vitórias imaginárias, promessas de PokéCoins/passes, prêmios distribuídos ou upload implícito.
+- Criado documento de regras, etapas, integridade competitiva, moderação e critérios de aceite; checklist atualizado.
+- Mudanças feitas somente na branch de feature para não interferir em trabalhos/branches de releases em paralelo.
+
+ARQUIVOS PRINCIPAIS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaProgress.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngine.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/ArenaDashboard.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaProgressTest.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngineTest.kt`
+- `docs/ARENA_RANKING_TOURNAMENTS_REWARDS.md`
+- `docs/CHECKLIST-PvPPokeGo-0.5.29.md`
+- `docs/PROJECT_CONTINUITY_GUIDE.md`
+
+TESTES:
+- Arquivos de teste JUnit adicionados, cobrindo resultado explícito, XP/idempotência, streak, três ligas, relatos conflitantes e únicos, rating e chave.
+- **Não afirmar que passaram até executar**. Build Android, renderização Compose e Samsung/QA físico ainda não realizados nesta etapa.
+- APK não foi produzido e `versionName/versionCode` não foram alterados.
+
+RESULTADO:
+- MVP local de perfil/progresso/medalhas e fundação matemática do ranking/torneios, isolados do HUD existente; backend competitivo e prêmios permanecem por fazer.
+
+STATUS:
+**PARCIAL** — código e especificação no branch de feature; sem Android QA/APK.
+
+PENDÊNCIAS:
+- Testar compilar e tela real, revisar medidas no celular.
+- Online exige autenticação, servidor autoritativo, banco, monitor antifraude, moderação e consentimento.
+- Histórico existente é limitado a 50 partidas: números locais são referentes aos registros ainda salvos e não são contadores vitalícios.
+- Implementar campeonatos operacionais, desafios, medalhas persistentes, inventário e premiação conforme checklist; requisitos legais/fornecedores para prêmios reais.
+
+PRÓXIMO PASSO:
+- Rodar testes/assemble Standard e QA da interface; corrigir falhas antes de merge; só então versionar novo APK legítimo.
+- Evoluir backend e eventos verificados em etapa separada; a captura proposta pelo usuário é referência visual de produto, não evidência de funções já operantes.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
