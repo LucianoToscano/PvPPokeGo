@@ -303,3 +303,20 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] P2: histórico de scans e filtros, CP/poeira/doce e apelidos customizados.
 - [ ] QA e eventual build somente depois de implementação autorizada; não misturar artefatos do Poke Genie ou de distribuidores terceiros no mirror público.
 **Estado: estudo/documentação. Nenhum novo APK ou código Kotlin da versão 0.5.34 foi feito neste checkpoint.**
+
+
+### Status de código da 0.5.34 — 2026-10-09
+- [x] Criada branch `feature/team-scan-0.5.34-implementation`, preservar 0.5.33.
+- [x] Adicionado TeamScanParser: espécies, PC/PS e movimentos por screenshot do Pokémon GO; nickname não é fonte de IV.
+- [x] TeamScreenshotScanner ML Kit via GetContent: captura selecionada pelo usuário, sem gravação automática da imagem.
+- [x] Interface SUA EQUIPE: scanner individual por vaga, prévia, confirmação/aplicar, segunda imagem e prevenção de conflito de espécies.
+- [x] Rank de IV offline, estatísticas PC potencial e análise básica de energia/turnos/DPE de golpes por dados PvPoke.
+- [x] Histórico local dos scans confirmados e inclusão no backup; sem armazenar captura bruta.
+- [x] Testes JUnit adicionados para Cramorant OCR, rejeitar números do apelido, dados inválidos, fórmula de CP, rank e energia.
+- [x] versão 0.5.34 code 39 com arquivos do scanner e testes espelhados no público para QA, workflow iniciado: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37917670306
+- [ ] Confirmar testes/compilação Standard no Actions público e corregir falhas antes de declarar APK pronto.
+- [ ] Scanner real das três barras de Avaliar 0–15: calibrar layout/dimensões com screenshots de aparelhos reais. A versão atual **NÃO preenche IVs automaticamente**.
+- [ ] Captura ao vivo de ficha/avaliação sob consentimento usando MediaProjection com classificador de contexto, sem regredir overlay.
+- [ ] Calculadora dos custos exatos de poeira/doces/evolução via fonte atualizada e testes.
+- [ ] QA no celular: variabilidade de OCR, reserva/matcher, posições HUD, histórico e backup/restore.
+- [ ] Publicar APK com checksum e assinatura verificados apenas se o CI passar.
