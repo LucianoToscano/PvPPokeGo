@@ -149,7 +149,7 @@ fun TrainerSettingsPanel(
                                     singleLine = true
                                 )
                                 Button(
-                                    enabled = level.isBlank() || level.toIntOrNull() in 1..80,
+                                    enabled = level.isBlank() || (level.toIntOrNull()?.let { it in 1..80 } == true),
                                     onClick = {
                                         trainerStore.trainerLevel = level.toIntOrNull()
                                         levelMessage = "Nível salvo localmente."
