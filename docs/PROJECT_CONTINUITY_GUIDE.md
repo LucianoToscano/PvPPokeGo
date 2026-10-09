@@ -1,3 +1,16 @@
+## 2026-10-09 — REGIBOT 2.3.32 (APK DO PRÓPRIO USUÁRIO) INSPECIONADO — PESQUISA E ROADMAP, SEM BUILD
+
+Usuário informou que criou o `Regibot_v2.3.32.apk` e autorizou análise. Arquivo comprovadamente examinado na sessão: `52.937.403` bytes, SHA256 `6f08a94c19b7d84b42e412d51cbe5f583732606f3681bee5d7b323b344bdb6b7`, ZIP integralmente testado, Android manifest package `com.regitools.regibot` versão 2.3.32 code45, minSdk26/target36. Análise **ESTÁTICA SEM INSTALAÇÃO OU EXECUÇÃO**; nenhum segredo, token, binário, asset ou código do Regibot copiado para repo.
+
+**DOCUMENTO CANÔNICO COMPLETO:** [`ESTUDO_REGIBOT_2.3.32_PVPPokeGo.md`](ESTUDO_REGIBOT_2.3.32_PVPPokeGo.md). Arquitetura com 5 esquemas JSON (`catchemall` 15 seções/119 campos, `grunt` 11/95, `raid` 10/71, `regiplay` 10/71, `sniper` 10/38); 394 campos / 344 não-nota, sem IDs duplicados por arquivo, mode/feature/sections/typed fields/defaults/file. APK contém 31 activities, serviços de foreground/boot, classes ConfigManager/SaveLists/SaveFilterSets/WorldClock/Pokedex/RegiPlayScanner, asset de catálogo Pokémon (1250 linhas, 1025 IDs únicos), mapa 1473 formas bidirecional, Leaflet 1.9.4 BSD-2-Clause com obrigações de licença. `pokemon.json.type` significa categoria ('normal', 'form', 'legendary', 'mythical'), **NÃO O TIPO ELEMENTAL**; não importar para matemática PvP. Existem ELF arm64 de injeção e scripts/bridges que **NÃO devem ser executados nem transferidos**.
+
+**O QUE VALE ADAPTAR AO PvPPokeGo:** configuração schema-driven versionada + ON/OFF cinza/colorido, validação e rollback de backup, perfis de filtro/time e import-export, scanner por espécie/forma/IV/sexo/ligas + ajuste de exibição, preparação de reide/Rocket/Dinamax puramente consultiva, calendário/relógio mundial e mapa de eventos opt-in, diagnóstico do próprio app e checklists. NÃO transpor teleporte, injeção, auto-captura, automação de batalha, autenticação arbitrária, permissões desnecessárias. O Pokémon GO proíbe localização falsa, software modificado/acesso não autorizado; fonte na documentação. Mesmo sendo do autor, revisar licenças dos assets e dependências.
+
+**STATUS REAL:** apenas relatório/documentos privados nesta branch, **SEM MUDANÇAS DE CÓDIGO/APK**. A versão 0.5.34 QA e o Guia Mestre anterior são preservados. Propostas dependem de autorização posterior e validação do HEAD antes de codificar. Integrar com `ESTUDO_CALCY_POKERAID_GOHUB_0.5.35.md` e `PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md`.
+
+---
+
+
 ## 2026-10-09 — ESTUDO DOS XAPK CALCY IV 3.44, POKERAID 0.48.16 E GO HUB (SOMENTE PESQUISA)
 
 O usuário forneceu os dois arquivos XAPK originais deste chat e seis screenshots de PokeRaid (Amizade, Seus Clãs, Trocar/lista desejos/ofertas, scanner). Os pacotes foram inspecionados **ESTATICAMENTE (sem instalar/executar)** e o site https://db.pokemongohub.net/pt e páginas de tier lists, DPS/TDO, bônus Mega e disclaimer foram consultadas online. **Relatório completo obrigatório:** [`ESTUDO_CALCY_POKERAID_GOHUB_0.5.35.md`](ESTUDO_CALCY_POKERAID_GOHUB_0.5.35.md). Integra-se ao backlog [`PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md`](PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md).
