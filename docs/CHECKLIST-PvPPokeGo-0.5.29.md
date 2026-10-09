@@ -373,3 +373,17 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] Ferramentas de fuso e calendário de eventos opt-in, localização aproximada e licença Leaflet/tiles caso utilizada.
 - [ ] Sem novos componentes de teleporte, auto-play, bots, hooks de jogo nem acesso indevido ao cliente ou backend Pokémon GO.
 - [ ] APK dessa etapa NÃO foi recompilado; manter entrega QA 0.5.34.
+
+
+### AUDITORIA DOS QUATRO ARQUIVOS REAIS 0.5.33 — 2026-10-09
+- [x] Validar APK e ZIPs, hashes, backups iguais, 7 batalhas e 464 eventos CSV/JSON.
+- [x] Reproduzir matematicamente pares inválidos Wingull CP1485 e Vanillite CP1485 com CP máximo 875/1182 no nível51 e Cramorant CP1485 plausível.
+- [x] Verificar 14/20 carregados sem nome, 0 rápidos inimigos, todos shields=2 em 282 snapshots, 7 resultados null e 1 sessão sem identidades.
+- [x] Contar 1 inversão -2121ms, Logcat limitado a uma linha, 7 session-start vs 4 session-end.
+- [x] Registrar docs/AUDITORIA_EXPORTS_0.5.33_2026-10-09.md e Guia Mestre sem anexos pessoais brutos.
+- [ ] P0: validator species-CP plausibility antes de OCR/switch/batalha, casos negativos Wingull e Vanillite 1485.
+- [ ] P0: registrar fontes, confiança e motivos de rejeição; tratar sessão vazia como observação não batalha confirmada.
+- [ ] P0: diferenciar golpe inferido x OCR, robustez escudo/HP e warnings sob baixa confiança.
+- [ ] P1: correlação e ordenação monotônica de eventos, fechamento logado para todas as saídas.
+- [ ] P1: QA Samsung Android16 com overlay, reservas, layout HUD restaurado e scanner 0.5.34 intactos.
+- [ ] Nenhum novo APK/compilação realizado neste estudo.
