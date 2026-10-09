@@ -40,6 +40,7 @@ import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.BattleLeagueMode
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.data.TeamSetupRepository
+import com.lucianotoscano.pvppokego.data.TrainerPreferencesRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,6 +68,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val teamStore = remember(context) { TeamSetupRepository(context) }
+    val trainerStore = remember(context) { TrainerPreferencesRepository(context) }
     var overlay by remember { mutableStateOf(repository.overlayEnabled) }
     var auto by remember { mutableStateOf(repository.autoRecognition) }
     var assist by remember { mutableStateOf(repository.battleAssistEnabled) }
@@ -125,6 +127,7 @@ fun SettingsScreen(
                     }
                 )
                 ArenaDashboard(history = history)
+                TrainerSettingsPanel(trainerStore = trainerStore, teamStore = teamStore)
 
                 Card(
                     modifier = Modifier
