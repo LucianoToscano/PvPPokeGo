@@ -1567,6 +1567,25 @@ AÇÕES PENDENTES:
 
 Documentos alterados: `docs/DIAGNOSTICO_EXPORTS_0.5.31_2026-10-09.md` (novo), checklist e este Guia Mestre. Estado da branch de feature deve ser verificado ao continuar.
 
+### 2026-10-09 — Proposta nova "Caixa-Preta PvPPokeGo" / Logcat / relatório antibug (SEM BUILD)
+
+ORIGEM: após o diagnóstico dos três anexos da v0.5.31, usuário perguntou se havia mais registros ou "cat Android" que pudessem ser incorporados ao app para exportar e trazer para análise. **Resposta: priorizar telemetria interna estruturada, e usar Logcat/Bugreport externos quando precisar investigar falhas de sistema**.
+
+ANÁLISE DIRETA DO CÓDIGO NA FEATURE 0.5.32:
+- `MainActivity.kt` linhas 57–96 contém exportador básico ZIP existente (`settings.json`, `battle_history.json`, `device.txt`, `README.txt`). ZIP de histórico é separado (linhas 98–135) com JSON/TXT/CSV.
+- `BattleHistoryRepository.kt` já dispõe de `recordDiagnostic`; `SettingsScreen.kt` já possui botões; `BattleOverlayService.kt` já emite eventos de diagnóstico e captura. Preservá-los, acrescentar somente trilha de *por que* uma decisão foi tomada (candidatos OCR, thresholds, matcher, confiança, rejeições, tempos).
+- Um APK comum Android 16 **não pode ler todo Logcat do SO ou de terceiros** por permissão `READ_LOGS`; não prometer isso nem solicitar root. Relatório oficial externo: Opções do desenvolvedor → Criar relatório de bugs (sujeito a dados sensíveis); ou computador/ADB. Fontes oficiais listadas no documento novo.
+
+ESPECIFICAÇÃO:
+- `docs/PROPOSTA_CAIXA_PRETA_DIAGNOSTICO_0.5.32.md` detalha UX recolhível, `Marcar problema agora`, export ZIP compatível com manifest + versionamento + eventos de timestamp monotônico, traces do OCR/espécie/forma/PC/confiança, rejeições, drift de captura/FPS, motor/estado, erros próprios, integridade da sessão e warnings 3×3.
+- Coleta OFF por padrão, registro circular limitado e amostrado, armazenamento local, imagem apenas **opt-in manual**, limpeza de identificadores/PII; nenhum envio remoto automático, evitar excesso no HUD e travamento do overlay por escrita em disco.
+- **Distinguir observação e correção:** alertas antibug não devem forçar troca de Pokémon nem fundir sessões sem evidência; devem manter estado válido/inconsistência visível, gerar diagnóstico e apoiar testes.
+- Evitar duplicar exportador básico ou modificar settings import/backups; manter HUD/painel/ícones e posições sem mudança.
+- Casos de aceite extraídos da v0.5.31: 7 sessões, 702 eventos, 1 vitória sem OCR, outros seis resultados ausentes, troca OCR aparentemente inconsistente, 4 sessões com ordem temporal não monotônica, divergência flag `auto_recognition` entre exportações.
+- DOCUMENTAÇÃO apenas, para futura implementação quando user aprovar; **nenhum código de produção, build, teste, APK ou release foi alterado**.
+
+Registro no checklist: `docs/CHECKLIST-PvPPokeGo-0.5.29.md`. Próximo chat deve começar pelo Guia Mestre e verificar HEAD real de `feature/team-recognition-modes-0.5.32`, sem retomar versão antiga por engano.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
