@@ -54,3 +54,12 @@ Continuação **sem reiniciar** após a primeira build 0.5.35 (run `37974565481`
 - `data/SpeciesCpPlausibilityPolicy.kt`, `GameDataRepository.kt`, `BattleOcrDetector.kt`, `BattleHistoryRepository.kt` e testes da primeira build mantidos. Sem alterações de posições/ícones/controles HUD, time Manual/Auto, OCR screenshot e backup.
 - Commit do espelho de build `cc8783f5a7e0e818d72d8df2046067e18d8bb688`; QA2 GitHub Actions https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37990550678. **Quando este checkpoint foi escrito, CI em espera/executando; não afirmar sucesso até verificar.**
 - A validação automática **não substitui** QA Samsung Android16 e não prova OCR/HP/escudos reais. Não incluir ativos/código de APK de terceiros. Recursos sociais online permanecem planejados, não entregues.
+
+
+## QA3 — integração explícita de formas regionais às reservas
+**Branch canônica:** `feature/verified-core-0.5.35-20261009`; **snapshot compilado final:** `LucianoToscano/PvPPokeGo-APK-Build@d63f24b08053955802d4ab3a5b492d688983ae0a`, workflow https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37991257400 .
+
+**Arquivos adicionais:** `engine/ReserveCardMatcher.kt` passa a receber `activeSpeciesId` **opcional**, priorizando forma exata antes de mesmo nome (retrocompatível com chamadas prévias); `engine/BattleEngine.kt` passa `playerSpeciesId` ao matcher; `ReserveCardMatcherTest.kt` cobre (a) Ninetales normal/Alolan com mesmo display name e PC ausente, (b) fallback com forma ativa inexistente sem classificar indevidamente como confirmado. `BattleCorrespondenceTracker.kt` também passa a usar referência nula segura e confiança **>=0.90** para considerar membro como âncora do time.
+
+**Evidências de QA:** run base 0.5.35 `37974565481` `success`; QA2 `37990550678` `success`; QA3 ainda pendente na criação deste adendo. Não confundir QA automatizado com execução em Samsung nem afirmar presença de funcionalidades sociais novas.
+
