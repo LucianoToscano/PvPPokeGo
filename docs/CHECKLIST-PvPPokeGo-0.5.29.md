@@ -320,3 +320,12 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] Calculadora dos custos exatos de poeira/doces/evolução via fonte atualizada e testes.
 - [ ] QA no celular: variabilidade de OCR, reserva/matcher, posições HUD, histórico e backup/restore.
 - [ ] Publicar APK com checksum e assinatura verificados apenas se o CI passar.
+
+
+### Conclusão de QA automatizada — Scanner 0.5.34 (2026-10-09)
+- [x] GitHub Actions público run `37917670306` `success`; testes e Gradle Standard debug concluídos.
+- [x] Artefato `11611096799` `PvPPokeGo-0.5.34-QA-debug` baixado; APK e ZIP íntegros, SHA256 conferido com arquivo do CI.
+- [x] Assinatura Android v2 validada no CI; entregue APK concreto `PvPPokeGo-0.5.34-QA-debug.apk`, 79.660.114 bytes, SHA256 `45e24fdf5d6c9a3c899bda7e08cec8a826231201c1f07f30604c99d3f7bc6d3e`.
+- [ ] QA Samsung e compatibilidade de assinatura com versão instalada; fazer backup das configurações antes de tentar atualização.
+- [ ] Validar scanner com imagens reais, especialmente IV Avaliar, correção de nomes PT-BR, Auto/Manual, HP/overlay/reservas.
+- [ ] Implementar scanner da avaliação numérico, live scan e custos exatos numa fase seguinte; *não* tratá-los como prontos no APK 0.5.34.
