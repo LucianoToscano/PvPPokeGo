@@ -1,3 +1,9 @@
+## 2026-10-09 — Confirmação importante: "Projeto do Regibot_v2.3.3.0 Criação Original.apk" é IDENTICO a Regibot_v2.3.32.apk
+
+Upload descrito como compilação original Grok foi comparado localmente com Regibot_v2.3.32.apk já analisado. **Tamanho dos dois: 52.937.403 bytes; SHA-256 idêntico `6f08a94c19b7d84b42e412d51cbe5f583732606f3681bee5d7b323b344bdb6b7`; comparação binária `cmp -s` exit 0; ZIP íntegro, 940 itens.** É O MESMO APK com nome diferente; package `com.regitools.regibot` e versionName interno **2.3.32**, apesar do nome da cópia citar `2.3.3.0`. Isto **NÃO é entrega de código-fonte original**. Não analisar como versão separada, nem inferir mudanças inexistentes. Estudo de recursos e salvaguardas já registrado em [`ESTUDO_REGIBOT_2.3.32_PVPPokeGo.md`](ESTUDO_REGIBOT_2.3.32_PVPPokeGo.md), com adendo de identidade binária. **Nenhuma alteração funcional nem APK do PvPPokeGo**. Documentação privada apenas.
+
+---
+
 ## 2026-10-09 — REGIBOT 2.3.32 (APK DO PRÓPRIO USUÁRIO) INSPECIONADO — PESQUISA E ROADMAP, SEM BUILD
 
 Usuário informou que criou o `Regibot_v2.3.32.apk` e autorizou análise. Arquivo comprovadamente examinado na sessão: `52.937.403` bytes, SHA256 `6f08a94c19b7d84b42e412d51cbe5f583732606f3681bee5d7b323b344bdb6b7`, ZIP integralmente testado, Android manifest package `com.regitools.regibot` versão 2.3.32 code45, minSdk26/target36. Análise **ESTÁTICA SEM INSTALAÇÃO OU EXECUÇÃO**; nenhum segredo, token, binário, asset ou código do Regibot copiado para repo.
