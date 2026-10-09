@@ -70,6 +70,31 @@ class MainActivity : ComponentActivity() {
                         entry("battle_history.json", historyRepo.exportJson())
                         entry("runtime-events.log", AppDiagnosticLog.exportRuntimeEvents())
                         entry("logcat-app.txt", AppDiagnosticLog.exportOwnLogcat())
+                        // Non-destructive validation: never relabel unknown outcomes or
+                        // merge sessions here. Report suspicious timelines by position only.
+                        entry("integrity-warnings.txt", buildString {
+                            val sessions = historyRepo.loadHistory()
+                            appendLine("PvPPokeGo: auditoria de integridade (sem alterar histórico)")
+                            appendLine("Sessões: ${sessions.size}")
+                            sessions.forEachIndexed { index, session ->
+                                val inversions = session.events.zipWithNext().count { (a, b) ->
+                                    b.elapsedMs < a.elapsedMs
+                                }
+                                val seconds = (session.endedAtEpochMs - session.startedAtEpochMs)
+                                    .coerceAtLeast(0L) / 1000
+                                if (inversions > 0 || session.result.isNullOrBlank() ||
+                                    (seconds < 5 && session.result != null)
+                                ) {
+                                    appendLine(
+                                        "Sessão ${index + 1}: ${session.events.size} eventos, " +
+                                            "duração ${seconds}s, inversões ${inversions}, " +
+                                            "resultado ${if (session.result.isNullOrBlank()) "indeterminado" else "registrado"}"
+                                    )
+                                }
+                            }
+                            appendLine("Este relatório aponta anomalias; não comprova erro de OCR.")
+                        })
+
                         entry(
                             "device.txt",
                             buildString {
