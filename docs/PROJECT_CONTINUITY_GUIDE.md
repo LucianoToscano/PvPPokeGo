@@ -1,3 +1,15 @@
+## 2026-10-09 — IMPLEMENTAÇÃO 0.5.35: VALIDAÇÃO PC/ESPÉCIE + HISTÓRICO ÍNTEGRO (BUILD QA EM ANDAMENTO)
+
+**Guia operacional:** [IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md](IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md). Branch privada separada `feature/verified-core-0.5.35-20261009`, a partir de 0.5.34 que continua preservada. Espelho público isolado para build `LucianoToscano/PvPPokeGo-APK-Build@preview/verified-core-0.5.35-20261009`. Código versionName=0.5.35 e code40.
+
+**ALTERAÇÕES REALMENTE APLICADAS:** (1) `SpeciesCpPlausibilityPolicy` verifica PC matematicamente permitido pelas estatísticas locais, IV15/15/15 e CPM até nível51, com fallback conservador para catálogo ausente; (2) `GameDataRepository.isSpeciesCpPlausible`; (3) cards de batalha, equipe selecionada, fallback OCR 3 slots filtram falsos pares identidade+CP sem alterar o motor, deixam log anônimo `species_cp_impossible`; (4) `BattleHistoryRepository` nunca grava `elapsedMs` regressivo após OCR assíncrono, registra motivo do finish em todas as rotas, descarta fragmento sem identidade nem combate observável; (5) testes `SpeciesCpPlausibilityPolicyTest` com casos reais Wingull1485 impossível, Vanillite1485 impossível e Cramorant1485 possível; (6) Gradle 0.5.35 /40.
+
+**BUILD/TESTES:** GitHub Actions público isolado [run 37974565481](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37974565481). Em execução quando este bloco foi criado; verificar status **antes** de declarar APK compilado. O source do espelho foi sincronizado só para arquivos necessários; nenhum arquivo pessoal/backup do jogador foi publicado. Não confundir build/CI com QA físico Samsung Android16.
+
+**NÃO IMPLEMENTADO NESTE PATCH:** comunidade, backend de amigos/clãs, convites de reide, comércio, calibração automática barras IV Avaliar, login/account, injeções de outros APKs; estudos Calcy/Poke Genie/PokeRaid/GO Hub/Regibot seguem como backlog, não chamar de recursos entregues. P0 ainda precisa validar escudos e Charged OCR x energia (auditoria 0.5.33 encontrou todos shields2 e 14/20 charged inferidos). Preservados HUD, controles, iconografia, scanner 0.5.34, overlay, HP fantasma, modos de equipe, backup/posições.
+
+---
+
 ## 2026-10-09 — AUDITORIA DOS EXPORTS REAIS 0.5.33 (CONFIG / DIAGNÓSTICO / HISTÓRICO / APK)
 
 **Documento integral:** [AUDITORIA_EXPORTS_0.5.33_2026-10-09.md](AUDITORIA_EXPORTS_0.5.33_2026-10-09.md). O usuário enviou 4 arquivos físicos e todos foram lidos/validados. ZIPs e APK íntegros; config do ZIP de diagnóstico idêntico byte a byte ao JSON individual; JSON de histórico idêntico entre ZIPs; CSV possui exatamente **464 eventos e 7 sessões**. Não copiar anexos brutos ao repositório por privacidade. Hashes/proveniência constam no estudo.
