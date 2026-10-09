@@ -8,7 +8,8 @@
 - Referência histórica: https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.26/docs/PROJECT_CONTINUITY_GUIDE.md
 - Continuidade da feature: [PROJECT_CONTINUITY_GUIDE.md](PROJECT_CONTINUITY_GUIDE.md).
 - Dependência funcional: [TEAM_RECOGNITION_MODES_0.5.32.md](TEAM_RECOGNITION_MODES_0.5.32.md) para Automático/Manual.
-- Captura do usuário: tela "Configurações", seções **Gerais, PvP IV, Gerador de Nomes, Formato da Data Pego, Simulador de Batalha**, mais os campos **Nível do Treinador (54)** e **Equipe (Mystic)**. Os valores **54/Mystic são exemplo da captura**, não são dados verificados sobre o usuário e NÃO são escritos como valores default.
+- Captura do usuário: tela "Configurações", seções **Gerais, PvP IV, Gerador de Nomes, Formato da Data Pego, Simulador de Batalha**, mais os campos **Nível do Treinador (54)** e **Equipe (Mystic)**.
+- Captura visual original arquivada no Google Drive oficial: https://drive.google.com/file/d/14EgQT-TBmqzOC0vdIThI9nuzcTa1_P0L/view?usp=drivesdk (referência de layout, não base de dados do perfil). Os valores **54/Mystic são exemplo da captura**, não são dados verificados sobre o usuário e NÃO são escritos como valores default.
 
 ## Design escolhido
 
