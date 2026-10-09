@@ -1,3 +1,17 @@
+## 2026-10-09 — Continuação executada: correspondência de batalhas e reservas 0.5.36
+
+**NÃO REINICIAR.** Pedido expresso: "Continue exatamente do ponto em que você parou — Resolvendo lógica de correspondência de batalhas"; preservar tudo e compilar com testes. Fonte canônica: `feature/battle-correspondence-0.5.36-20261009`, derivada da `feature/verified-core-0.5.35-20261009`. Versão 0.5.36 versionCode41. Detalhes: [`IMPLEMENTACAO_CORRESPONDENCIA_BATALHAS_0.5.36.md`](IMPLEMENTACAO_CORRESPONDENCIA_BATALHAS_0.5.36.md).
+
+**ARQUIVOS EM CÓDIGO alterados:** `engine/BattleCorrespondenceTracker.kt`, `engine/ReserveCardMatcher.kt`, `engine/BattleEngine.kt`, `overlay/BattleOverlayService.kt`, `data/BattleHistorySegmentMatcher.kt`, `data/BattleHistoryRepository.kt`, `app/build.gradle.kts` e 3 testes: `BattleCorrespondenceTrackerTest.kt`, `ReserveCardMatcherTest.kt`, `BattleHistorySegmentMatcherTest.kt`.
+
+**CORREÇÕES VERIFICÁVEIS POR REGRA:** (a) novas partidas só após gap efetivo + dois frames incompatíveis estáveis; latch do gap entre detecções consecutivas enquanto o serviço renova `lastBattleEvidenceAtMs`; (b) apenas membro confiável ancora continuidade do próprio time; (c) reserva do card usa CP, forma/Dex coerentes e identidade exata do ativo, conflito não é confirmado nem por eliminação; não cadastrar membro com CP impossível ou pertencente ao slot de outra espécie; (d) evento OCR abaixo 0.78 não muta motor nem histórico; (e) histórico fragmentado requer interrupção e retomada + identidade overlap, sem fundir partidas vazias ou rematches; leitura do histórico não regrava material bruto. Testes originais de CP impossível Wingull/Vanillite e novo teste Cramorant preservados, com 3 suítes ampliadas.
+
+**BUILD:** espelho público existente `LucianoToscano/PvPPokeGo-APK-Build`, branch `preview/battle-correspondence-0.5.36-20261009`, HEAD `4e9dbfd7057001989fb9b6d61b14d554d0abc283` (arquivos compiláveis conferidos por hashes com source privado). Run definitiva do último snapshot: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37991096113 . A run `37990812354` é anterior à correção de latch/CP reserva; **não usar seu APK para entrega final**. Acompanhar até teste + compilação + artefato + checksum. Não dizer que passou antes de concluir.
+
+**CONTINUAM PENDENTES:** QA físico Android16 Samsung; OCR de escudos/resultados e previsão HP com video/log; Avaliar IV 0–15 calibrado, scanner live, comunidade/torneios/reides/trocas, backlog de outros APKs. Esses itens não foram incorporados no patch de confiabilidade e não devem ser anunciados como concluídos. Preservar todos os backups/posições do HUD, scanner 0.5.34, ícones, previsão HP 0.5.33 e configurações. Nenhum dado pessoal do usuário ou APK de terceiros copiado ao repositório público.
+
+---
+
 ## 2026-10-09 — PvPPokeGo 0.5.35 COMPILADO, TESTADO E ENTREGUE
 
 **CONFIRMAÇÃO REAL:** espelho isolado [run 37974565481](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37974565481), job 113969447354, **completed/success**. Android SDK 36, Gradle 8.11.1 e Java 17, fingerprints/atlas offline, testes `testStandardDebugUnitTest` e `assembleStandardDebug`, integridade ZIP APK, assinatura v2 e upload do artifact **TODOS PASSARAM**.
