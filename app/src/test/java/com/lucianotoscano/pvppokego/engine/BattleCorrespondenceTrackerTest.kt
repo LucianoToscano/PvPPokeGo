@@ -233,4 +233,72 @@ class BattleCorrespondenceTrackerTest {
         )
     }
 
+    @Test
+    fun repeatedImpossiblePairWithoutVisibilityGapCannotStartNewMatch() {
+        val tracker = BattleCorrespondenceTracker()
+        val context = BattleCorrespondenceTracker.Context(
+            activePlayer = team[0],
+            activeOpponent = id("Sneasel", 1465, "sneasel"),
+            ownTeam = team,
+            knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+            inactiveForMs = 300,
+            sessionAgeMs = 75_000
+        )
+        val suspected = BattleCorrespondenceTracker.Observation(
+            player = id("Vanillite", 1485, "vanillite"),
+            opponent = id("Wingull", 1485, "wingull"),
+            pairedCards = true
+        )
+        assertEquals(BattleCorrespondenceTracker.Decision.HOLD_CURRENT,
+            tracker.observe(context, suspected, 10_000))
+        assertEquals(BattleCorrespondenceTracker.Decision.HOLD_CURRENT,
+            tracker.observe(context, suspected, 10_800))
+        assertEquals(false, tracker.hasPendingNewBattleCandidate)
+    }
+
+    @Test
+    fun confirmedGapCanContinueEvenAfterEvidenceGapCounterResets() {
+        val tracker = BattleCorrespondenceTracker()
+        val context = BattleCorrespondenceTracker.Context(
+            activePlayer = team[0],
+            activeOpponent = id("Sneasel", 1465, "sneasel"),
+            ownTeam = team,
+            knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+            inactiveForMs = 6_000,
+            sessionAgeMs = 45_000
+        )
+        val frame = BattleCorrespondenceTracker.Observation(
+            player = id("Azumarill", 1498, "azumarill"),
+            opponent = id("Lanturn", 1497, "lanturn"),
+            pairedCards = true
+        )
+        assertEquals(BattleCorrespondenceTracker.Decision.INSUFFICIENT,
+            tracker.observe(context, frame, 20_000))
+        // Service updates lastBattleEvidenceAtMs on the first frame; second
+        // frame therefore has a short gap, but it is the same candidate.
+        val shortGap = context.copy(inactiveForMs = 600)
+        assertEquals(BattleCorrespondenceTracker.Decision.NEW_BATTLE,
+            tracker.observe(shortGap, frame, 20_600))
+    }
+
+    @Test
+    fun oneSidedEnemyNeedsStableSecondFrameAndDoesNotSplitBattle() {
+        val tracker = BattleCorrespondenceTracker()
+        val context = BattleCorrespondenceTracker.Context(
+            activePlayer = team[0],
+            activeOpponent = id("Sneasel", 1465, "sneasel"),
+            ownTeam = team,
+            knownOpponents = listOf(id("Sneasel", 1465, "sneasel")),
+            inactiveForMs = 500,
+            sessionAgeMs = 50_000
+        )
+        val partial = BattleCorrespondenceTracker.Observation(
+            player = null, opponent = id("Lanturn", 1497, "lanturn"), pairedCards = false
+        )
+        assertEquals(BattleCorrespondenceTracker.Decision.HOLD_CURRENT,
+            tracker.observe(context, partial, 30_000))
+        assertEquals(BattleCorrespondenceTracker.Decision.SWITCH_WITHIN_BATTLE,
+            tracker.observe(context, partial, 30_650))
+    }
+
 }
