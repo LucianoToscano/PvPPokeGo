@@ -2,7 +2,7 @@
 **Data:** 2026-10-09
 **Status:** especificação funcional registrada, NÃO IMPLEMENTADA, sem build/APK novo.
 **Base canônica preservada:** `feature/diagnostics-hp-ui-0.5.33`, APK QA 0.5.33, código legado do overlay e os controles/posições preservados.
-**Evidência do usuário:** duas capturas da ficha do Cramorant e arquivo de referência `Poke Genie -Remote Raid IV PvP v8.19.0_(416) (Premium) (Fixed) (...)-TekMods.com.apk`. Material APK modificado não oficial: tratado como arquivo NÃO CONFIÁVEL, inspecionado somente como ZIP de forma estática; NUNCA executado/instalado, não copiar código pago, bibliotecas proprietárias, assets/arte/traduções/banco de dados do APK, nem adicionar seu binário ou arquivo ao repositório público ou ao APK PvPPokeGo.
+**Evidência do usuário:** duas capturas da ficha do Cramorant e arquivo de referência `Poke Genie -Remote Raid IV PvP v8.19.0_(416) (Premium) (Fixed) (...)-TekMods.com.apk`. **Esclarecimento posterior de 2026-10-09:** o usuário afirma que adicionou pessoalmente "Premium" ao nome apenas por estética e que o aplicativo é uma versão normal. O nome do arquivo, isoladamente, NÃO é prova de modificação, origem oficial, autenticidade ou segurança. Podemos inspecionar e estudar o APK fornecido como referência técnica, sem executá-lo no ambiente. Não assumir direitos de redistribuição de código, bibliotecas proprietárias, assets/arte/traduções/datasets de terceiros apenas pelo nome ou pela permissão do usuário para analisar.
 
 ## Pedido literal
 “Alguma forma de por para scanear como no poke genie e sanear o pokemon 1, 2 e 3.. e ele ja preencher todos os Campos .. E algo mais que possamos aproveitar no apk do genie.”
@@ -55,9 +55,13 @@ Funcionalidades para desenvolver com implementação própria e fonte compatíve
 ## Portas de qualidade antes de liberar APK novo
 - Não modificar original 0.5.33/QA/debug ou positions HUD. Criar branch funcional separada, manter snapshots e docs canônicas.
 - Casos de teste: screenshot Cramorant 1485/126, duas imagens mesma vaga, troca de Pokémon entre imagens, duas espécies com nomes semelhantes, app em PT-BR/EN, escudo/HP não misturados com o cadastro, IV ausente, appraisal incompleta, Mega/Sombroso, ligas 1500/2500/sem limite, duplicados, captura sem consentimento, cache e memória de Bitmap.
-- Rodar unit/integration/compile Standard; quando APK pedido, usar **espelho público existente** `LucianoToscano/PvPPokeGo-APK-Build` com SHA de fonte preservada e apenas snapshot sanitizado (NUNCA espelhar APK modificado).
+- Rodar unit/integration/compile Standard; quando APK pedido, usar **espelho público existente** `LucianoToscano/PvPPokeGo-APK-Build` com SHA de fonte preservada e apenas snapshot sanitizado (NUNCA espelhar o APK de referência de terceiro sem licença/verificação de direitos).
 - QA em Samsung do usuário, validar telas/posição do overlay. Nada nesta proposta foi implementado, compilado ou instalado.
 
 ## Segurança e respeito a direitos
-- O APK fornecido tem nome de distribuição “Premium / Fixed / TekMods”, **não oficial**; a análise estática não avalia se contém malware, alterações de assinatura ou patch de licença. Não instalar/executar no ambiente de trabalho, não usar para burlar controles Premium nem replicar ativos comerciais.
+- **Correção solicitada pelo usuário:** "Premium" no nome foi inserido por ele mesmo; não se deve inferir que o APK é um mod/crack apenas por "Premium"/"Fixed" no nome. A procedência e a assinatura original não foram autenticadas nesta análise estática. É permitido usar o arquivo enviado para pesquisar estrutura/recursos e extrair requisitos de funcionalidades. Não instalar/executar ou redistribuir esse APK em nossos builds sem necessidade e sem confirmação de direitos; não copiar ativos/código de terceiros nem presumir autorização de sublicença.
 - Não extrair ou reutilizar classes, recursos visuais, textos e bancos de dados de terceiros como se fossem nossos. Reproduzir apenas **ideias e comportamentos gerais**, com algoritmos próprios e dados com licença compatível.
+
+
+### 2026-10-09 — Retificação de procedência/nome do arquivo
+O usuário esclareceu: “Fui eu quem renomeei para Premium... pode usar ela sim... Mas é uma versão normal”. Portanto, a classificação anterior de “APK modificado não oficial” com base apenas no filename foi **indevida** e foi retirada. O arquivo passa a ser tratado como **APK enviado pelo usuário, de procedência não verificada tecnicamente, autorizado pelo usuário para análise e referência**. Nenhuma conclusão sobre assinatura oficial é implicada. Prosseguiremos com inspeção estática, comparação funcional e futura implementação própria do scanner 1/2/3, sem alterar o app de batalha até autorização específica de implementação.
