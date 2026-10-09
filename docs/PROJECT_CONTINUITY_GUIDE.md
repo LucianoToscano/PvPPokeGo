@@ -1,3 +1,13 @@
+## 2026-10-09 — 0.5.36 APK QA PRONTO E VERIFICADO
+
+Build FINAL aprovado: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37992150961 (**completed/success**). Branch pública isolada `preview/battle-correspondence-offline-0.5.36-20261009`, commit `7fd5532cac539fc81559fee44079f88e8d297f33`; dados PvPoke locais e 3 assets de atlas/fingerprints preservados da 0.5.35 **com SHA verificado**. Correções do matcher de batalha, distinção de forma, time e reservas, desambiguação do par de candidatos, confirmação de troca e integridade histórica com testes do núcleo aprovados. Teste Kotlin de `BattleHistorySegmentMatcherTest.kt` corrigido quanto aos quatro parâmetros de evento; `BattleCorrespondenceTrackerTest.kt` agora confirma comportamento conservador de duas evidências em troca simultânea. Não afetar as versões anteriores nem misturar com funcionalidades ainda não implementadas.
+
+**Artifact:** `PvPPokeGo-0.5.36-QA-debug.apk`, 79.676.502 bytes, SHA256 `e1ff7e2ac9e0a5f6e940f1d334bb2c7722409d7018bc3781253652a0679c1a94`, artifact `11645731162`, APK e ZIP validados, assinatura v2=true, 1 signer, versão 0.5.36 code41, link na sessão `sandbox:/mnt/data/PvPPokeGo-0.5.36-QA-debug.apk`. `testStandardDebugUnitTest` e `assembleStandardDebug` **SUCCESS**. **Não houve QA físico Samsung**: salvar backup antes de trocar APK QA/debug, conferir chave de assinatura e testar reconhecimento 3x3, troca de formas regionais, continuidade, HUD, HP, escudos e histórico.
+
+**Documentação detalhada:** [BUILD_0.5.36_OFFLINE_ALTERNATIVE.md](BUILD_0.5.36_OFFLINE_ALTERNATIVE.md). O mirror público é apenas compilação; projeto original fica PRIVADO, sem transferir dados do jogador. **Pendente** módulo Comunidade completo/backend, scanner Avaliar calibrado e correções com evidência física para escudos/charged OCR; não alegar essas funcionalidades como prontas.
+
+---
+
 ## 2026-10-09 — Continuação da correspondência 0.5.36 com fallback de build
 
 **Não reiniciar trabalho nem compilar de mirror novo:** o estudo/patch de correspondência está em `feature/battle-correspondence-0.5.36-20261009`. Para o espelho de build, a versão `preview/battle-correspondence-0.5.36-20261009` teve atraso na tarefa de baixar sprites de PokeMiners. Foi derivado o mirror auxiliar `preview/battle-correspondence-offline-0.5.36-20261009` **no repositório público de build já existente**, usando apenas `gh run download` e o SHA256 conhecido do APK QA 0.5.35 para recuperar atlas/fingerprints e preservar todos os ícones. Fonte e espelho privado/público continuam separados.
