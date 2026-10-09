@@ -32,3 +32,12 @@ Workflow isolado `.github/workflows/verified-core-0.5.35.yml`, run GitHub Action
 - Ampliar diagnósticos relevantes do próprio processo sem logs de outros apps, permissão excessiva ou dados privados.
 - Comunidade/reides/trocas exige produto separado e backend seguro; seguir roadmap e consentimentos.
 
+
+## RESULTADO VERIFICADO DA COMPILAÇÃO — 2026-10-09
+- Workflow público isolado **completou com conclusão SUCCESS**: [run 37974565481](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37974565481), job **113969447354**.
+- SDK Android 36, Java 17, Gradle 8.11.1, pacotes offline PvPoke e atlas visual: todas as etapas SUCCESS.
+- **Testes unitários** `:app:testStandardDebugUnitTest` e **compilação** `:app:assembleStandardDebug`: SUCCESS.
+- Verificação APK ZIP: sem erros; assinatura `apksigner verify` **v2=true, 1 signatário**.
+- Artifact: [`PvPPokeGo-0.5.35-QA-debug`](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37974565481), artifact ID **11638566198**; vence **2026-11-08** no armazenamento do GitHub Actions.
+- Arquivos entregues na conversa: `PvPPokeGo-0.5.35-QA-debug.zip` (ZIP artifact) e `PvPPokeGo-0.5.35-QA-debug.apk` (APK extraído); **79.660.114 bytes**; SHA-256 do APK **`4b52dc60ea7ee29da7363a3e061bb72d44aa1377cc1a1106d25b6a54f9257172`**. Confere exata/independentemente com `SHA256SUMS.txt` do runner. APK 0.5.35 **não é byte-a-byte igual** ao 0.5.34 (SHA deste: `45e24fdf5d6c9a3c899bda7e08cec8a826231201c1f07f30604c99d3f7bc6d3e`), embora tenha mesmo tamanho. ZIP do APK também testado como íntegro.
+- **QA no aparelho não realizado**: não afirmar combate/OCR/escudo/scanner de captura testados no Samsung. Pode exigir reinstalação se assinatura divergir; exportar backup primeiro. Não usar dados 0.5.33 sem revisar privacidade.
