@@ -1427,6 +1427,53 @@ PRÓXIMO PASSO:
 - Sempre reler este guia, checklist e último HEAD real antes de mexer em código, preservar histórico em releases anteriores.
 
 
+### 2026-10-09 — Referência Configurações do Treinador: perfil, PvP IV, nomes, datas e simulador (sem build)
+
+ORIGEM:
+- Novo print fornecido pelo usuário: tela de "Configurações" contendo **Gerais, PvP IV, Gerador de Nomes, Formato da Data Pego, Simulador de Batalha**, campo **Nível do Treinador** e seleção **Equipe**.
+- Os valores `54` e `Mystic` no print **não são necessariamente informações do usuário**; não copiá-los como padrão para o perfil.
+- Consulta prévia do guia canônico `release/0.5.29` e referência histórica `release/0.5.26`. Contrato principal: preservar tudo, implementar em branch, registrar, **não compilar/não gerar APK até nova ordem**.
+
+BRANCH/ESTADO DE PARTIDA:
+- Repositório: `LucianoToscano/PvPPokeGo`.
+- Feature corrente: `feature/team-recognition-modes-0.5.32`, continuando o modo Manual/Automático de Sua Equipe (HEAD anteriormente registrado `54d34253d711523cccd1a9d0f2a592152fc9605e`; HEAD deve ser consultado novamente no próximo chat).
+- A `release/0.5.29` e as branches de Arena `0.5.30` e equipe `0.5.31` **não foram mescladas nem substituídas**.
+- A base visual HUD V03/0.5.17, ícones do atlas, OCR, matcher, energia e posições permanecem intocados por este adendo.
+
+MUDANÇAS EM CÓDIGO:
+1. `app/src/main/java/com/lucianotoscano/pvppokego/data/TrainerTools.kt`: entidades `TrainerFaction`, `CatchDateDisplay`, `PokemonNameStyle`, política pura de validação e geração de nomes, IVs registrados e formato de data.
+2. `app/src/main/java/com/lucianotoscano/pvppokego/data/TrainerPreferencesRepository.kt`: guarda nível opcional do treinador, facção (Mystic/Valor/Instinct ou não informada), estilo de nomes e formato de data no mesmo arquivo local de configurações; nenhum login/conta oficial.
+3. `app/src/main/java/com/lucianotoscano/pvppokego/ui/TrainerSettingsPanel.kt`: novo card recolhível no app com cinco opções:
+   - **Gerais**: nível do treinador editável e equipe pessoal (não sincronizados com Pokémon GO);
+   - **PvP IV**: mostra apenas IVs que o jogador já cadastrou nos três Pokémon em Sua Equipe; **não reivindica rank PvP calculado**;
+   - **Gerador de Nomes**: configura estilo, gera prévia com dados conhecidos e botão que copia para clipboard do Android, sem modificar nomes dentro do jogo;
+   - **Formato da Data Pego**: `dd/MM/yyyy`, `yyyy-MM-dd`, `dd/MM/yy` e prévia ilustrativa de hoje; **não usa data real de captura ainda**;
+   - **Simulador de Batalha**: primeira funcionalidade é comparador OFFLINE de vantagens de tipos entre um dos três aliados cadastrados e Pokémon adversário selecionado via `gamemaster.json`, utilizando `TypeChart` existente. Rotulado como **prévia de tipos e NÃO simulação de combate por turnos ou resultado**.
+4. `app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt`: integra o novo card após Sua Equipe/Arena sem duplicar controles do HUD e sem alterar os modos de reconhecimento.
+5. `app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt`: incluir `trainer_profile_level_v1`, `trainer_profile_faction_v1`, `trainer_pokemon_name_style_v1`, `trainer_catch_date_display_v1` no allowlist de import/export JSON, mantendo posições e outros dados.
+6. `app/src/test/java/com/lucianotoscano/pvppokego/data/TrainerToolsTest.kt`: testes Kotlin escritos para valores opcionais, formato, nomes/IVs, sem execução.
+7. `docs/TRAINER_SETTINGS_0.5.32.md` e `docs/CHECKLIST-PvPPokeGo-0.5.29.md` com implementação, QA pendente e roadmap.
+
+LIMITES:
+- Ranking PvP IV por combinação exata de espécie/nível/forma/IV/PC/limite de liga é trabalho futuro; não confundir soma de IVs com classificação.
+- Simulador real deve modelar fast/charged moves, turnos, escudos, estados, HP e energia, com motor auditado/testes; a comparação de tipos atual é **somente apoio exploratório**, não diz quem ganha.
+- Não importar dados do Pokémon GO nem inferir nível/facção/data de captura a partir de imagem de outro app, a menos que fonte confiável e consentimento.
+- Nenhuma alteração deve preencher identificação OCR, histórico de vitórias, ranking Arena ou dados de adversário.
+- Manter UX clean: opções recolhidas na tela inicial, e eventual futura aba Configurações exige validação de navegação e nenhuma perda de funções.
+
+TESTES E ENTREGA:
+- **Nenhum teste Kotlin, Android, CI, Gradle, build, APK, assinatura, instalação ou QA Samsung executado para este adendo.** Os testes acima são código criado e documentado, não passaram nem falharam.
+- APK QA mais recente realmente entregue permanece `0.5.31`; `0.5.32` é somente código de desenvolvimento.
+- Não disparar workflows, não copiar/renomear APK antigo e não criar nova release até autorização explícita.
+
+STATUS:
+**IMPLEMENTAÇÃO DE INTERFACE + PERSISTÊNCIA/PRÉVIA INICIAL REGISTRADAS NO GITHUB E DOCUMENTAÇÃO. TESTES/BUILD PENDENTES A PEDIDO DO USUÁRIO.**
+
+PRÓXIMOS PASSOS:
+- Continuar acumulando mudanças e registrando no Guia Mestre.
+- Quando autorizado: rodar testes `TrainerToolsTest`, modo de equipe, backup, Compose/Android e QA real em dispositivo, depois considerar build.
+- Em outra etapa criar classificador real de PvP IV e simulador por turnos, sem regressões nos mecanismos existentes.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
