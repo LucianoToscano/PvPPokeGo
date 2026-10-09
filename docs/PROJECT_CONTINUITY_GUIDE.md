@@ -1543,6 +1543,30 @@ PRIORIZAÇÃO / NÃO EXECUTADO:
 
 PRÓXIMO CHAT: abrir esta análise e o último registro do Guia, verificar HEAD real, preservar todas as versões e NÃO iniciar build/apk espontaneamente.
 
+### 2026-10-09 — Novo diagnóstico REAL da 0.5.31 (3 anexos JSON/ZIP), sem build e sem copiar dados brutos
+
+Pedido contextual: usuário anexou `PvPPokeGo-0.5.31-config.json`, `PvPPokeGo-0.5.31-diagnostico.zip` e `PvPPokeGo-0.5.31-historico.zip` após análise do projeto. Feita inspeção estática sem restaurar, ativar, compilar ou gerar APK.
+
+**RELATÓRIO DE ORIGEM E PROVAS:** `docs/DIAGNOSTICO_EXPORTS_0.5.31_2026-10-09.md` (hashes, formato, indicadores, QA pendente). Os arquivos de entrada contêm dados de jogo, aparelho e ajustes de HUD: NÃO foram publicados em bruto no repositório/Drive, somente métricas para depuração. Preserve as posições de HUD e não regrave preferências.
+
+EVIDÊNCIAS REALMENTE CONFERIDAS:
+- Ambos os ZIPs contêm `battle_history.json`/`historico.json` idênticos byte a byte, SHA256 `f395abee65fc32cb508c6279a1923a3ffca57e7ba0cc92f9abaa6bb717682242`. ZIP de histórico contém também versão legível e CSV.
+- **7 sessões, 702 eventos**; CSV exatamente 702 registros e 7 IDs. **1 resultado Vitória, 6 sem resultado** (`null`). Não usar 1/7 como taxa de vitórias, nem contabilizar `null` como derrota.
+- Uma vitória de somente **3,7s** não contém identificação de Pokémon nem OCR; duas sessões adicionais sem identidades e sem OCR. Isso sugere investigar a segmentação/associação de resultado, não prova bug único.
+- Três encerramentos por 28s sem evidência; dois por seleção de time; um por novo OCR; um por resultado. Há sessões de ~843s e ~507s com mais espécies atribuídas a cada lado do que o limite de três da batalha; podem incluir OCR errado, retenção temporal ou fragmentos indevidamente agrupados.
+- **34 trocas** têm fonte OCR e rótulo `CONFIRMADO`; porém a consistência de identidades em múltiplos minutos não está verificada por vídeo. Em **4 sessões** os eventos não estão ordenados crescentemente por `elapsedMs`.
+- `auto_recognition=false` está no `settings.json` do diagnóstico (35 chaves), mas ausente no backup separado (34 chaves). Isso **não demonstra** a configuração efetiva durante cada partida. O novo `team_recognition_mode_v1` da feature 0.5.32 naturalmente não aparece no backup 0.5.31.
+- A equipe salva `manual_team_v1` difere de parte dos nomes vistos no histórico; o modo de equipe não estava implementado em 0.5.31. Não imputar definitivamente um erro ou afirmar que 0.5.32 já corrigiu antes de QA.
+
+AÇÕES PENDENTES:
+1. **P0** QA e testes de segmentação início/fim, telas de resultado, seleção e reinício, rosters 3×3 e equipe divergente.
+2. **P0** integração do modo manual/automático com OCR/slots e preferência global, confirmando regra de não sobrescrever equipe declarada e não inventar ativo.
+3. **P1** distinguir `OCR CONFIRMADO` verdadeiro de evento candidato/estimado; preservar fonte e relógio; ordenar exportação e verificar motivos de reservas `DESCONHECIDO`.
+4. Validar em Samsung com captura conhecida e cenário rotulado; só então alterar/compilar, se o usuário autorizar.
+5. Manter `release/0.5.29` e último APK 0.5.31 sem alterações. Nesta etapa: **DOCUMENTAÇÃO SOMENTE — ZERO BUILD/TESTES KOTLIN/APK**.
+
+Documentos alterados: `docs/DIAGNOSTICO_EXPORTS_0.5.31_2026-10-09.md` (novo), checklist e este Guia Mestre. Estado da branch de feature deve ser verificado ao continuar.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
