@@ -1,3 +1,18 @@
+
+## 2026-10-09 — Solicitação de Scanner 1/2/3 e referência ao APK Poke Genie (v0.5.34, somente planejamento)
+
+O usuário apresentou duas capturas da ficha do **Cramorant** e um APK de terceiros nomeado “Poke Genie ... Premium ... Fixed ... TekMods.com.apk”, pedindo scanner similar para as vagas Pokémon 1, 2 e 3 da tela SUA EQUIPE, com preenchimento automático dos campos, e mais ideias funcionais do Genie.
+
+**Decisão técnica:** a primeira fase deve reutilizar **ML Kit**, `BattleOcrDetector`, `TeamBuilderPanel`, `TeamSetupRepository`, `ManualTeamPolicy`, `gamemaster.json`, nomes de golpes PT-BR e o modo Manual/Automático existentes, sem sobreposição direta de captura em outros apps sem consentimento. Fluxo previsto: selecionar vaga -> importar 1 ou 2 screenshots -> extrair campos com confiança/fonte -> opcional screenshot “Avaliar” para IV -> prévia editável -> salvar vaga -> escolher equipe atual depois dos 3. Captura em tempo real por MediaProjection consentida fica fase posterior, após QA e preservação do HUD.
+
+**Evidência exemplo das imagens:** Cramorant PC 1485, PS 126/126, feminino, Voador/Água, Bicada, Mergulho, Voar. Indicadores 6/9/14 parecem parte do apelido, não comprovam IVs; requerem avaliação oficial ou confirmação manual. As formas Engolidora/Devoradora são efeitos transitórios de batalha e NÃO duas espécies diferentes no cadastro permanente.
+
+**APK modificado de terceiros:** ZIP inspecionado de modo estático apenas, sem execução/instalação. Contém nomes de recursos `ivision_overlay`, `scan_details`, `dialog_input_appraisal`, `activity_pvp_iv_settings`, `move_list`, `battle_team_overlay`, OCR Tesseract e tabelas locais; estes nomes não provam funcionamento nem segurança. Por ser distribuição “Premium/Fixed” de terceiro, não instalar, incorporar, copiar código, ativos comerciais ou datasets proprietários, nem tentar reativar funções Premium. Reimplementar conceitos com código e dados legitimamente licenciados, mantendo o repositório privado e o espelho público de compilação separado.
+
+**Documentação integral de critérios/arquitetura/testes:** [`docs/PROPOSTA_SCANNER_EQUIPE_0.5.34.md`](PROPOSTA_SCANNER_EQUIPE_0.5.34.md).
+
+**Estado real:** criada branch isolada `feature/team-scan-0.5.34-planning` a partir de `feature/diagnostics-hp-ui-0.5.33`. Só documentação; nenhum código Kotlin do scanner, testes nem novo APK foram feitos. A 0.5.33 compilada em 2026-10-09 continua base de uso; não alegar que o scanner já está na 0.5.33. Implementar em fases; preservar posições HUD, histórico, Logcat, HP, overlay, reservas/matcher e switch Auto/Manual. Se build futuro for autorizado, usar repositório público de compilação previamente validado.
+
 ## REGRA PRIORITÁRIA — BUILD/APK POR ESPELHO PÚBLICO EXISTENTE
 
 **ANTES de tentar GitHub Actions no repositório original privado `LucianoToscano/PvPPokeGo`, consulte ESTA seção e os checkpoints históricos de 2026-10-07.** O GitHub Actions desse repositório já foi bloqueado por problema de faturamento/conta em 2026-10-07 e 2026-10-09; repetir workflows privados pode falhar antes de iniciar o Gradle.
