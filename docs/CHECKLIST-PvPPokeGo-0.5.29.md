@@ -278,7 +278,7 @@ Relatório exato de código/QA: [IMPLEMENTACAO_0.5.33_LOGCAT_HP_UI.md](IMPLEMENT
 Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_EQUIPE_0.5.34.md).
 
 - [x] Conferir código atual de SUA EQUIPE (3 vagas, PC/HP/IV/sexo/forma/golpes), ML Kit, MediaProjection e guia mestre 0.5.33.
-- [x] Analisar **estaticamente** nomes de recursos/arquivos do APK Poke Genie modificado enviado como referência, sem executar, importar nem redistribuir recursos proprietários.
+- [x] Analisar **estaticamente** nomes de recursos/arquivos do APK Poke Genie enviado como referência. **Correção do usuário 2026-10-09:** "Premium" no filename foi acrescentado por ele mesmo; NÃO inferir modificação só pelo nome. Arquivo inspecionado sem executar e sem redistribuição.
 - [x] Registrar exemplo Cramorant 1485 PC, 126 PS, Bicada, Mergulho, Voar, fêmea, tipos Voador/Água; IVs no apelido não validados.
 - [x] Propor UI por vaga “Escanear ficha” + “Escanear avaliação” + “Revisar e aplicar” + “Usar time agora”, com confiança por campo.
 - [ ] Implementar importação de screenshot consentida (Android Photo Picker), parser OCR de ficha, validação contra Game Master e merge conservador de duas capturas.
@@ -286,6 +286,8 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] Adicionar captura direta a partir de tela do Pokémon GO via MediaProjection ativa/consentida, sem tocar automaticamente no jogo e sem regressões no OCR de batalha.
 - [ ] Rank IV PvP, calculadora de fortalecer/evoluir, moveset, histórico local, apelidos e casos de mudança de forma como Cramorant, com fontes licenciadas.
 - [ ] Testes Android/JUnit, UX e QA do aparelho; depois build no espelho público existente e checksum do APK da versão nova **quando explicitamente pedido**.
-- [ ] Não usar ou distribuir APK “Premium Fixed” de terceiros no PvPPokeGo ou no mirror.
+- [ ] Não embutir/redistribuir o APK de referência do Poke Genie no PvPPokeGo ou no mirror sem confirmação de titularidade/licença; pesquisar livremente funcionalidades e implementar equivalentes de forma independente.
 
 **Status: apenas documentação na branch `feature/team-scan-0.5.34-planning`; sem novo APK.**
+
+- [x] **Retificação de registro 2026-10-09:** usuário informou que renomeou pessoalmente o arquivo com “Premium” por estética e que é uma versão normal. Removido o rótulo não comprovado “APK modificado” do planejamento. Permissão para usar em análise técnica; autenticidade da assinatura e licença de componentes não verificadas. Nenhum novo APK gerado nesta retificação.
