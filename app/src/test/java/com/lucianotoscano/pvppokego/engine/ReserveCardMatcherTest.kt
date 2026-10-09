@@ -149,4 +149,33 @@ class ReserveCardMatcherTest {
     }
 
 
+
+    @Test
+    fun activeRegionalFormUsesStableSpeciesIdEvenWithSameNameAndCp() {
+        val variants = listOf(
+            ReserveCardMatcher.Member(0, "Ninetales", 1490, 38, "ninetales"),
+            ReserveCardMatcher.Member(1, "Ninetales", 1490, 38, "ninetales_alolan"),
+            ReserveCardMatcher.Member(2, "Azumarill", 1498, 184, "azumarill")
+        )
+        val result = ReserveCardMatcher.resolve(
+            team = variants, activeName = "Ninetales", activeCp = 1490,
+            cardCps = listOf(1490, 1498),
+            cardSpeciesIds = listOf("ninetales", "azumarill"),
+            activeSpeciesId = "ninetales_alolan"
+        )
+        assertEquals(listOf("ninetales", "azumarill"), result.map { it.member.speciesId })
+        assertTrue(result.all { it.confirmed })
+    }
+
+    @Test
+    fun conflictingSecondCardMustNotBeConfirmedByElimination() {
+        val result = ReserveCardMatcher.resolve(
+            team, "Houndoom", 1499,
+            cardCps = listOf(1485, 1500),
+            cardSpeciesIds = listOf("cramorant", "cramorant")
+        )
+        assertTrue(result[0].confirmed)
+        assertFalse(result[1].confirmed)
+    }
+
 }
