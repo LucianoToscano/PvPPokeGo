@@ -249,3 +249,17 @@ Relatório exato de código/QA: [IMPLEMENTACAO_0.5.33_LOGCAT_HP_UI.md](IMPLEMENT
 - [ ] Produzir artefato ao usuário quando compile/testes realmente funcionarem, indicando assinatura debug e necessidade de backup se exigida reinstalação.
 
 **ATENÇÃO: IMPLEMENTADO EM CÓDIGO-FONTE; COMPILAÇÃO NÃO OCORREU; 0 APKs GERADOS.** 
+
+
+## P0 — Recuperação do build público já existente (2026-10-09, v0.5.33)
+
+- [x] Encontrar o procedimento HISTÓRICO já documentado no Guia Mestre (2026-10-07): espelho público `LucianoToscano/PvPPokeGo-APK-Build`, em vez de tentar repetidamente Actions privados.
+- [x] Confirmar permissões e branch pública `preview/team-recognition-0.5.32-20261009`, usada como base.
+- [x] Comparar SHA dos arquivos `app/` da fonte privada `3b316f6f...` com mirror 0.5.32: 20 arquivos diferentes/ausentes; criar snapshot 0.5.33 isolado e atualizado em um commit (`655514514f1cdfa4ce89b7848aa36994dc639f27`).
+- [x] Adicionar workflow `.github/workflows/diagnostics-hp-ui-0.5.33.yml` com Standard+tests+SHA256, herdando fluxo comprovado da 0.5.31.
+- [x] Confirmar criação da run pública: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37903983424 — inicialmente `in_progress`.
+- [ ] Verificar run concluir `success`; se `failure` investigar stacktrace real e corrigir **primeiro fonte privada**, depois repetir sync por SHA no build público.
+- [ ] Confirmar testStandardDebugUnitTest + assembleStandardDebug executados; extrair APK do artifact, validar arquivo e SHA256; não renomear build antigo.
+- [ ] Entregar APK real 0.5.33 ao usuário após sucesso, com ressalva de assinatura QA/debug e QA físico ainda pendente.
+- [ ] Registrar resultado final no Guia Mestre e Drive (run, commit, SHA256, testes, artifact, pendências).
+- [x] Regra permanente introduzida no início do Guia Mestre: **consultar sempre o espelho público já aprovado antes de alegar que build é impossível**, manter original privado e sincronização revisada somente para compilação.
