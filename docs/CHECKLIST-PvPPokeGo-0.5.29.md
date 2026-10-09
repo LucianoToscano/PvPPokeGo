@@ -74,11 +74,12 @@ Especificação: [TEAM_BUILDER_0.5.31.md](TEAM_BUILDER_0.5.31.md). Branch `featu
 - [x] Sincronizar seletor de liga ao `SettingsRepository.leagueMode` existente, sem flag concorrente.
 - [x] Persistência local + inclusão `manual_team_v1` no backup JSON existente.
 - [x] Validação pura + testes JUnit para liga, campos inválidos, slots vazios e campos opcionais.
-- [ ] CI Kotlin targeted `ManualTeamPolicyTest` concluído (ver resultado workflow).
+- [x] CI Kotlin `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.data.ManualTeamPolicyTest'` PASS: [run 37875124885](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124885) — BUILD SUCCESSFUL em 1m 4s.
 - [ ] CI Standard integral `:app:testStandardDebugUnitTest :app:assembleStandardDebug` concluído (ver resultado workflow).
 - [ ] QA real Samsung: editor de 3 slots, busca de formas, persistência, exportar/importar, troca de liga, rolagem, exibição do teclado.
 - [ ] Integrar cadastro como sugestão/hint verificável de reconhecimento, jamais substituir automaticamente OCR com dados antigos.
-- [ ] Usar sprites exatos do atlas nos cartões, validar layout compacto e legibilidade nas dimensões do aparelho.
+- [x] Sprite fiel por `speciesId` usando `PokemonIconAtlas` existente, sem falsificar imagem de forma; carregamento assíncrono e fallback por nome.
+- [ ] Validar visual real dos três cartões e legibilidade no Samsung.
 - [ ] Exibir rank e HP inferidos apenas após cálculo confiável, versão de dados e critério de confiança explícito.
 - [ ] Validar elegibilidade real de Mega/Sombroso por liga e forma; o toggle atual é só declaração do jogador.
 - [ ] Registrar link e checksum de APK real, sem renomear artefato de versão antiga.
