@@ -86,3 +86,31 @@ Especificação: [TEAM_BUILDER_0.5.31.md](TEAM_BUILDER_0.5.31.md). Branch `featu
 - [ ] Validar em Samsung antes de aprovar visual e PR.
 
 **Status:** Código da funcionalidade implantado em branch de feature; sem confundir esse progresso com validação física.
+
+
+## 0.5.32 — SUA EQUIPE: Automático x Manual — 2026-10-09 (SEM BUILD)
+
+Especificação: [TEAM_RECOGNITION_MODES_0.5.32.md](TEAM_RECOGNITION_MODES_0.5.32.md).
+Branch isolada `feature/team-recognition-modes-0.5.32`; `release/0.5.29` e APKs 0.5.30/0.5.31 permanecem preservados.
+
+- [x] Conferir guia canônico `release/0.5.29`, histórico `release/0.5.26`, HEAD das branches e contrato visual.
+- [x] Manter modo **Automático** como padrão, reutilizando detector de três aliados e correspondência de reservas existentes.
+- [x] Adicionar escolha explícita de modo **Manual** no painel SUA EQUIPE.
+- [x] Se os três Pokémon têm espécie válida + PC dentro da liga, associar roster declarado ao motor como equipe atual sem esperar escanear a tela de seleção.
+- [x] Não presumir por ordem de cadastro qual está em campo; seguir verificando imagem/CP/OCR para ativo e reservas.
+- [x] Impedir que um scan automático sobrescreva a composição selecionada manualmente.
+- [x] Criar política para rejeitar visual forte e PC incompatíveis, espécie externa e correspondência ambígua.
+- [x] Persistir `team_recognition_mode_v1` e incluir no export/import de configurações existente.
+- [x] Proteger resets/continuidade do motor para reaplicar roster selecionado, sem reaproveitar energia/HP da equipe anterior.
+- [x] Adicionar testes JUnit no código para CP, visual, contradição, espécie não cadastrada, duplicatas e trocas.
+- [x] Registrar estado, referência de código, critérios de QA e limitações no Guia Mestre.
+- [ ] Executar os testes do matcher **somente quando for autorizado compilar/testar**.
+- [ ] Rodar build Android e validar APK **somente quando o usuário solicitar**.
+- [ ] Verificar se modo Manual com OCR global OFF deixa aviso e não presume o Pokémon ativo.
+- [ ] QA Samsung: seleção imediata, três aliados, ordem real dos cartões reservas, mudança de equipe, batalha nova, troca de liga e falha de captura.
+- [ ] Exibir, também no card inicial, snapshot de equipe reconhecida automaticamente com confiança e origem dos dados, sem sobrescrever `manual_team_v1`.
+- [ ] Adicionar testes de regressão de integração `BattleOverlayService`/`BattleEngine`/`BattleCorrespondenceTracker` em partidas consecutivas antes de liberar.
+- [ ] Verificar compatibilidade de backup após importação de flag e roster.
+- [ ] Polir o layout usando imagens originais do atlas, sem remover funcionalidades atuais.
+
+**STATUS REAL: CÓDIGO ALTERADO + DOCUMENTAÇÃO REGISTRADA; NENHUM TESTE/COMPILAÇÃO/APK EXECUTADO NESTA ETAPA POR PEDIDO DO USUÁRIO.**
