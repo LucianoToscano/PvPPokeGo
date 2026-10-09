@@ -387,3 +387,19 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] P1: correlação e ordenação monotônica de eventos, fechamento logado para todas as saídas.
 - [ ] P1: QA Samsung Android16 com overlay, reservas, layout HUD restaurado e scanner 0.5.34 intactos.
 - [ ] Nenhum novo APK/compilação realizado neste estudo.
+
+### 2026-10-09 — AUDITORIA 0.5.33 / CORREÇÃO E APK 0.5.35
+- [x] Conferir Guia Mestre, branch fonte 0.5.34, manter código em branch isolada sem reset.
+- [x] Validar hipótese CP impossível pela gamemaster embutida com testes Wingull/Vanillite1485 rejeitados e Cramorant1485 aceito.
+- [x] Bloquear mutações de identidade via OCR candidato matematicamente impossível em cards batalha, OCR amplo e slots da equipe.
+- [x] Garantir eventos de histórico não regressivos e registrar encerramento com motivo.
+- [x] Não incluir fragmentos sem identidade nem combate no histórico competitivo.
+- [x] VersionName 0.5.35 / versionCode 40; preservar HUD, configuração, scanner e restantes módulos sem patch destrutivo.
+- [x] Isolar mirror de build, sem dados de usuário; CI público [37974565481](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37974565481) completed/success.
+- [x] Testes unitários Kotlin e assembleStandardDebug sucesso. APK validado v2=true, 1 signatário, ZIP ok.
+- [x] APK `PvPPokeGo-0.5.35-QA-debug.apk` enviado no chat, SHA256 `4b52dc60ea7ee29da7363a3e061bb72d44aa1377cc1a1106d25b6a54f9257172`.
+- [x] Guia Mestre e Google Docs de continuidade atualizados com implementação e referências.
+- [ ] **QA físico:** instalação Samsung Android16, scanner 3 slots, auto/manual, troca/retorno de reservas, escudos 0/1/2, HP fantasma e botões.
+- [ ] **P0:** investigar escudos invariáveis e 14/20 carregados inferidos encontrados no histórico 0.5.33 com vídeo/replay para distinguir dados reais de hipóteses.
+- [ ] **P1:** calibração de IVs visuais e captura ao vivo do jogador, sem estimar IV numérico a partir de nickname.
+- [ ] **Backlog/integracão:** comunidade de treinadores, amigos, torneios/duelos/raid/trocas, bases externas e recursos dos APKs estudados; não declarar implantado sem código e backend/testes.
