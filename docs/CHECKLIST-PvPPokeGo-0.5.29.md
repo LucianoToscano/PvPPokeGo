@@ -420,3 +420,14 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 
 
 **Atualização real de CI 2026-10-09:** A primeira execução 37990812354 chegou à compilação Kotlin dos testes e falhou com erro verificável em `BattleHistorySegmentMatcherTest.kt:91`: construção de `BattleHistoryEvent` com três argumentos quando `moveName` é obrigatório. O teste foi corrigido na fonte canônica, e também foi corrigida a expectativa do teste de troca simultânea (agora exige dois frames). Runs intermediárias descartadas: 37991096113, 37992007040. **Run definitiva do source compilável atual:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37992092526, mirror HEAD `41a83803e213503af19d99342acd0b80d1be0d2e`. Comparação real da árvore Git: **129 arquivos de código/recursos de build comparáveis iguais em SHA** entre fonte privada e mirror, zero divergências. Aguardar resultado desta run antes de declarar APK pronto; o CI antigo não comprova sucesso dos testes atualizados.
+
+
+### Conclusão 0.5.36: matcher e QA (2026-10-09)
+- [x] Ajustar correspondência de time ativo/reservas, formas com IDs distintos, switch unilateral/simultâneo e detecção de nova partida somente após ausência de evidência e frames concordantes.
+- [x] Proteger validação espécie+CP e histórico de leituras erradas/sessão sem evidência.
+- [x] Consertar compilação teste `BattleHistorySegmentMatcherTest.kt` 4 argumentos; atualizar `BattleCorrespondenceTrackerTest.kt` para HOLD primeiro frame e SWITCH segundo frame.
+- [x] Compilar versão 0.5.36 code41 com testes unitários + `assembleStandardDebug` aprovados no Actions público `37992150961`.
+- [x] APK real `PvPPokeGo-0.5.36-QA-debug.apk` de 79.676.502 bytes, SHA256 `e1ff7e2ac9e0a5f6e940f1d334bb2c7722409d7018bc3781253652a0679c1a94`, ZIP íntegro, assinatura v2, artifact `11645731162`.
+- [x] Preservar overlay, HUD e ícones por reuso de atlas com SHA verificado, sem copiar dados privados ao mirror.
+- [ ] Instalação/QA visual real no Samsung Android16: equipe e reservas 3x3, regional, OCR, ligação escudos, HP, modo Auto/Manual, histórico e posição HUD.
+- [ ] Calibração Avaliar IV 0–15 e funcionalidades sociais/raid online ainda NÃO implementadas.
