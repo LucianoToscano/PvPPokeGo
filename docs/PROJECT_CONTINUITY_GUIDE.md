@@ -1,4 +1,12 @@
 
+## 2026-10-09 — Análise estática aprofundada do APK Poke Genie concluída (planejamento 0.5.34)
+Após o usuário pedir “estude ele então. Veja o que podemos aproveitar dele”, foi analisado o arquivo APK real enviado, não apenas as imagens. Hash SHA256 da amostra: `0c668336c534361aaad76021f9ab52b2bd9bd625df3b0ff83f524ab7f5eb347d`, manifesto `com.cjin.pokegenie.standard` versão 8.19.0/build 416. Evidências: telas/activities de scan, iVision, Avaliar IV, PvP IV/ranking gráfico, golpes, evolução e custos, histórico/merge, nomes personalizados, tipos, simulação e raids; bibliotecas `libtesseract`, `libleptonica` e tessdata eng/números/idiomas; datasets `assets/plists/*` (movesets PvP, CPM, evolução, poeira e tipagem). Permissões declaradas de overlay/MediaProjection. O ZIP externo também contém `assets/yrf.apk` (~84 MB), um APK ZIP aninhado. **Não presumir originalidade, modificação, malware ou funcionalidades plenamente operantes somente pelos nomes**; o usuário esclareceu que ele próprio inseriu “Premium” no filename, e esta explicação permanece respeitada.
+
+**RELATÓRIO TÉCNICO COMPLETO e plano auditável:** [`ESTUDO_APK_POKE_GENIE_0.5.34.md`](ESTUDO_APK_POKE_GENIE_0.5.34.md). Funcionalidades escolhidas: (P0) Scanner de três slots por screenshot de ficha + Avaliar, validação de confiança e confirmação manual; (P1) scanner overlay consentido com classificador de contexto, rank IV por liga, golpes/energia; (P2) histórico scans/custos/apelidos. Reusar `TeamBuilderPanel`, `TeamSetupRepository`, `BattleOcrDetector` ML Kit, `PokemonVisualRecognizer` e Game Master — **sem copiar** binários, interfaces, dados e algoritmos proprietários. Prioridade de preservar modo Auto/Manual, histórico/diagnósticos, overlay/reservas, HUD/ícones/posições. Não construir funcionalidades de lobby remoto/loja/raids como pré-requisito de scanner PvP.
+
+**Estado:** documentos atualizados na branch privada `feature/team-scan-0.5.34-planning`; não há implementação Kotlin do scanner nem APK 0.5.34. Base última compilada/validada em CI é 0.5.33. Prosseguir em branch funcional separada e usar mirror público de APK existente só quando implementar/compilar.
+
+
 ## 2026-10-09 — Solicitação de Scanner 1/2/3 e referência ao APK Poke Genie (v0.5.34, somente planejamento)
 
 O usuário apresentou duas capturas da ficha do **Cramorant** e um APK de terceiros nomeado “Poke Genie ... Premium ... Fixed ... TekMods.com.apk”, pedindo scanner similar para as vagas Pokémon 1, 2 e 3 da tela SUA EQUIPE, com preenchimento automático dos campos, e mais ideias funcionais do Genie.
