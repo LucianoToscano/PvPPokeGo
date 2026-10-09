@@ -65,3 +65,11 @@ Funcionalidades para desenvolver com implementação própria e fonte compatíve
 
 ### 2026-10-09 — Retificação de procedência/nome do arquivo
 O usuário esclareceu: “Fui eu quem renomeei para Premium... pode usar ela sim... Mas é uma versão normal”. Portanto, a classificação anterior de “APK modificado não oficial” com base apenas no filename foi **indevida** e foi retirada. O arquivo passa a ser tratado como **APK enviado pelo usuário, de procedência não verificada tecnicamente, autorizado pelo usuário para análise e referência**. Nenhuma conclusão sobre assinatura oficial é implicada. Prosseguiremos com inspeção estática, comparação funcional e futura implementação própria do scanner 1/2/3, sem alterar o app de batalha até autorização específica de implementação.
+
+
+## 2026-10-09 — Estudo aprofundado do APK concluído
+Relatório auditável e prioridades: **[`docs/ESTUDO_APK_POKE_GENIE_0.5.34.md`](ESTUDO_APK_POKE_GENIE_0.5.34.md)**.
+
+Confirmado no manifesto externo e no APK aninhado: pacote `com.cjin.pokegenie.standard`, versão 8.19.0/build 416. Há infraestrutura Android declarada de overlay/MediaProjection e OCR Tesseract/Leptonica com modelos de texto/números; componentes de scan, iVision, avaliação de IV, comparação PvP, movimentos, histórico/merge, renomeação, evolução, simuladores e Raid. As tabelas próprias incluem movimentos PvP, rankings de combos, multiplicadores PC, evolução e custos. **Isso prova presença de arquivos/telas, não funcionamento nem atualização dos cálculos**. Manter a retificação do usuário: a palavra Premium foi por ele adicionada ao nome; não atribuir modificação/crack ao nome. Existência de `assets/yrf.apk` aninhado é só um fato de empacotamento, sem conclusão de procedência ou risco.
+
+Resultado técnico: priorizar Scanner por vaga 1/2/3 + screenshot de ficha + screenshot de Avaliar + validação de confiança antes de persistir; então rank IV por liga e golpes/energia; depois histórico scans, custo de fortalecimento e apelidos. Reaproveitar ML Kit, `BattleOcrDetector` (somente abstração de OCR), `PokemonVisualRecognizer`, `TeamBuilderPanel`, `TeamSetupRepository` e Game Master. Evitar copiar dados comerciais, assets ou código de terceiros. **Sem código/novo APK neste estudo.**
