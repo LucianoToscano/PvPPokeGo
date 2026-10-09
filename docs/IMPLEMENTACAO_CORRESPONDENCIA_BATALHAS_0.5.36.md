@@ -1,0 +1,29 @@
+# PvPPokeGo 0.5.36 — correspondência de batalhas e reservas, continuidade e histórico
+**Iniciado em:** 2026-10-09. **Origem:** pedido "Continue exatamente do ponto em que você parou — Resolvendo lógica de correspondência de batalhas". **Base:** branch `feature/verified-core-0.5.35-20261009`; branch de intervenção isolada `feature/battle-correspondence-0.5.36-20261009`. Não recomeçar o projeto, não substituir HUD/ícones/backup, manter a v0.5.34/v0.5.35.
+
+## Implementado no código
+1. `engine/BattleCorrespondenceTracker.kt`: preserva IDs de espécie/forma, reservas conhecidas e dois frames de confirmação. Agora um par de espécies incompatíveis **não abre partida nova sem intervalo significativo sem evidência**. Se o intervalo foi confirmado no primeiro frame, o candidato é **mantido durante as próximas capturas**, mesmo depois do serviço atualizar o tempo de última evidência, evitando a regressão "primeiro frame após gap nunca confirma". Um único OCR errado durante combate retorna `HOLD_CURRENT`.
+2. `engine/BattleEngine.kt`: não transforma `identityConfidence` fraca em confiança artificialmente estável no contexto; entrega `playerSpeciesId` ao matcher para separar formas regionais de mesmo nome/PC. `learnMissingMember` recusa um membro de reserva se o CP é matematicamente impossível ou pertence unicamente a outra espécie do time. Preserva os três slots manuais.
+3. `engine/ReserveCardMatcher.kt`: o membro ativo é escolhido somente quando a combinação de espécie/CP/nome é inequívoca, sem assumir o primeiro slot com nome igual. Cards com CP/forma/Dex incompatíveis são mantidos **não confirmados** (fonte `conflict`), inclusive impedindo que a eliminação confirme outro card com conflito. Evidência consistente usa CP único, forma única, Dex ou eliminação, como antes.
+4. `overlay/BattleOverlayService.kt`: antes de entregar detecções ao matcher **e ao motor**, descarta identidades com confiança menor que `0.78`, registrando apenas o código `identity_low_confidence_held` no diagnóstico local. Preserva MediaProjection, OCR de reservas, estados do HUD e interação visual, sem gravar texto bruto OCR.
+5. `data/BattleHistorySegmentMatcher.kt`: não une trechos sem sobreposição verificável de identidade. Exige evento de interrupção anterior + fragmento seguinte iniciado no meio da batalha, além de duração do gap limitada (ambas identidades conferidas <=7s; apenas uma <=3,5s). A proximidade temporal pura não junta partidas diferentes.
+6. `data/BattleHistoryRepository.kt`: `loadHistory` pode produzir vista reconstruída, mas **não regrava históricos ao ler**; `append` mantém registros originais preexistentes e somente avalia um merge conservador do novo trecho. Históricos antigos não são reescritos irreversivelmente por navegação.
+7. `app/build.gradle.kts`: versionName `0.5.36`, versionCode `41`.
+
+## Testes adicionados ou alterados
+- `engine/BattleCorrespondenceTrackerTest.kt`: falso novo par repetido durante combate não abre sessão, novo par após gap ainda confirma quando contador de inatividade fecha no segundo OCR, identidade apenas do inimigo desconhecido precisa 2 quadros, formas regionais/CP truncado mantidos.
+- `engine/ReserveCardMatcherTest.kt`: conflito entre CP e visual não é `confirmed`; não usar eliminação com card contraditório; espécie ativa por form ID mesmo se nome e PC repetidos; mantenha CP/visual íntegros/duas reservas.
+- `data/BattleHistorySegmentMatcherTest.kt`: trechos sem identidades permanecem separados mesmo a 300ms, partidas com lead igual e encerramento normal não se fundem, 15s de intervalo não força união, eventos 'Charged' sem identificação não provam continuidade. Caso genuíno de 2s segue permitido.
+- Mantém todos os testes pré-existentes de OCR/PC da 0.5.35, HP, scanner, reservas e motor quando o CI executar.
+
+## Pipeline de compilação (atualizar resultado antes de declarar pronto)
+- Fonte principal **privada** e canônica `LucianoToscano/PvPPokeGo@feature/battle-correspondence-0.5.36-20261009`, sem espelhar histórico/configurações privadas.
+- Snapshot compilador público isolado existente `LucianoToscano/PvPPokeGo-APK-Build@preview/battle-correspondence-0.5.36-20261009`; HEAD código/CI `4e9dbfd7057001989fb9b6d61b14d554d0abc283`.
+- Workflow `.github/workflows/battle-correspondence-0.5.36.yml`: gradle `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, integridade, assinatura, SHA256, upload.
+- Primeira execução 37990812354 foi substituída por snapshot atualizado 37991096113, https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37991096113 . **Verificar status conclusivo**, não fornecer APK do snapshot antigo e não alegar QA físico Samsung.
+
+## Evidência e limitações
+- Motivação: auditoria de 7 sessões / 464 eventos da v0.5.33, pares espécie+CP impossível (Wingull e Vanillite com PC 1485), ausência de desfechos, inversão temporal e reservas reconhecidas incorretamente.
+- As mudanças acima tratam correspondência, estado interno e persistência. **Não representam correção comprovada da detecção de escudos/HP ou reconhecimento dos resultados**, que continuam necessitando vídeo/QA físico da tela de batalha.
+- As funções comunitárias, Rank de usuário, reides online, trocas, scanner de Avaliar IV calibrado, etc., estudadas em Calcy/Poke Genie/Regibot/PokeRaid/GO Hub, continuam no roadmap e **não foram implementadas neste patch**. Evitar declarar "tudo dos outros apps" concluído.
+- O espelho público não contém backups privados, códigos de amizade ou documentos internos. Se assinatura debug diferente da instalada, exportar configurações antes de remover qualquer APK.
