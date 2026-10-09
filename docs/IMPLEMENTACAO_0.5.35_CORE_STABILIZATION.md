@@ -63,3 +63,16 @@ Continuação **sem reiniciar** após a primeira build 0.5.35 (run `37974565481`
 
 **Evidências de QA:** run base 0.5.35 `37974565481` `success`; QA2 `37990550678` `success`; QA3 ainda pendente na criação deste adendo. Não confundir QA automatizado com execução em Samsung nem afirmar presença de funcionalidades sociais novas.
 
+
+## 2026-10-09 — RELEASE QA3 CONCLUÍDO E APK ENTREGUE
+
+**GitHub Actions FINAL:** [37991257400](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37991257400), resultado **completed/success**. Snapshot build espelho: `d63f24b08053955802d4ab3a5b492d688983ae0a`. As etapas **`:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, verificação ZIP, SHA256, `apksigner verify`, upload do artifact** foram concluídas com êxito.
+
+**Artifact `11645695934`** entregue: `PvPPokeGo-0.5.35-QA-debug.apk` com **79.676.502 bytes**. SHA256: **`ae7a891f3c6d72070037d64b756217f6ccb3a104db89b6f93c384543924584fc`**, conferido contra `SHA256SUMS.txt` do workflow. Arquivos ZIP e APK passaram no `unzip -t`; `signature-verification.txt` indica `Verified using v2 scheme: true`, 1 signatário (debug). ZIP do artifact **35.913.058 bytes**.
+
+**Links de entrega:** `sandbox:/mnt/data/PvPPokeGo-0.5.35-QA-debug.apk` (APK extraído real e verificado), `sandbox:/mnt/data/PvPPokeGo-0.5.35-QA-debug.zip` e pacote ZIP salvo na pasta final autorizada do Drive: https://drive.google.com/file/d/1mTAzmwF0syu0bdslXM-1D806jmQNvWPv/view?usp=drivesdk .
+
+**Arquivos Kotlin/teste efetivamente modificados da 0.5.35:** `data/SpeciesCpPlausibilityPolicy.kt` (novo), `data/GameDataRepository.kt`, `detect/BattleOcrDetector.kt`, `data/BattleHistoryRepository.kt`, `engine/BattleCorrespondenceTracker.kt`, `engine/BattleEngine.kt`, `engine/ReserveCardMatcher.kt`, `overlay/BattleOverlayService.kt`, `test/data/SpeciesCpPlausibilityPolicyTest.kt` (novo), `test/engine/BattleCorrespondenceTrackerTest.kt`, `test/engine/ReserveCardMatcherTest.kt`, `app/build.gradle.kts`. Não houve substituição de ícones ou HUD, nem importação de binários de outros APKs.
+
+**Limites:** CI aprova compilação/unidades/estrutura, não comprova qualidade de OCR no Samsung nem troca real, HP/escudos, rede social ou leitores de IV Avaliar. Instalar QA/debug pode exigir assinatura compatível; **salvar backup antes**. Status das ideias de comunidade, rankings públicos, eventos e PvE: backlog, não presentes no APK apenas por documentação. Não prometer todas essas funções como prontas. Scanner 0.5.34 preservado.
+
