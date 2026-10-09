@@ -151,7 +151,7 @@ internal class BattleCorrespondenceTracker {
                 !observation.switchPrompt
             ) {
                 val signature = "simultaneous:" +
-                    player.stableKey().orEmpty() + "|" + opponent.stableKey().orEmpty()
+                    player?.stableKey().orEmpty() + "|" + opponent?.stableKey().orEmpty()
                 if (!confirmSwitchCandidate(signature, nowMs)) return Decision.HOLD_CURRENT
             }
             reset()
