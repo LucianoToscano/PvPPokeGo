@@ -341,3 +341,19 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] Debater/avaliar autenticação e backend próprios, moderação, consentimento, bloqueio e privacidade antes de ligar rede social online.
 - [ ] Testar exportação/restore, scans sensíveis e regressão HUD/overlay/scanner antes de release.
 - [ ] Build e APK com essas funções: NÃO iniciados; 0.5.34 QA entregue permanece inalterada.
+
+
+### Novos anexos Calcy IV + PokeRaid + GO Hub DB — pesquisa 2026-10-09
+- [x] Verificar ZIP/manifest.json e hashes de `Calcy IV_3.44.xapk` e `PokeRaid_0.48.16.xapk`; inspeção estática somente.
+- [x] Estudar os recursos em níveis: scanner/avaliação/PvP IV do Calcy; clãs, PvP matcher, reides, amizade, ofertas, smart IV e notificações do PokeRaid.
+- [x] Identificar o esquema SQLite do Calcy sem copiar conteúdos para o app.
+- [x] Navegar `https://db.pokemongohub.net/pt` e confirmar tabelas PvP, rankings, CP, DPS/TDO, moves, fraquezas, Megas, Dinamax e disclaimer copyright.
+- [x] Registro: `docs/ESTUDO_CALCY_POKERAID_GOHUB_0.5.35.md`, Guia Mestre e Drive.
+- [ ] Calibrar leitura gráfica IV 0–15 e registrar pontuação de confiança por campo + QA no dispositivo.
+- [ ] Estudar e obter licença/fonte para custos de doce/poeira/evolução, metas PvP/PvE e ranking com dados versionados.
+- [ ] Implementar biblioteca de ataques PvP/PvE separada e comparador (DPS/TDO, efeitos e energia) com testes.
+- [ ] Criar listas de desejos/ofertas com consentimento, dados limitados e compartilhamento manual, sem comércio/trade automatizado.
+- [ ] Avaliar Hub pesquisa de links GO Hub e melhores counters PvE/reides, com copyright/atribuição.
+- [ ] Considerar clãs/duelos/salas/reides online após decisão de arquitetura, autenticação, LGPD, bloqueio e moderação.
+- [ ] Validar UX clean sem legendas/títulos truncados e preservar HUD.
+- [ ] Build/APK dessas propostas: **não iniciado**; APK 0.5.34 segue inalterado.
