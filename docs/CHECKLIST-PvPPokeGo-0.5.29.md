@@ -49,6 +49,7 @@ Planejamento canônico: [Arena — especificação e estado](ARENA_RANKING_TOURN
 - [x] CI Kotlin/Android: `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.arena.*'` — SUCCESS em [37873242217](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242217).
 - [x] Suíte Android Standard completa, assemble e integridade SHA/ZIP/assinatura v2 PASS no [build 37873242187](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242187): **PvPPokeGo-0.5.30-QA-debug.apk**, 79.283.282 bytes, SHA-256 `4069ced7db03ea6e5d104b8d13826438802a671853b4b228784a3ad225ac5e7a`.
 - [x] VersionName/versionCode 0.5.30 / 35 ajustados na branch de feature privada após o build público validado.
+- [x] ZIP de QA enviado e verificado na pasta Drive oficial: [PvPPokeGo 0.5.30 Arena QA](https://drive.google.com/file/d/1lMFVEQrq6sc37iDdFrw2upCAfaZrDDp9/view?usp=drivesdk), tamanho 35.770.210 bytes.
 - [ ] Testar APK de prévia em aparelho Samsung e aprovar UI, perfil e medalhas; a instalação não foi executada pela assistência.
 - [ ] Validar UI real no Samsung: expansão, apelido, medalhas, legibilidade, rolagem e persistência.
 - [ ] Manter acumuladores vitalícios independentes do histórico atual limitado a 50 partidas; definir política de migração.
