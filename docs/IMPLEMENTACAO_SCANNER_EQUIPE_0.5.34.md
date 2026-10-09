@@ -33,3 +33,11 @@
 3. Validar checksum e assinatura antes de publicar link do APK.
 4. Pedir capturas reais de “Avaliar” e testar reconhecimento por barras no Samsung.
 5. Passar as conclusões ao Guia Mestre e Google Drive, atualizando checklist com etapas feitas e pendentes.
+
+
+## Resultado de CI e entrega QA (2026-10-09)
+- RUN https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37917670306 terminou **completed/success**; job `113777712647` executou JDK17, Android SDK36, Gradle8.11.1, assets offline, fingerprints/atlas, **`:app:testStandardDebugUnitTest` + `:app:assembleStandardDebug`** com sucesso, inspeção de APK, assinatura Android e upload do artifact.
+- Artifact `11611096799`, nome `PvPPokeGo-0.5.34-QA-debug`. Arquivo APK **`PvPPokeGo-0.5.34-QA-debug.apk`**, **79.660.114 bytes**, SHA-256 **`45e24fdf5d6c9a3c899bda7e08cec8a826231201c1f07f30604c99d3f7bc6d3e`**; reproduz exatamente `SHA256SUMS.txt` do GitHub Actions. ZIP e APK testados como arquivos ZIP íntegros. Verificação da assinatura: v2=true, 1 assinante.
+- Arquivo recebido diretamente do artifact do GitHub, extraído/verificado e entregue por `sandbox:/mnt/data/PvPPokeGo-0.5.34-QA-debug.apk` no chat.
+- **QA físico no Samsung pendente**: testar scanner com ficha de verdade, Auto/Manual, histórico, backup, reconhecimento aliado/reservas, HUD/icons/posição e HP. Compatibilidade de atualização depende de assinatura: exportar backup e não desinstalar versão anterior sem preservar dados. O sucesso do CI não significa scan visual QA aprovado.
+- Não declarar Avaliar IV automático completo, captura live, custos de poeira/doces exatos; registrados como pendências no plano.
