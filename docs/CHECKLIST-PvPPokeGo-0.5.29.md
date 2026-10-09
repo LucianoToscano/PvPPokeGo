@@ -159,3 +159,30 @@ Documento técnico, fontes, nove imagens arquivadas e CSV original: [PVP_ANALYTI
 - [ ] Executar testes e gerar APK **somente quando o usuário pedir**; evitar qualquer alteração de release/0.5.29 ou regressão do HUD V03.
 
 **STATUS: REFERÊNCIAS E CSV ARQUIVADOS + ESPECIFICAÇÃO/CHECKLIST REGISTRADOS. NOVOS MÓDULOS NÃO IMPLEMENTADOS; NENHUM TESTE, BUILD OU APK.**
+
+
+## Análise consolidada Calcy IV / PvPoke / Team Builder / Training / 2 CSV — 2026-10-09
+
+**Documento de trabalho:** [ANALISE_CONSOLIDADA_PVP_2026-10-09.md](ANALISE_CONSOLIDADA_PVP_2026-10-09.md). Esta entrada é exclusivamente **ANÁLISE + DOCUMENTAÇÃO**, não uma nova implementação.
+
+- [x] Reler Guia Mestre canônico `release/0.5.29`, histórico `release/0.5.26`, branch e HEAD real de `feature/team-recognition-modes-0.5.32` antes de registrar.
+- [x] Inventariar código existente: `GameDataRepository`, `TypeChart`, `Models`, `BattleEngine`, `TeamBuilderPanel`, `TrainerSettingsPanel`; distinguir lógica já escrita do simulador completo ainda ausente.
+- [x] Ler arquivo `Team vs. All Pokemon.csv`: **1.152 linhas de confronto**, 6 colunas, 0 linhas inválidas, 0 duplicatas, ratings de Altaria/Houndoom/Rillaboom + Threat Score/Overall Rating, 51.369 bytes e hash registrado.
+- [x] Ler `_vs .csv`: grade 3×3 de diferenças assinadas, W/L/D, Average conferida, 370 bytes e hash registrado.
+- [x] Armazenar cópias originais dos **dois CSVs** na pasta do projeto no Drive com links no documento.
+- [x] Revisar prints e referências dos módulos de Team Builder (Coverage/Bulk/Safety/Consistency, amenazas/alternativas/scorecard), CMP, Rankings, simulador 1×1, Academy/Train IA, análise de dano/escudos/energia, top performers e filtros avançados.
+- [x] Distinguir ranking de espécies, PvP IV Rank, Battle Rating 0–1000, Threat Score, diferença média CSV, Team Rating/Individual Rating de Training e Arena Elo. Nunca rotular como mesma métrica.
+- [x] Distinguir PvPoke Tera Raid da mecânica GO: **Tera é de Scarlet/Violet** e fica excluída do PvP GO; ideia geral de counters pode inspirar futuro módulo independente de raides GO.
+- [x] Definir três pilares e plano por prioridade: Assistente de Batalha, Laboratório PvP, Academia/Training.
+- [x] Registrar limites de licenciamento, versão/validade de dados, amostragem de bots no Train, identidade OCR versus simulação e confidencialidade.
+- [ ] **P0** Quando autorizado: testes/compilação da feature atual 0.5.32, isolamento da equipe manual/automática e regressão HUD/OCR/backup.
+- [ ] **P1** Implementar importador de dois formatos CSV com fonte/versionamento e cópia simulada, sem inserir na Arena/histórico real.
+- [ ] **P1** Criar botão "Analisar equipe" a partir da composição atual sem alterá-la; exibir relatório de ameaças/cobertura e incerteza, com métricas tipadas.
+- [ ] **P1** Validar versão dos dados e implementar motor matemático puro (CPM, IV rank, dano, energia, escudos, buff, CMP, timing) com fixtures de regressão.
+- [ ] **P2** Simulador real 1×1, 3×N Matrix/scorecard, breakpoints/bulkpoints, histograma e top counters; evitar uso no caminho crítico da captura.
+- [ ] **P2** Academia PvP 3×3 contra IA offline, replay de decisões, gráficos de dano/escudos/energia, progressão em treino separada de batalhas verificadas.
+- [ ] **P3** Rankings Arena/campeonatos/prêmios somente com backend, validação e antifraude; sem misturar indicadores de simulação/bot.
+- [ ] **Fora do núcleo PvP:** qualquer cálculo específico de Tera/Scarlet/Violet; futura Raides/PvE GO deve ser uma ferramenta distinta.
+- [ ] **Antes de publicar:** revisar licenças/atribuições, movimentos legados, regras de liga, dados válidos e QA Samsung.
+
+**Nenhum código de produção, testes executados, build, APK ou release nesta rodada de análise.** 
