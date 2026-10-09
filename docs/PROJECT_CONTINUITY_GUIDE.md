@@ -1327,6 +1327,57 @@ TESTES:
 
 STATUS: **PARCIAL** — código/testes direcionados concluídos, build completo e QA visual pendentes.
 
+
+### 2026-10-09 — Entrega técnica APK Standard QA 0.5.31 "Sua Equipe" concluída
+
+Versão: **0.5.31**, versionCode **36**  
+Branch de código: `feature/team-builder-0.5.31-20261008` (feature baseada na Arena 0.5.30, NÃO merged na release/0.5.29).  
+PR draft: https://github.com/LucianoToscano/PvPPokeGo/pull/36  
+Cópia pública build-only isolada: `LucianoToscano/PvPPokeGo-APK-Build:preview/team-builder-0.5.31-20261008`.  
+Commit SHA compilado da cópia pública: `fd17818758bb35f54c31a9cd379a42c1af373594`.
+
+OBJETIVO:
+- Entregar o cadastro manual de três Pokémon na página inicial com seleção da liga, busca de espécie/forma, PC, IV, HP, sexo, flags e golpes, sem regressar OCR, HUD ou Arena.
+
+ALTERAÇÕES/ARQUIVOS:
+- `data/TeamSetupModels.kt`: DTO de 3 vagas + validação/sanitização.
+- `data/TeamSetupRepository.kt`: persistência própria dentro de `pvppokego_prefs`.
+- `ui/TeamBuilderPanel.kt`: editor Compose recolhível, três cards com sprite fiel via atlas existente carregado assíncrono, busca no Game Master local, seleção de golpes e saves por slot.
+- `ui/SettingsScreen.kt`: painel antes da Arena/Batalha e seleção compartilhada `SettingsRepository.leagueMode`.
+- `data/SettingsRepository.kt`: backup JSON inclui `manual_team_v1`.
+- `app/build.gradle.kts`: `versionName 0.5.31`, `versionCode 36`.
+- `app/src/test/java/com/lucianotoscano/pvppokego/data/ManualTeamPolicyTest.kt`.
+- `docs/TEAM_BUILDER_0.5.31.md`, `docs/CHECKLIST-PvPPokeGo-0.5.29.md`, `docs/PROJECT_CONTINUITY_GUIDE.md`.
+
+TESTES:
+- Teste Kotlin `ManualTeamPolicyTest`, run https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124885 — **SUCCESS**.
+- Testes Standard completos `:app:testStandardDebugUnitTest` e compilação `:app:assembleStandardDebug`, run https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124890 — **SUCCESS**, `BUILD SUCCESSFUL in 1m 17s`.
+- Snapshot privado/público dos sete arquivos de código comparados por Git blob SHA, coincidindo exatamente.
+- APK QA: `PvPPokeGo-0.5.31-QA-debug.apk`, tamanho **79.430.738 bytes**, SHA-256 **`07d769bdcbbe4a6400ca21fe38f1276ddbb946b3a682c46cb85648d9400f52a0`**, reconfirmado após download e comparado ao `SHA256SUMS.txt`.
+- ZIP artefato ID **11592506273**, tamanho **35.822.814 bytes**. `unzip -t` ZIP/APK PASS; assinatura APK Signature Scheme **v2 true**, 1 signatário QA/debug; **não** é certificado permanente.
+- Assets `gamemaster.json`, `move_names_ptbr.json`, `pokemon_icon_atlas.json/png`, `pvpoke_snapshot.json`, launcher original transparente confirmados presentes.
+- ZIP no Google Drive oficial, upload e metadados verificados:
+  https://drive.google.com/file/d/1BQP8Zffi9IlwzBHWbN5S0koxbCOtJwvY/view?usp=drivesdk
+
+RESULTADO:
+- Editor manual de três Pokémon com dados reais do Game Master, sincronização com liga já existente, persistência/backup e cartões com sprites do atlas; compile/testes/build/arquivo APK QA reais.
+
+STATUS:
+**CONCLUÍDO** — código inicial, testes Kotlin, build Standard e verificações técnicas do APK/Drive.  
+**PARCIAL** — aceite de aparência no Samsung, integração segura das dicas manuais ao reconhecimento em batalha, verificações de elegibilidade por copa, ranking PvPoke real e acabamento visual igual ao mockup.
+
+PENDÊNCIAS E GARANTIAS:
+- Cadastro manual é **dica do jogador**, nunca substitui sozinho OCR/identidade/CP confiável do detector existente. Não alterar `BattleEngine`, correspondência do inimigo ou posicionamento HUD sem regressões e fixtures.
+- Instalar no Samsung, testar busca por nomes/formas, três vagas, ícones do atlas, ligas, restauração do backup, edição e sensores, além de telas de batalha, troca e launcher.
+- O certificado QA/debug pode ser diferente do APK já instalado; exportar backup antes de desinstalar se Android rejeitar a atualização.
+- Não declarar esta prévia "aprovada no celular" sem prova visual e feedback.
+- Não mergear PR #36 na branch da Arena/release até validação no dispositivo.
+
+PRÓXIMO PASSO:
+- Receber capturas reais do layout e relato do comportamento dos três slots em 0.5.31.
+- Corrigir eventuais falhas ou diferenças visuais, depois desenvolver uso dos dados manuais como hints sujeitos a confirmação por OCR/matcher e incorporar pontuação PvPoke somente com dados validados.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
