@@ -228,3 +228,24 @@ Especificação: [PROPOSTA_CAIXA_PRETA_DIAGNOSTICO_0.5.32.md](PROPOSTA_CAIXA_PRE
 - [ ] Não compilar nem gerar APK até ordem explícita.
 
 **Estado: registrada PROPOSTA; nenhuma implementação/compilação/teste.**
+
+
+## v0.5.33 Logcat + HP + controles OFF cinza — execução autorizada em 2026-10-09
+
+Relatório exato de código/QA: [IMPLEMENTACAO_0.5.33_LOGCAT_HP_UI.md](IMPLEMENTACAO_0.5.33_LOGCAT_HP_UI.md).
+
+- [x] Abrir branch `feature/diagnostics-hp-ui-0.5.33` derivada da feature 0.5.32, sem alterar a release antiga.
+- [x] Implementar `AppDiagnosticLog.kt` com `Log.i("PvPPokeGo")`, buffer privado limitado, coleta **apenas do próprio processo** por Logcat best-effort.
+- [x] Anexar `runtime-events.log`, `logcat-app.txt` e `integrity-warnings.txt` ao ZIP diagnóstico preexistente (sem remover JSON de histórico/settings/device).
+- [x] Instrumentar eventos de serviço/reset/sessões com breadcrumbs sanitizados, sem registrar OCR bruto/terceiros.
+- [x] Corrigir estados visuais: OFF cinza + label atenuado, ON ciano no menu rápido e no Switch da página de configurações.
+- [x] Melhorar previsão de HP: intervalo sobrevivente sem escudo, aviso separado de escudo, fallback discreto quando ROI ausente, chave persistente `show_hp_remaining_forecast` incluída no backup.
+- [x] Atualizar `versionName=0.5.33`, `versionCode=38` e adicionar CI de QA para geração de artefato APK com SHA256.
+- [x] **Tentou-se compilar** no GitHub Actions, mas job encerrou como failure antes de steps/logs, sem executar Gradle. Primeira run: https://github.com/LucianoToscano/PvPPokeGo/actions/runs/37901931447 ; tentativa posterior: https://github.com/LucianoToscano/PvPPokeGo/actions/runs/37902276938.
+- [ ] **BLOQUEADOR — APK**: verificar aviso da run GitHub Actions na interface (runner, faturamento/quota, Actions desabilitado) e restabelecer execução; não atribuir causa sem evidência.
+- [ ] Testes unitários Kotlin/Android: 0 executados até desbloqueio de runner; exigir `testStandardDebugUnitTest` e `assembleStandardDebug` passando.
+- [ ] Download e checksum do APK **0.5.33 real**; não oferecer cópia 0.5.31 renomeada.
+- [ ] QA em Samsung/Android 16: Logcat próprio, ZIP, tema claro/escuro, QuickMenu ON/OFF, HP previsão com/sem ROI, capture stale, OCR/manual/auto e restauração de posições.
+- [ ] Produzir artefato ao usuário quando compile/testes realmente funcionarem, indicando assinatura debug e necessidade de backup se exigida reinstalação.
+
+**ATENÇÃO: IMPLEMENTADO EM CÓDIGO-FONTE; COMPILAÇÃO NÃO OCORREU; 0 APKs GERADOS.** 
