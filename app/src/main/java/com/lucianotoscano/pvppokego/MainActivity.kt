@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.lucianotoscano.pvppokego.capture.AccessibilityScreenCapture
+import com.lucianotoscano.pvppokego.data.AppDiagnosticLog
 import com.lucianotoscano.pvppokego.data.BattleHistoryRepository
 import com.lucianotoscano.pvppokego.data.SettingsRepository
 import com.lucianotoscano.pvppokego.overlay.BattleOverlayService
@@ -67,6 +68,8 @@ class MainActivity : ComponentActivity() {
                         }
                         entry("settings.json", settingsRepo.exportBackupJson())
                         entry("battle_history.json", historyRepo.exportJson())
+                        entry("runtime-events.log", AppDiagnosticLog.exportRuntimeEvents())
+                        entry("logcat-app.txt", AppDiagnosticLog.exportOwnLogcat())
                         entry(
                             "device.txt",
                             buildString {
@@ -84,7 +87,9 @@ class MainActivity : ComponentActivity() {
                         entry(
                             "README.txt",
                             "Diagnóstico PvPPokeGo " + BuildConfig.VERSION_NAME + "\n" +
-                                "Inclui configurações, posições, histórico de batalhas, fontes/confiança dos eventos e dados do aparelho.\n"
+                                "Inclui configurações, posições, histórico, registro interno e Logcat limitado ao próprio processo.\n" +
+                                "Android pode bloquear Logcat; runtime-events.log continua disponível.\n" +
+                                "Não contém Logcat de outros apps/sistema. Revise dados pessoais antes de compartilhar.\n"
                         )
                     }
                 } ?: error("Não foi possível criar o ZIP")
@@ -175,6 +180,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppDiagnosticLog.initialize(this)
+        AppDiagnosticLog.record("activity", "on-create")
         settingsRepo = SettingsRepository(this)
         historyRepo = BattleHistoryRepository(this)
         overlayGranted = Settings.canDrawOverlays(this)
@@ -309,6 +316,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportDiagnostics() {
+        AppDiagnosticLog.record("export", "diagnostics-requested")
         exportDiagnosticsLauncher.launch("PvPPokeGo-" + BuildConfig.VERSION_NAME + "-diagnostico.zip")
     }
 
