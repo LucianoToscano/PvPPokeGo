@@ -1270,6 +1270,45 @@ PRÓXIMO PASSO:
 - Evoluir infraestrutura de torneios/ranking e recompensas em etapas rastreáveis no Guia Mestre e checklist, sem substituir matemáticas de batalha nem modificar controles nativos.
 
 
+
+### 2026-10-08/09 — Proposta Sua Equipe: editor manual pré-batalha 0.5.31
+
+Versão: `0.5.31`, versionCode `36` (apenas branch de feature isolada)  
+Base: `feature/arena-foundation-20261008` (0.5.30, HEAD de criação `5ce6f0398d36455294b1300e142aaad3a4f6528e`)  
+Branch de implementação: `feature/team-builder-0.5.31-20261008`  
+Branch de CI isolado: `LucianoToscano/PvPPokeGo-APK-Build:preview/team-builder-0.5.31-20261008`  
+Referências visuais: duas capturas/mockups fornecidos pelo usuário nesta conversa, com página inicial, logo/overlay/coplay, cartão SUA EQUIPE, Altaria/Houndoom/Rillaboom, PC/IVs/tipos/golpes/sexo/Mega/Sombroso/liga. Não presumir nomes/golpes/IV/rank desses exemplos como dados reais do usuário.
+
+OBJETIVO:
+- Incluir na página inicial cadastro manual de três Pokémon e seleção de liga sem perder Arena 0.5.30 nem regressar motor, OCR, reserva, launcher, HUD.
+- Não introduzir falsos ranks, medição HP não verificada ou dados inventados, nem interferir no jogo nativo.
+
+ALTERAÇÕES:
+- `TeamBuilderPanel.kt`: componente Compose compacto recolhível no início da tela, três vagas, busca de espécie/forma no Game Master offline, PC, IVs, HP máximo, sexo, Mega, Sombroso, e seleção de golpes legais da forma quando a espécie está presente no banco. Campos opcionais vazios em vez de adivinhar.
+- `ManualTeamPokemon`, `ManualTeamRoster`, `ManualTeamPolicy`: modelo e regras puras sanitizadas para 3 vagas, IVs, PC, HP, gênero e teto da liga.
+- `TeamSetupRepository.kt`: salvar/carregar equipe no mesmo arquivo persistente das configurações, chave `manual_team_v1`.
+- `SettingsRepository.kt`: autorizar a nova chave de equipe na exportação/importação JSON existente, sem migrar/resetar posições do HUD.
+- `SettingsScreen.kt`: painel antes da Arena, seletor usando a MESMA `leagueMode` de configurações e menu rápido.
+- `app/build.gradle.kts`: 0.5.31 / code 36 **somente nesta feature**.
+- `ManualTeamPolicyTest.kt`: testes de time incompleto, 3 vagas, IV/PC inválidos, limite da liga e opcionais.
+- `docs/TEAM_BUILDER_0.5.31.md` e checklist atualizados.
+
+INTEGRIDADE/ESCOPO:
+- Entrada manual é **declaração do jogador**, não OCR confirmado. Nenhum dado manual foi injetado no matcher e engine em combate. Integração da sugestão precisa de política por confiança e replay para evitar a regressão de aliados relatada na 0.5.29.
+- Sem alterar `BattleEngine`, `BattleOverlayService`, `BattleOverlayView`, assets do launcher ou lógica da Arena.
+- RANK e porcentagem de HP não são atribuídos por esses campos; são requisitos futuros.
+- UI visual dos sprites dos três Pokémon do mockup ainda não implementada. Priorizar funcionamento e dados consistentes, depois reproduzir mockup.
+
+TESTES:
+- Fonte/modelo, editor e testes JUnit adicionados. Execução Standard/CI aguardando resultado real; sem promessa de APK nesta data do registro.
+- Pendente validação visual no Samsung, teclado/scroll, reentrada do app e backup/restauração.
+
+STATUS: **PARCIAL** — código de editor e persistência, sem QA físico e sem integrar OCR.
+
+PRÓXIMO PASSO:
+- Conferir pipeline `0.5.31`, corrigir falhas de compilação/testes, só depois entregar APK de QA assinado e registrar SHA-256/Drive. Validar no aparelho antes de merge para a release.
+- Integrar manual com reconhecedor como preferência verificável, mantendo maior prioridade em evidência visual de espécie/forma correta.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
