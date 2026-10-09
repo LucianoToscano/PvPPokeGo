@@ -1211,6 +1211,64 @@ STATUS: **PARCIAL — testes direcionados concluídos; APK/QA aguardando.**
 
 PRÓXIMO PASSO: conferir `:app:testStandardDebugUnitTest` integral, `:app:assembleStandardDebug`, `apksigner`, SHA-256 e resultado do artifact; corrigir erros de CI se houver.
 
+### 2026-10-08/09 — PvPPokeGo Arena 0.5.30: APK Standard QA gerado e verificado
+
+Versão de prévia: `0.5.30` (`versionCode = 35`)  
+Branch privada de desenvolvimento: `feature/arena-foundation-20261008` (originada em `release/0.5.29`, HEAD inicial `952ff14e5f97fb461619946473a42c144cdc2caa`)  
+PR de integração: https://github.com/LucianoToscano/PvPPokeGo/pull/35 (**draft**, sem merge para a release)  
+Branch pública de CI: `LucianoToscano/PvPPokeGo-APK-Build:preview/arena-0.5.30-20261008`  
+HEAD compilado da cópia de build: `8fc87cce058bfe23e505e5b9dffb18162f65a651`  
+Run completo: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242187  
+Run testes isolados: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242217
+
+OBJETIVO/PROBLEMA:
+- Entregar QA local da primeira implementação de perfil, XP/medalhas, regras de pontuação e torneios PvPPokeGo sem interferir em HUD e OCR da 0.5.29.
+- Corrigir o versionamento da branch privada para corresponder ao APK efetivamente compilado.
+
+ALTERAÇÕES:
+- Introduzidos `ArenaProgress`, `ArenaCompetitionEngine`, `ArenaDashboard`, integração mínima no topo de `SettingsScreen`, testes JUnit e documentação Arena/Checklist.
+- Alterado `app/build.gradle.kts` na branch de feature para `versionName 0.5.30` e `versionCode 35` após êxito do snapshot público.
+- Registro espelhado no Google Drive do Guia Mestre (espelho, não substituto do arquivo GitHub).
+
+ARQUIVOS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaProgress.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngine.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/ArenaDashboard.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaProgressTest.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/arena/ArenaCompetitionEngineTest.kt`
+- `app/build.gradle.kts`
+- `docs/ARENA_RANKING_TOURNAMENTS_REWARDS.md`
+- `docs/CHECKLIST-PvPPokeGo-0.5.29.md`
+- `docs/PROJECT_CONTINUITY_GUIDE.md`
+
+TESTES:
+- `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.arena.*'` no run 37873242217: **SUCCESS**.
+- `:app:testStandardDebugUnitTest :app:assembleStandardDebug` no run 37873242187: **SUCCESS / BUILD SUCCESSFUL in 46s**.
+- Pacote offline PvPoke e atlas visual gerados pelo workflow: PASS.
+- ZIP do artifact e arquivo APK: integridade `unzip -t` PASS; assinatura APK v2 debug: true, um signatário.
+- SHA-256 computado no CI e reconfirmado após extração: **`4069ced7db03ea6e5d104b8d13826438802a671853b4b228784a3ad225ac5e7a`**.
+- Tamanho real do APK: **79.283.282 bytes**.
+- Artifact GitHub `PvPPokeGo-0.5.30-QA-debug`, ID `11591126817`; inclui APK, `SHA256SUMS.txt` e relatório `apksigner`.
+- **Nenhum teste visual/físico em Samsung nesta etapa**. Assinatura QA/debug pode divergir do APK instalado; exportar configurações antes de desinstalar e não sugerir update in-place garantido.
+
+RESULTADO:
+- Primeira implementação local de Arena com APK de QA disponível, mantendo exclusivamente na feature branch até aceite visual; OCR/energia/HUD/launcher base não modificados pela feature.
+
+STATUS:
+**CONCLUÍDO** para código inicial, testes, build, integridade, assinatura v2 e disponibilização do artifact QA.  
+**PARCIAL** para o módulo completo: falta backend, contas, ranking vivo, competições operacionais, histórico vitalício, premiações virtuais persistidas, prêmios reais e QA Samsung.
+
+PENDÊNCIAS:
+- Instalar e testar APK no Samsung: botão Arena no topo, expansão, apelido após reinício, medalhas, velocidade de rolagem, histórico e funções anteriores; preservar exportação de configurações/HUD.
+- Não conceder pontos competitivos por OCR/histórico autoestimado; histórico de batalhas atual limitado a 50 registros.
+- Futuro serviço autoritativo e aprovação contra fraudes antes de posicionamento em ranking e resgate de prêmio.
+
+PRÓXIMO PASSO:
+- Receber captura e relato de QA do usuário, corrigir defeitos em branch, repetir CI, finalizar PR#35 somente após validação.
+- Evoluir infraestrutura de torneios/ranking e recompensas em etapas rastreáveis no Guia Mestre e checklist, sem substituir matemáticas de batalha nem modificar controles nativos.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
