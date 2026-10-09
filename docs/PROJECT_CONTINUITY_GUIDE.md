@@ -1,3 +1,13 @@
+## 2026-10-09 — Continuação do matcher, formas e reservas 0.5.35 (QA3)
+
+**Estado real:** sem reiniciar a base: `feature/verified-core-0.5.35-20261009` mantém 0.5.34 e correções P0. QA base `37974565481` sucesso, QA2 matcher `37990550678` sucesso, último QA3 de reservas `37991257400` disparado sobre commit público `d63f24b08053955802d4ab3a5b492d688983ae0a`, **ainda exige comprovar sucesso e artefato antes de entregar**. Código privado HEAD `a29568f1f84a6778157e76c2f6418c0adcbf0d56`.
+
+**Alterações adicionais implementadas:** tracker só confia em lista de equipe >=0.90, exige 2 frames em troca inédita só de adversário ou troca simultânea dos dois, não confunde prompt de troca com partida nova, não divide quando falta par antigo de identidades; serviço faz *gate* dos cards OCR <0.78 antes do estado; BattleEngine só aplica identidade visual/form-aware quando >=0.80 e PC fisicamente compatível, preserva confiança dos membros provisórios; ReserveCardMatcher prioriza `activeSpeciesId` exato para diferenciar formas regionais de mesmo nome antes do fallback por nome/PC. Testes novos em `BattleCorrespondenceTrackerTest.kt` (6 cenários) e `ReserveCardMatcherTest.kt` (2 cenários); testes prévios de OCR/PC impossíveis, continuidade e reservas permanecem. Arquivos rastreados e escopo em [IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md](IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md).
+
+**Não regressar:** todos os ícones, layout e posições do HUD, botões, Logcat, HP fantasma, ranking offline, scanner da equipe, Auto/Manual, presets/backups e análise PvPoke. **Não afirmar realizado:** QA físico Android16, leitura de barras Avaliar IV, escudos confiáveis, login/reides/chats/torneios online e importação de código de APK de terceiros. Se o CI final falhar, corrigir origem na branch privada e reespelhar apenas arquivo necessário. Não dar link do APK não verificado.
+
+---
+
 
 ## 2026-10-09 — Revisão final de correspondência de batalhas (0.5.35, QA2)
 
