@@ -107,4 +107,5 @@ Pontos de XP ou OCR não autorizam premiação e nunca devem ser usados para fab
 - APK: **79.283.282 bytes**; SHA-256 `4069ced7db03ea6e5d104b8d13826438802a671853b4b228784a3ad225ac5e7a`.
 - `unzip -t` do arquivo ZIP de artefato e do APK extraído: PASS; `apksigner verify`: v2 **true**, um signatário QA/debug, sem promessa de certificado release permanente.
 - Branch de fonte privada: `feature/arena-foundation-20261008`, `app/build.gradle.kts` elevado para **0.5.30 / versionCode 35**; PR #35 permanece **draft** até aceite de QA.
+- Google Drive oficial: [ZIP com APK + verificação + checksum](https://drive.google.com/file/d/1lMFVEQrq6sc37iDdFrw2upCAfaZrDDp9/view?usp=drivesdk) (35.770.210 bytes verificados por metadados).
 - **Não houve teste instalado no Samsung**. Ranking competitivo online, torneios operacionais, sincronização de contas, anti-fraude server-side, prêmios reais e PokéCoins NÃO implementados/ativos.
