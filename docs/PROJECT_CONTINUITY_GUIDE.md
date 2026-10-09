@@ -1,3 +1,15 @@
+## 2026-10-09 — Continuação da correspondência 0.5.36 com fallback de build
+
+**Não reiniciar trabalho nem compilar de mirror novo:** o estudo/patch de correspondência está em `feature/battle-correspondence-0.5.36-20261009`. Para o espelho de build, a versão `preview/battle-correspondence-0.5.36-20261009` teve atraso na tarefa de baixar sprites de PokeMiners. Foi derivado o mirror auxiliar `preview/battle-correspondence-offline-0.5.36-20261009` **no repositório público de build já existente**, usando apenas `gh run download` e o SHA256 conhecido do APK QA 0.5.35 para recuperar atlas/fingerprints e preservar todos os ícones. Fonte e espelho privado/público continuam separados.
+
+- Primeira execução offline: [37991507117](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37991507117). Chegou ao Gradle e revelou erro **somente de teste** em `BattleHistorySegmentMatcherTest.kt` linha 91: `BattleHistoryEvent` exigia quarto argumento. Corrigido de `BattleHistoryEvent(2_000, "PARTIDA", "INÍCIO")` para `BattleHistoryEvent(2_000, "SISTEMA", "PARTIDA", "INÍCIO")`; código do app não teve que ser revertido.
+- Commit fonte de teste corrigido: `bd67821e44bf19f21e7effe5343d086e9cfab90a`; mirror offline `a19644936b8b9c8dad0324b3e9ffed5b11e0e934`.
+- Segunda execução offline: [37991837778](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37991837778), verificar status final, testes, SHA256/assinatura e APK. Não informar que o APK está pronto enquanto não existir artifact íntegro verificado.
+- Documentação integral: [BUILD_0.5.36_OFFLINE_ALTERNATIVE.md](BUILD_0.5.36_OFFLINE_ALTERNATIVE.md).
+- Pendências: teste físico Samsung Android16, checagem de escudos/HP/ativação manual e compatibilidade de assinatura. Não misturar futuro módulo Comunidade com funções já implementadas.
+
+---
+
 ## 2026-10-09 — Continuação executada: correspondência de batalhas e reservas 0.5.36
 
 **NÃO REINICIAR.** Pedido expresso: "Continue exatamente do ponto em que você parou — Resolvendo lógica de correspondência de batalhas"; preservar tudo e compilar com testes. Fonte canônica: `feature/battle-correspondence-0.5.36-20261009`, derivada da `feature/verified-core-0.5.35-20261009`. Versão 0.5.36 versionCode41. Detalhes: [`IMPLEMENTACAO_CORRESPONDENCIA_BATALHAS_0.5.36.md`](IMPLEMENTACAO_CORRESPONDENCIA_BATALHAS_0.5.36.md).
