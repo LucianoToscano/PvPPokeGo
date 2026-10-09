@@ -66,6 +66,9 @@ internal class BattleCorrespondenceTracker {
     val hasPendingNewBattleCandidate: Boolean
         get() = pendingNewSignature != null && pendingNewCount > 0
 
+    val hasPendingSwitchCandidate: Boolean
+        get() = pendingSwitchSignature != null && pendingSwitchCount > 0
+
     fun reset() {
         pendingNewSignature = null
         pendingNewCount = 0
@@ -88,16 +91,18 @@ internal class BattleCorrespondenceTracker {
             return Decision.INSUFFICIENT
         }
 
+        val trustedTeam = context.ownTeam.filter { it.usable }
+        val trustedEnemies = context.knownOpponents.filter { it.usable }
         val playerSame = player != null && sameIdentity(player, context.activePlayer)
         val enemySame = opponent != null && sameIdentity(opponent, context.activeOpponent)
-        val playerKnownTeam = player != null && context.ownTeam.any { sameIdentity(player, it) }
-        val enemyPreviouslySeen = opponent != null && context.knownOpponents.any { sameIdentity(opponent, it) }
+        val playerKnownTeam = player != null && trustedTeam.any { sameIdentity(player, it) }
+        val enemyPreviouslySeen = opponent != null && trustedEnemies.any { sameIdentity(opponent, it) }
 
         // A player identity outside an already-established own team is almost always
         // transient OCR. Never let one such frame replace the trusted active Pokémon.
         if (
             player != null &&
-            context.ownTeam.size >= 2 &&
+            trustedTeam.size >= 2 &&
             !playerSame &&
             !playerKnownTeam &&
             (opponent == null || enemySame)
@@ -138,9 +143,17 @@ internal class BattleCorrespondenceTracker {
             return if (player != null && !playerSame) Decision.SWITCH_WITHIN_BATTLE else Decision.CONTINUE
         }
 
-        // The player's known team is the strongest continuity anchor. Both sides are
-        // allowed to change together (simultaneous/faint switch) without splitting history.
+        // A trusted own-team member is a continuity anchor. When BOTH identities switch
+        // to new members at once, demand a second frame before mutating active/reserve state.
+        // A switch back to previously seen opponents is already supported immediately.
         if (playerKnownTeam) {
+            if (!playerSame && opponent != null && !enemySame && !enemyPreviouslySeen &&
+                !observation.switchPrompt
+            ) {
+                val signature = "simultaneous:" +
+                    player.stableKey().orEmpty() + "|" + opponent.stableKey().orEmpty()
+                if (!confirmSwitchCandidate(signature, nowMs)) return Decision.HOLD_CURRENT
+            }
             reset()
             return if (!playerSame || (opponent != null && !enemySame)) {
                 Decision.SWITCH_WITHIN_BATTLE
@@ -149,8 +162,17 @@ internal class BattleCorrespondenceTracker {
             }
         }
 
-        // Opponent-only identity change is common and must never start a new session.
+        // Opponent-only identity change is a switch, never a new battle. Require stable
+        // identity for a previously unseen opponent; single-frame OCR errors are common.
         if (player == null && opponent != null) {
+            if (enemySame) {
+                reset()
+                return Decision.CONTINUE
+            }
+            if (!enemyPreviouslySeen && context.activeOpponent != null &&
+                !observation.switchPrompt &&
+                !confirmSwitchCandidate("enemy:" + opponent.stableKey().orEmpty(), nowMs)
+            ) return Decision.HOLD_CURRENT
             reset()
             return Decision.SWITCH_WITHIN_BATTLE
         }
@@ -169,10 +191,25 @@ internal class BattleCorrespondenceTracker {
             return Decision.CONTINUE
         }
 
-        val ownTeamEstablished = context.ownTeam.size >= 2
+        // Without a known old pair there is nothing to split. Missing data is never proof
+        // of a new battle, even if two new OCR labels happen to match for several frames.
+        if (context.activePlayer == null || context.activeOpponent == null) {
+            reset()
+            return Decision.CONTINUE
+        }
+
+        // A switch dialog belongs to the current battle, never a new match. Unknown
+        // teammates are held until selection/reconfirmation resolves their identity.
+        if (observation.switchPrompt) {
+            reset()
+            return if (playerKnownTeam) Decision.SWITCH_WITHIN_BATTLE
+                else Decision.HOLD_CURRENT
+        }
+
+        val ownTeamEstablished = trustedTeam.size >= 2
         val playerIncompatible = ownTeamEstablished &&
-            context.ownTeam.none { sameIdentity(player, it) }
-        val opponentNew = context.knownOpponents.none { sameIdentity(opponent, it) }
+            trustedTeam.none { sameIdentity(player, it) }
+        val opponentNew = trustedEnemies.none { sameIdentity(opponent, it) }
 
         // Candidate new match:
         // 1) player is incompatible with the already-known team and opponent is new, or
