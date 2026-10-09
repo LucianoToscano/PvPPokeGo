@@ -24,7 +24,7 @@ Permitir ao jogador preparar os três Pokémon na tela inicial antes da partida,
 - **Importante:** este é cadastro MANUAL e não é evidência visual. O motor de batalha, OCR e reserva **não consomem automaticamente** esses dados até que seja implementada política de correspondência (identificador de espécie/forma, IV, CP, confiança e replay) com salvaguardas para não misturar slots em troca.
 - Sexo, Mega e Sombroso são marcações locais; elegibilidade real da liga/copa e existência da forma devem ser verificadas em integração posterior, não estão garantidas por toggle.
 - Sem calcular RANK/Elo a partir do cadastro. Rank de PvPoke e HP real dependem de dados corretos de nível, IV e forma, algoritmo auditado e versão.
-- Imagens oficiais dos Pokémon nos cartões e acabamento visual idêntico aos mockups **pendentes**. A versão inicial prioriza operação limpa e validação de dados num editor recolhível, sem criar imagens falsas.
+- Sprites nos três cartões **implementados no código** a partir de `PokemonIconAtlas` já existente, com correspondência por `speciesId`, carregamento assíncrono e fallback para nome quando indisponível. O acabamento visual idêntico ao mockup (cenário/fundos/ícones) **permanece pendente** até QA e refinamento.
 - Não alterar controles nativos Pokémon GO, HUD da 0.5.17, motor matemático ou identificação automática.
 - Em versões seguintes: selecionar espécies e movimentos por listas mais eficientes, recortes oficiais do atlas para cada slot, informar quais campos foram reconhecidos e oferecer aceitar/corrigir, histórico de equipes e prévia de cobertura PvP com dados validados.
 - Se houver múltiplas telas ou modalidades, manter sempre a **mesma** preferência `league_mode` e um único roster persistente.
@@ -37,6 +37,7 @@ Permitir ao jogador preparar os três Pokémon na tela inicial antes da partida,
 - `app/src/main/java/com/lucianotoscano/pvppokego/ui/TeamBuilderPanel.kt`
 - `app/src/main/java/com/lucianotoscano/pvppokego/ui/SettingsScreen.kt`
 - `app/src/main/java/com/lucianotoscano/pvppokego/data/SettingsRepository.kt`
+- `app/src/main/java/com/lucianotoscano/pvppokego/overlay/PokemonIconAtlas.kt` (apenas reutilizado, não alterado)
 - `app/build.gradle.kts`
 - `app/src/test/java/com/lucianotoscano/pvppokego/data/ManualTeamPolicyTest.kt`
 
