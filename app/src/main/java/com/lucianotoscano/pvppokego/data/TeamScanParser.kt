@@ -28,7 +28,8 @@ object TeamScanParser {
         .replace(Regex("\\s+"), " ")
 
     private val cpPattern = Regex("(?i)\\b(?:pc|cp)\\s*[:.]?\\s*([0-9]{2,5})\\b")
-    private val hpPattern = Regex("(?i)\\b([0-9]{1,4})\\s*/\\s*([0-9]{1,4})\\s*(?:ps|hp)?\\b")
+    private val hpPattern = Regex("(?i)\\b([0-9]{1,4})\\s*/\\s*([0-9]{1,4})\\s*(?:ps|hp)\\b")
+    private val hpPrefixPattern = Regex("(?i)\\b(?:ps|hp)\\s*[:.]?\\s*[0-9]{1,4}\\s*/\\s*([0-9]{1,4})\\b")
     private val hpSinglePattern = Regex("(?i)\\b(?:ps|hp)\\s*[:.]?\\s*([0-9]{1,4})\\b")
 
     /** A nickname such as "Cramorant 6 9 14" is NEVER used as IV evidence. */
@@ -54,7 +55,8 @@ object TeamScanParser {
             val current = match.groupValues[1].toIntOrNull()
             val max = match.groupValues[2].toIntOrNull()
             max?.takeIf { it in 1..2000 && current != null && current in 0..it }
-        } ?: hpSinglePattern.find(raw)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 1..2000 }
+        } ?: hpPrefixPattern.find(raw)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 1..2000 }
+            ?: hpSinglePattern.find(raw)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 1..2000 }
         val gender = when {
             raw.contains("♀") -> "FEMALE"
             raw.contains("♂") -> "MALE"
