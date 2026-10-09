@@ -186,3 +186,27 @@ Documento técnico, fontes, nove imagens arquivadas e CSV original: [PVP_ANALYTI
 - [ ] **Antes de publicar:** revisar licenças/atribuições, movimentos legados, regras de liga, dados válidos e QA Samsung.
 
 **Nenhum código de produção, testes executados, build, APK ou release nesta rodada de análise.** 
+
+
+## Exportações reais do aparelho — diagnóstico 0.5.31 — 2026-10-09 (SEM BUILD)
+
+Documento técnico com hash de origem, evidências e plano conservador: [DIAGNOSTICO_EXPORTS_0.5.31_2026-10-09.md](DIAGNOSTICO_EXPORTS_0.5.31_2026-10-09.md).
+
+- [x] Inspecionar 3 anexos 0.5.31: backup JSON de configurações, ZIP de diagnóstico e ZIP de histórico, **sem restaurar configurações**.
+- [x] Verificar que os dois ZIPs incluem histórico JSON de bytes idênticos; 7 sessões, 702 eventos, CSV de 702 linhas compatível com JSON.
+- [x] Registrar que 6/7 sessões não têm `result` verificável; nunca classificá-las como derrota/estimar win rate.
+- [x] Detectar possível fragmentação de sessão: vitória de 3,7s sem Pokémon identificados nem OCR, próximas sessões longas, duas sessões sem participantes.
+- [x] Detectar 34 trocas rotuladas `OCR/CONFIRMADO` e sessões com mais de 3 espécies do mesmo lado, exigindo auditoria de temporalidade/identidade.
+- [x] Verificar ordens dos eventos: quatro das sete sessões possuem `elapsedMs` regressivo em pelo menos um par consecutivo.
+- [x] Comparar configurações: arquivo isolado 34 chaves, ZIP diagnóstico 35; única chave adicional `auto_recognition=false` no diagnóstico. O novo `team_recognition_mode_v1` **não existe** no backup antigo 0.5.31, sem supor bug por isso.
+- [x] Documentar mismatch entre roster `manual_team_v1` e espécies aliadas reconhecidas, ainda sem causa determinada; não inserir dados pessoais/arquivo bruto no repositório.
+- [x] Revisar medidas existentes no código 0.5.32 para time Manual/Auto, sem alegar testes nem correção já verificada.
+- [ ] **P0** Criar testes com cenários de sessao partida/resultado → partida subsequente; evitar fragmentos e juntar partidas reais erroneamente.
+- [ ] **P0** Auditar confirmação OCR contra roster real: 3 aliados + 3 adversários, espécies/PC/forma, persistência, troca e pressão do matcher.
+- [ ] **P0** Validar comportamento de `auto_recognition=false` e modo Manual separado, antes/depois do backup e na inicialização do serviço.
+- [ ] **P1** Diferenciar evento confirmado por imagem, inferido e manual; exigir evidência para resultado e manter indeterminado quando necessário.
+- [ ] **P1** Garantir ordem cronológica estável e consistente JSON/CSV/txt, sem afetar captura de batalha.
+- [ ] **P1** Mostrar e permitir recuperar reservas desconhecidas sem inventar golpes.
+- [ ] Executar QA em Samsung + testes Kotlin/Gradle/Android **somente quando usuário autorizar**.
+
+**STATUS: somente inspeção estática e documentação sanitizada; nenhum código funcional, teste compilado ou APK modificado.**
