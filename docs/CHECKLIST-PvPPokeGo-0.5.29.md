@@ -357,3 +357,19 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] Considerar clãs/duelos/salas/reides online após decisão de arquitetura, autenticação, LGPD, bloqueio e moderação.
 - [ ] Validar UX clean sem legendas/títulos truncados e preservar HUD.
 - [ ] Build/APK dessas propostas: **não iniciado**; APK 0.5.34 segue inalterado.
+
+
+### Estudo Regibot autoral 2.3.32 — 2026-10-09
+- [x] Validar upload físico do APK, tamanho, SHA256, integridade ZIP, manifest Android, permissões e atividades.
+- [x] Inventariar os cinco esquemas JSON, versões e tipos de campos, sem extrair credenciais ou copiar código de automação.
+- [x] Identificar módulos de scanner/filtros, perfis/listas, Raid/Rocket, Mapa Leaflet/WorldClock, catálogo espécie/forma e watchdog.
+- [x] Registrar armadilhas de dados: `pokemon.json.type` NÃO é tipagem de batalha; variantes compartilham species ID; validar cobertura.
+- [x] Identificar componentes ELF/hooks/automação que não entram no PvPPokeGo e permissões excessivas que não devem ser herdadas.
+- [x] Relatório em `docs/ESTUDO_REGIBOT_2.3.32_PVPPokeGo.md` e Guia Mestre; Drive como espelho de continuidade.
+- [ ] Implementar versão nova do schema dinâmico com migração segura e opções ON/OFF visuais sem alterar layout original e HUD.
+- [ ] Perfis de filtros/ligas/time, export/import e rollback no scanner e Equipe 1/2/3 com QA.
+- [ ] Scanner com calibração real de barras Avaliar, confiança e validação do catálogo de formas.
+- [ ] Preparador PvE/Rocket/reide/Dinamax consultivo, com fontes válidas e versões de dados.
+- [ ] Ferramentas de fuso e calendário de eventos opt-in, localização aproximada e licença Leaflet/tiles caso utilizada.
+- [ ] Sem novos componentes de teleporte, auto-play, bots, hooks de jogo nem acesso indevido ao cliente ou backend Pokémon GO.
+- [ ] APK dessa etapa NÃO foi recompilado; manter entrega QA 0.5.34.
