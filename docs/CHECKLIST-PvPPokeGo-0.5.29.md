@@ -403,3 +403,17 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] **P0:** investigar escudos invariáveis e 14/20 carregados inferidos encontrados no histórico 0.5.33 com vídeo/replay para distinguir dados reais de hipóteses.
 - [ ] **P1:** calibração de IVs visuais e captura ao vivo do jogador, sem estimar IV numérico a partir de nickname.
 - [ ] **Backlog/integracão:** comunidade de treinadores, amigos, torneios/duelos/raid/trocas, bases externas e recursos dos APKs estudados; não declarar implantado sem código e backend/testes.
+
+
+### Continuidade de batalha 0.5.36 — implementação e validação (2026-10-09)
+- [x] Verificar HEAD real 0.5.35 e criar branch privada isolada `feature/battle-correspondence-0.5.36-20261009`.
+- [x] Impedir falso novo confronto por OCR de 2 espécies incompatíveis em pleno combate; exigir gap + 2 leituras e preservar candidato quando segundo frame zera inatividade.
+- [x] Corrigir identidade da reserva regional ao usar speciesId + nome/CP, sem primeiro-slot arbitrário.
+- [x] Impedir que CP x espécie/forma/Dex contraditórios sejam marcados confirmados ou aprendidos pelo motor, mesmo via eliminação.
+- [x] Gate único `confidence >=0.78` antes de `onDetection`, com diagnóstico anônimo; remover elevação artificial de confiança de slots OCR.
+- [x] Histórico não regrava segmentos brutos ao ler, fusão sem identidade proibida, exigir início no meio da partida + interrupção anterior + gap curto.
+- [x] Versão 0.5.36 (code41) e suites de testes de Correspondence, ReserveCard, HistorySegment ampliadas.
+- [x] Sincronizar somente código/recursos de compilação ao espelho público existente; comparar hashes e preservar repositório privado.
+- [ ] Confirmar resultado final do GitHub Actions `37991096113` (0.5.36 atualizada), testes Kotlin + Standard APK, SHA256/assinatura e entrega REAL de artefato.
+- [ ] QA funcional Samsung da integração OCR/forma/reservas/matcher/continuidade, modos auto/manual, overlay e histórico; ainda não confirmado em hardware.
+- [ ] Prioridades separadas: escudos/HP/resultados confiáveis, barras IV Avaliar, comunidade, PvE, torneios — NÃO implementadas nesta mudança.
