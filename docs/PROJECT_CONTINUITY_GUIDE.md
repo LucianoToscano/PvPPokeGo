@@ -1,3 +1,17 @@
+## 2026-10-09 — Nova proposta: comunidade, treinador, duelos, reides PvE e eventos (PENDENTE)
+
+Usuário compartilhou capturas reais das telas de perfil e código QR de treinador e pediu aproveitar perfil, código de amigos, duelos, eventos e PvE no PvPPokeGo. **Não confundir com recurso já implementado:** a compilação entregue 0.5.34 **NÃO contém essas funções sociais**.
+
+**Proposta técnica/análise funcional completa:** [`docs/PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md`](PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md), criada na branch privada `feature/team-scan-0.5.34-implementation` e não enviada ao espelho público (somente documentação). Proposta candidata a uma próxima fase 0.5.35+ conforme validações.
+
+**Conceito:** tela "Comunidade" com Meu Treinador (nickname, nível, facção, código 12 dígitos e QR/carta de apresentação compartilhável), cadastro voluntário de amigos/treinadores no PvPPokeGo, convites **de coordenação** para duelo PvP, reides PvE e eventos, equipes recomendadas, inscrição/agenda e histórico de resultados. Prioridade de fase 1 offline/local com Android Share Sheet + OCR via imagem selecionada e revisão do código, reaproveitando `TrainerPreferencesRepository` existente. Fases sociais online (confirmação entre usuários, lobby, push, moderação) dependem de backend seguro e autorização/consentimento.
+
+**LIMITES oficiais:** amizade por Trainer Code/QR nativo de 12 dígitos; duelo próximo usa Battle Code QR diferente; duelo remoto entre amigos acontece **dentro do Pokémon GO**; reides dependem de convite nativo, passes e regras da Niantic; Party Play usa QR/código temporário diferente. Sem API confirmada de integração, o app NÃO pode alegar ter efetivamente adicionado amigo, iniciado duelo/raid ou entrado no lobby do jogo. Fontes oficiais vinculadas na proposta.
+
+**SEGURANÇA:** usuário mostrou QR/código pessoal em imagem; NUNCA transcrever código real, QR, nome da conta nem compartilhá-los em GitHub público/diagnósticos/logs. Perfil social privado por padrão, compartilhamento opt-in; locais aproximados e regras LGPD; moderação/bloqueio para futuro componente online. Não copiar assets originais do jogo. Preservar 0.5.34 e todas as funções anteriores do scanner/HUD/overlay, sem alterações ao APK nesta etapa.
+
+---
+
 ## 2026-10-09 — 0.5.34 CI SUCCESS e APK QA verificado
 
 **Compilação da fase 1 do Scanner de Equipe 0.5.34 concluída em run real:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37917670306 `completed/success` job `113777712647`. Repo público compilador existente `LucianoToscano/PvPPokeGo-APK-Build` branch `preview/team-scan-0.5.34-20261009`, SHA `1dc7a4ba2d9e073f53523392cbd4fb5356bbd8ea`, snapshot sanitizado da fonte privada commit `286523513cc0d6fc7c310b2cb06027e79124f966`. `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, assets offline, atlas, testes de integridade e assinatura passaram.
