@@ -1475,6 +1475,41 @@ PRÓXIMOS PASSOS:
 - Quando autorizado: rodar testes `TrainerToolsTest`, modo de equipe, backup, Compose/Android e QA real em dispositivo, depois considerar build.
 - Em outra etapa criar classificador real de PvP IV e simulador por turnos, sem regressões nos mecanismos existentes.
 
+### 2026-10-09 — Nova leva de referências PvPoke: rankings, CMP, simulação, timing, matrizes e CSV (SEM BUILD)
+
+ORIGEM:
+- Usuário forneceu uma leva com 9 arquivos de imagem, um CSV e links explícitos do PvPoke. Mantida intenção anterior: **seguir acumulando mudanças e registrando; NÃO compilar nem gerar APK agora**.
+- Guias `release/0.5.29` e histórico `release/0.5.26` consultados; `release/0.5.29` HEAD confirmado `952ff14e5f97fb461619946473a42c144cdc2caa`.
+- Branch de desenvolvimento confirmada antes da alteração: `feature/team-recognition-modes-0.5.32`, HEAD anterior `75f380fc8ac801350bcbf9be65e95e35cefce3ea`. Não houve merge, build, alteração em APK, HUD ou código Kotlin nesta leva.
+
+NOVO DOCUMENTO COMPLETO:
+- `docs/PVP_ANALYTICS_REFERENCES_2026-10-09.md`
+- Nove capturas, URLs individuais do Drive e matriz CSV original estão preservados e indexados nele; **não depender só da disponibilidade futura das imagens deste chat**.
+- Arquivo CSV original no Drive: https://drive.google.com/file/d/1sYxNDXV0RszjN922ALwIARmmxu8dtDnf/view?usp=drivesdk
+- CSV verificado: 370 bytes, SHA-256 `bfc98fe13870a4b795466454a1bdfd114143c6f21ed10ff49d3206e09fdf3dc1`; 8 colunas, 4 linhas incluindo cabeçalho, grade 3×3 e W/L/D, `Average`; **valores assinados são diferenças de matriz, NÃO battle rating (0–1000), rank IV ou Elo de jogador**.
+- Links externos úteis: https://pvpoke.com/rankings/ · https://pvpoke.com/battle/ · https://pvpoke.com/team-builder/all/1500/ · https://pvpoke.com/attack-cmp-chart/all/1500/froslass/ · https://pvpoke.com/battle/1500/moltres_galarian/glalie/22/0-3-2/3-1-4/ · https://github.com/pvpoke/pvpoke
+- Comparar fonte/versionamento, respeitar licenças e direitos de marca/arte; tomar como referência funcional, não copiar interface ou afirmar resultados atuais dos screenshots.
+
+CONCEITOS E REQUISITOS CAPTURADOS:
+1. **Rankings PvP** por liga/papel (Overall, Leads, Closers, Switches, Chargers, Attackers, Consistency), notas como resultados de *simulações versionadas*; distintos de ranking público da Arena e rank IV.
+2. **CMP** por estatística real de Ataque e faixas de nível/IV/CP da liga, respeitando empate, timing de golpes ágeis e casos de “falso CMP”.
+3. **Simulador 1×1** com formas/IV/nível/golpes, HP/energia, escudos 0/1/2, buffs/debuffs, baiting, troca, timeline e cenários, com explicação de hipóteses e sem prometer previsão garantida.
+4. **Matrix Team Builder** para grupos offline, battle ratings 0–1000, W/L/D, diferenças, médias, cobertura, import/export CSV e cenários de 0/1/2 escudos, sem alterar a lista de três aliados *atuais* cadastrada no motor.
+5. **Optimal move timing** por turnos ágeis, **breakpoints/bulkpoints** por dano inteiro, **CMP chart**, condições de vitória e tradeoffs de energia.
+6. Continuar utilizando base `GameDataRepository` (GM e CP multipliers), `Models`, `TypeChart`, `BattleEngine` e módulos de equipe; motor de simulação deve ter estado puro/isolado do serviço OCR para preservar as partidas reais.
+7. Primeira etapa segura: inventariar modelos/snapshots/licenças e produzir algoritmo reproduzível e testes/fixtures; a UI clean e integração ao HUD vêm depois de validação.
+
+ARQUIVOS ALTERADOS NESTA LEVA:
+- `docs/PVP_ANALYTICS_REFERENCES_2026-10-09.md` (novo, referências + mapa técnico).
+- `docs/CHECKLIST-PvPPokeGo-0.5.29.md` (etapas, status e próximos testes).
+- `docs/PROJECT_CONTINUITY_GUIDE.md` (registro atual).
+- Espelho de continuidade do Google Drive oficial atualizado com este checkpoint; arquivos originais arquivados na pasta.
+
+STATUS / TESTES / PENDÊNCIAS:
+- **Somente documentação/arquivo de referências** nesta leva. **NÃO foram implementados** ranking simulado, CMP, matriz CSV ou simulador completo nesta etapa.
+- **NÃO executar testes/Gradle, disparar workflows, gerar APK, assinatura ou release** até solicitação expressa do usuário. A `0.5.31` permanece a última versão QA realmente compilada; `0.5.32` segue desenvolvimento em branch isolada.
+- Em próximos turnos, iniciar pela leitura do guia e checklist, HEAD real, inventário de snapshot e critérios de validade dos cálculos; desenvolver em etapas sem perda de OCR/HUD e documentar resultados reais.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
