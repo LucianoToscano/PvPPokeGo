@@ -1,3 +1,15 @@
+## 2026-10-09 — PvPPokeGo 0.5.35 COMPILADO, TESTADO E ENTREGUE
+
+**CONFIRMAÇÃO REAL:** espelho isolado [run 37974565481](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37974565481), job 113969447354, **completed/success**. Android SDK 36, Gradle 8.11.1 e Java 17, fingerprints/atlas offline, testes `testStandardDebugUnitTest` e `assembleStandardDebug`, integridade ZIP APK, assinatura v2 e upload do artifact **TODOS PASSARAM**.
+
+**Artefato:** `PvPPokeGo-0.5.35-QA-debug.apk`, 79.660.114 bytes, SHA256 **`4b52dc60ea7ee29da7363a3e061bb72d44aa1377cc1a1106d25b6a54f9257172`**, extraído e hash revalidado contra `SHA256SUMS.txt`. Artifact ID 11638566198, [GitHub Actions URL](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37974565481), expira 2026-11-08. O APK anterior 0.5.34 é diferente (hash `45e24fdf5d6c9a3c899bda7e08cec8a826231201c1f07f30604c99d3f7bc6d3e`), mas preservado.
+
+**Correções nesta versão:** guard matemático PC x espécie que rejeita Wingull/Vanillite PC1485, aceita Cramorant1485; filtros para batalha, time e fallback OCR; logging anônimo `species_cp_impossible`; cronologia monotônica dos eventos; descarte de sessões sem identidade e sem combate; logs de motivos de encerramento. Scanner 0.5.34, layout/icons/HUD/HP/config backup permanecem. Ver detalhes em [IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md](IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md).
+
+**Limites:** build/testes automatizados aprovados **não equivalem a QA físico**. Ainda pendente testar scanner/escudos e OCR ao vivo em Samsung Android16. Biblioteca pública não inclui material sensível. Ideias de apps terceiros continuam backlog quando não houver implementação real; comunidade e backend ainda ausentes. APK debug pode ter assinatura diferente da instalada: backup config, posições HUD e histórico antes de desinstalar.
+
+---
+
 ## 2026-10-09 — IMPLEMENTAÇÃO 0.5.35: VALIDAÇÃO PC/ESPÉCIE + HISTÓRICO ÍNTEGRO (BUILD QA EM ANDAMENTO)
 
 **Guia operacional:** [IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md](IMPLEMENTACAO_0.5.35_CORE_STABILIZATION.md). Branch privada separada `feature/verified-core-0.5.35-20261009`, a partir de 0.5.34 que continua preservada. Espelho público isolado para build `LucianoToscano/PvPPokeGo-APK-Build@preview/verified-core-0.5.35-20261009`. Código versionName=0.5.35 e code40.
