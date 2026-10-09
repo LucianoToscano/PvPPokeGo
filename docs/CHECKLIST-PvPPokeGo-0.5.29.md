@@ -329,3 +329,15 @@ Especificação detalhada: [PROPOSTA_SCANNER_EQUIPE_0.5.34.md](PROPOSTA_SCANNER_
 - [ ] QA Samsung e compatibilidade de assinatura com versão instalada; fazer backup das configurações antes de tentar atualização.
 - [ ] Validar scanner com imagens reais, especialmente IV Avaliar, correção de nomes PT-BR, Auto/Manual, HP/overlay/reservas.
 - [ ] Implementar scanner da avaliação numérico, live scan e custos exatos numa fase seguinte; *não* tratá-los como prontos no APK 0.5.34.
+
+
+### Backlog da Comunidade de Treinadores / 0.5.35+ (proposta 2026-10-09)
+- [x] Estudar screenshot do perfil e QR/código de amizade; confirmar oficialmente a separação entre código amizade, Battle Code e Party Play.
+- [x] Registrar plano e critérios em `docs/PROPOSTA_COMUNIDADE_TREINADORES_0.5.35.md`.
+- [ ] Área Meu Treinador: nick/código 12 dígitos, nível/facção, OCR de screenshot com prévia, opção compartilhar/copiar, dados privados por padrão.
+- [ ] Cadastro de amigos e cartões PvPPokeGo locais; não sincronizar nem alegar adição automática dentro do jogo.
+- [ ] Convites de coordenação e agenda para duelo PvP, reides PvE e eventos, com share sheet e regras.
+- [ ] Conectar selecionador do time 1/2/3 e informações de tipagem para recomendações de duelo/raid.
+- [ ] Debater/avaliar autenticação e backend próprios, moderação, consentimento, bloqueio e privacidade antes de ligar rede social online.
+- [ ] Testar exportação/restore, scans sensíveis e regressão HUD/overlay/scanner antes de release.
+- [ ] Build e APK com essas funções: NÃO iniciados; 0.5.34 QA entregue permanece inalterada.
