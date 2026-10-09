@@ -43,3 +43,14 @@ Workflow isolado `.github/workflows/verified-core-0.5.35.yml`, run GitHub Action
 - **QA no aparelho não realizado**: não afirmar combate/OCR/escudo/scanner de captura testados no Samsung. Pode exigir reinstalação se assinatura divergir; exportar backup primeiro. Não usar dados 0.5.33 sem revisar privacidade.
 
 **Links permanentes de entrega:** [APK 0.5.35 no Google Drive](https://drive.google.com/file/d/1oZ4srqfqZG-gi0OLudI6_6yS91Vn8Tfi/view?usp=drivesdk) · [ZIP e checksum 0.5.35 no Drive](https://drive.google.com/file/d/19fh30lTLh4clFi8pSreXkFcN946VYYEG/view?usp=drivesdk). Ambos uploads foram aceitos na pasta final oficial indicada pelo usuário. Os hash/signature check foram executados anteriormente sobre o arquivo local; não se afirma que o download do Drive foi reinspecionado independentemente.
+
+## 2026-10-09 — QA2: refinamento da correspondência de batalhas (versão 0.5.35)
+
+Continuação **sem reiniciar** após a primeira build 0.5.35 (run `37974565481` *success*; essa build não contém os patches QA2). Código na mesma branch privada `feature/verified-core-0.5.35-20261009`:
+- `engine/BattleCorrespondenceTracker.kt`: nova propriedade `hasPendingSwitchCandidate`; só equipe com confiança suficiente serve de âncora; dois frames para novo oponente OCR sem identidade própria visível e troca simultânea da equipe+oponente; botão/tela de troca **não** indica nova partida; sem par de identidades anteriores, não deduz limite de batalha; lista conhecida de oponentes também respeita confiança.
+- `engine/BattleEngine.kt`: evidência visual/forma só pode resolver espécie se superar a confiança mínima e não contradizer PC máximo; identidade de equipe provisória preserva confiança medida, sem promoção forçada a 0,90; matcher herda as mesmas condições do motor para não divergir na mesma captura.
+- `overlay/BattleOverlayService.kt`: descarte do OCR de espécie abaixo do limiar do matcher **antes** de decidir partida ou alterar motor e HUD; log apenas de evento anônimo, sem texto OCR.
+- `test/BattleCorrespondenceTrackerTest.kt`: 6 testes adicionais sobre troca unilateral, simultânea, troca com prompt, contexto insuficiente e formas regionais; baseline de troca simultânea atualizado para confirmação em 2 frames.
+- `data/SpeciesCpPlausibilityPolicy.kt`, `GameDataRepository.kt`, `BattleOcrDetector.kt`, `BattleHistoryRepository.kt` e testes da primeira build mantidos. Sem alterações de posições/ícones/controles HUD, time Manual/Auto, OCR screenshot e backup.
+- Commit do espelho de build `cc8783f5a7e0e818d72d8df2046067e18d8bb688`; QA2 GitHub Actions https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37990550678. **Quando este checkpoint foi escrito, CI em espera/executando; não afirmar sucesso até verificar.**
+- A validação automática **não substitui** QA Samsung Android16 e não prova OCR/HP/escudos reais. Não incluir ativos/código de APK de terceiros. Recursos sociais online permanecem planejados, não entregues.
