@@ -1309,6 +1309,24 @@ PRÓXIMO PASSO:
 - Conferir pipeline `0.5.31`, corrigir falhas de compilação/testes, só depois entregar APK de QA assinado e registrar SHA-256/Drive. Validar no aparelho antes de merge para a release.
 - Integrar manual com reconhecedor como preferência verificável, mantendo maior prioridade em evidência visual de espécie/forma correta.
 
+
+### 2026-10-08/09 — Sua Equipe 0.5.31: testes direcionados aprovados, sprites originais reutilizados
+
+Branch: `feature/team-builder-0.5.31-20261008`, baseada em `feature/arena-foundation-20261008` sem alterar a release 0.5.29.  
+PR draft: https://github.com/LucianoToscano/PvPPokeGo/pull/36  
+CI targeted: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37875124885
+
+ALTERAÇÕES:
+- Cartões dos três Pokémon mostram sprite exato do atlas local `PokemonIconAtlas` por espécie/forma quando carregado, em vez de imagens decorativas inventadas; fallback seguro por nome e PC.
+- A leitura/decodificação do atlas para a UI é assíncrona; classe original no overlay foi reutilizada sem alterações.
+- Sete arquivos de código, UI e testes comparados por hash Git (mesmo SHA de blob) entre branches privada e build público.
+
+TESTES:
+- `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.data.ManualTeamPolicyTest'` resultou **SUCCESS / BUILD SUCCESSFUL in 1m 4s**.
+- Versão completa do APK e teste Samsung ainda aguardando; não afirmar entrega final com base neste teste direcionado.
+
+STATUS: **PARCIAL** — código/testes direcionados concluídos, build completo e QA visual pendentes.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
