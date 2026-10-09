@@ -10,6 +10,7 @@ import com.lucianotoscano.pvppokego.data.DamageForecastConfidence
 import com.lucianotoscano.pvppokego.data.DetectedPokemon
 import com.lucianotoscano.pvppokego.data.ManualTeamRoster
 import com.lucianotoscano.pvppokego.data.ManualTeamPolicy
+import com.lucianotoscano.pvppokego.data.ManualTeamMatchPolicy
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
@@ -283,31 +284,19 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun hasManualTeamSelected(): Boolean = selectedManualTeam != null
 
     private fun manualSlotForPlayer(detected: DetectedPokemon): OwnTeamSlot? {
-        if (selectedManualTeam == null) return null
-
-        val visual = detected.visualSpeciesId?.takeIf {
+        val configured = selectedManualTeam ?: return null
+        val reliableVisualId = detected.visualSpeciesId?.takeIf {
             (detected.visualConfidence ?: 0f) >= IdentityThresholds.ACTIVE_VISUAL_MIN_CONFIDENCE
         }
-        if (visual != null) {
-            val candidates = ownTeamSlots.filter {
-                !it.speciesId.isNullOrBlank() && normalize(it.speciesId!!) == normalize(visual)
-            }
-            val exactCp = detected.cp?.let { cp -> ownTeamSlots.filter { it.cp == cp }.singleOrNull() }
-            // Strong visual evidence cannot be relabelled as some OTHER registered slot.
-            if (exactCp != null && exactCp !in candidates) return null
-            return candidates.singleOrNull { detected.cp == null || it.cp == detected.cp }
-                ?: candidates.singleOrNull()?.takeIf { exactCp == null }
-        }
-        detected.cp?.let { cp ->
-            ownTeamSlots.filter { it.cp == cp }.singleOrNull()?.let { return it }
-        }
-        val def = repo.pokemon(detected.name)
-        val identity = def?.speciesId ?: return null
-        return ownTeamSlots.filter { normalize(it.speciesId.orEmpty()) == normalize(identity) }
-            .singleOrNull()?.takeIf {
-                detected.cp == null || it.cp == detected.cp
-            }
+        val matchedIndex = ManualTeamMatchPolicy.memberIndex(
+            members = configured,
+            visualSpeciesId = reliableVisualId,
+            cp = detected.cp,
+            ocrSpeciesId = repo.pokemon(detected.name)?.speciesId
+        )
+        return ownTeamSlots.firstOrNull { it.slot == matchedIndex }
     }
+
 
     fun onBattleConfidence(value: Float) {
         lastBattleConfidence = value.coerceIn(0f, 1f)
