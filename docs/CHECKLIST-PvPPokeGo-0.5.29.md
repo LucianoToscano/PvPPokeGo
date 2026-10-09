@@ -47,7 +47,9 @@ Planejamento canônico: [Arena — especificação e estado](ARENA_RANKING_TOURN
 - [x] Criar gerador inicial de primeira rodada eliminatória por seeds para potências de dois.
 - [x] Adicionar testes de unidade no código para XP, duplicatas, streak, validação bilateral, Elo, separação por liga e chaves.
 - [x] CI Kotlin/Android: `:app:testStandardDebugUnitTest --tests 'com.lucianotoscano.pvppokego.arena.*'` — SUCCESS em [37873242217](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242217).
-- [ ] Executar suíte Android Standard completa e gerar/verificar APK 0.5.30 em workflow separado.
+- [x] Suíte Android Standard completa, assemble e integridade SHA/ZIP/assinatura v2 PASS no [build 37873242187](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37873242187): **PvPPokeGo-0.5.30-QA-debug.apk**, 79.283.282 bytes, SHA-256 `4069ced7db03ea6e5d104b8d13826438802a671853b4b228784a3ad225ac5e7a`.
+- [x] VersionName/versionCode 0.5.30 / 35 ajustados na branch de feature privada após o build público validado.
+- [ ] Testar APK de prévia em aparelho Samsung e aprovar UI, perfil e medalhas; a instalação não foi executada pela assistência.
 - [ ] Validar UI real no Samsung: expansão, apelido, medalhas, legibilidade, rolagem e persistência.
 - [ ] Manter acumuladores vitalícios independentes do histórico atual limitado a 50 partidas; definir política de migração.
 - [ ] Implementar login e identidade estável, API, banco de dados, anti-fraude e privacidade/consentimento.
