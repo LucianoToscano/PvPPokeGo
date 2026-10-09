@@ -345,9 +345,11 @@ class QuickOverlayMenu(
                 settings.showHpAssist = !settings.showHpAssist
                 changed()
             }
-            addRow(parent, "HP+", "HP restante após golpe", settings.showHpRemainingForecast) {
-                settings.showHpRemainingForecast = !settings.showHpRemainingForecast
-                changed()
+            if (settings.showHpAssist) {
+                addRow(parent, "HP+", "HP restante após golpe", settings.showHpRemainingForecast) {
+                    settings.showHpRemainingForecast = !settings.showHpRemainingForecast
+                    changed()
+                }
             }
             addRow(parent, "↻", "Timer de troca", settings.showSwitchTimer) {
                 settings.showSwitchTimer = !settings.showSwitchTimer
