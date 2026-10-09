@@ -1,3 +1,26 @@
+## REGRA PRIORITÁRIA — BUILD/APK POR ESPELHO PÚBLICO EXISTENTE
+
+**ANTES de tentar GitHub Actions no repositório original privado `LucianoToscano/PvPPokeGo`, consulte ESTA seção e os checkpoints históricos de 2026-10-07.** O GitHub Actions desse repositório já foi bloqueado por problema de faturamento/conta em 2026-10-07 e 2026-10-09; repetir workflows privados pode falhar antes de iniciar o Gradle.
+
+**Solução comprovada e autorizada anteriormente:** repositório público *isolado exclusivamente para compilar*, https://github.com/LucianoToscano/PvPPokeGo-APK-Build (não criar outro sem motivo). Ele contém snapshots isolados por `preview/...`, com workflows Standard que já geraram os APKs QA da 0.5.29 e 0.5.31. O repositório original permanece privado e canônico.
+
+**Procedimento obrigatório em futuras versões:**
+1. Conferir a branch, o HEAD e o Guia Mestre **do repositório privado**.
+2. Conferir o repositório público existente, HEAD da última branch preview, workflow, runs e artefatos. **Nunca afirmar que não há alternativa de build antes dessa verificação.**
+3. Criar branch `preview/<versão>` no repositório público, comparando SHA de blobs com a fonte canônica; copiar apenas a lista revisada de código/recursos necessários para build, **sem histórico privado, tokens, keystore, dados de usuários, backups, arquivos confidenciais ou credenciais**.
+4. Adaptar workflow de build Standard testado para versão/branch, incluir testes Gradle `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, empacotamento dos assets e verificações de APK, assinatura e SHA256.
+5. Só declarar APK pronto após **run success**, confirmação de SHA256 e identificação do artefato gerado; jamais renomear APK antigo, presumir sucesso porque o workflow foi iniciado, ou afirmar testes físicos no Samsung sem executá-los.
+6. Atualizar este Guia Mestre, checklist e espelho Google Drive com branches, commits privado/público, URL do run, checksum, nome de artefato, correções e QA pendente. Não sincronizar o mirror automaticamente nem tornar o repositório canônico público.
+
+**Situação nova 0.5.33 (2026-10-09):**
+- Origem privada: `feature/diagnostics-hp-ui-0.5.33`, HEAD de fonte `3b316f6fcaf7cf7726ca324548d9ce2427be70c5` (guia pode alterar HEAD posteriormente).
+- Branch pública criada: `preview/diagnostics-hp-ui-0.5.33-20261009`, HEAD `655514514f1cdfa4ce89b7848aa36994dc639f27`.
+- Snapshot derivado do `preview/team-recognition-0.5.32-20261009`, commit `11600081071b78348ae9fedf8620421c194cd3b8`; comparação dos arquivos `app/` revelou 20 diferenças (código Kotlin, testes, recurso XML e novo logger), sincronizadas por blobs idênticos ao Git original. Novo workflow público `.github/workflows/diagnostics-hp-ui-0.5.33.yml` adaptado do workflow da 0.5.31 aprovado.
+- **Run público iniciado**: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37903983424 ; resultado e APK DEVEM ser conferidos, não presumidos.
+- Histórico do espelho público já constava neste Guia desde 2026-10-07 nos registros `Espelho público isolado de compilação Standard`, versões 0.5.26–0.5.31. **Erro de processo identificado:** na preparação da 0.5.33, não foi relida/seguida essa seção, levando à tentativa redundante de Actions privados e instruções desnecessárias ao usuário para resolver billing.
+
+---
+
 # PvPPokeGo — Guia Mestre de Continuidade e Registro
 
 > **ARQUIVO CANÔNICO DO PROJETO**
