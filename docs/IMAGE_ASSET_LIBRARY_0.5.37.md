@@ -8,7 +8,10 @@ Esta operação organizou imagens e não recompilou nem alterou o aplicativo.
 - Referências de tela enviadas pelo usuário: https://drive.google.com/drive/folders/1RegKS5O87msOhHSZ_eHFtHIRnPyDsfZL
 - Mockups gerados (NÃO são os backgrounds do usuário): https://drive.google.com/drive/folders/1ddyDnmkA_5mQkpnZbHkBk7QS6AozjNmX
 - Ícones históricos 0.5.10: https://drive.google.com/drive/folders/1gmecKrsuLqsXBXUaSK4RaK2Ir1YefEZ_
-- Extração no CI de imagens do APK: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38486949624
+- Extração no CI de imagens do APK: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38486949624 (SUCCESS)
+- **ZIP só com imagens embutidas no APK no Drive:** https://drive.google.com/file/d/12R6jqydNSux-5hq0nt6o99YEwc-HZxf0/view?usp=drivesdk
+- Subpasta Drive APK: https://drive.google.com/drive/folders/1VmzCJejvoNTQVPLoZRD_DI-3S4SQrWn2
+- ZIP APK-only tem 1.369 arquivos; 10.085.253 bytes; SHA256 7a03bb21689609eca6c119415162a2081d27d3686363679d93150cc5115179ce; `unzip -t` PASS. Inclui 1.167 PNG recortados, atlas original, launcher, recursos raster e índices. Não inclui fundos externos; eles estão na subpasta correspondente.
 
 ## Inventário verificado
 - APK usado: 0.5.37 QA/debug (SHA256 0aa431a86f66d3cd6392330444fd3f307ef39378a28be2872aee6ea21360710d).
