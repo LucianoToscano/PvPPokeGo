@@ -1,4 +1,8 @@
-# PvPPokeGo 0.5.23
+# PvPPokeGo — estado atual 0.5.36 (QA)
+
+**Links atuais (13/10/2026):** [Drive oficial](https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI) · [APK QA 0.5.36](https://drive.google.com/file/d/14wzZDCx0RMCFtH-olGYlFb9FDnpaATHu/view?usp=drivesdk) · [Guia Mestre](docs/PROJECT_CONTINUITY_GUIDE.md) · [Checklist 0.5.36](docs/CHECKLIST-PvPPokeGo-0.5.36.md) · [Índice oficial de links](docs/PROJECT_LINKS.md).
+
+O APK Standard 0.5.36, `versionCode 41`, foi aprovado em CI e teve checksum revalidado após recuperação; **o reconhecimento e o HUD ainda não foram aprovados em aparelho real**. O conteúdo abaixo documenta as funções históricas, com seção específica de Predictor na 0.5.23.
 
 Assistente visual externo para batalhas PvP do Pokémon GO.
 
