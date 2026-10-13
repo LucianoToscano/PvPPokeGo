@@ -1,3 +1,13 @@
+# Nova reconstrução PvPPokeGo 1.0.0 — planejamento
+
+- **Checklist completo:** [REBUILD_MASTER_CHECKLIST_1.0.0.md](REBUILD_MASTER_CHECKLIST_1.0.0.md)
+- **Branch:** https://github.com/LucianoToscano/PvPPokeGo/tree/rebuild/1.0.0-checklist-20261013
+- **Escopo atual:** documentação de reconstrução, nenhum APK 1.0.x pronto.
+- **Legado 0.5.37/0.5.36 preservado**, conforme links abaixo.
+- **Google Drive oficial:** https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI
+
+---
+
 # Desenvolvimento da Home mobile 0.5.37 — 13/10/2026
 
 - **Código novo (privado):** https://github.com/LucianoToscano/PvPPokeGo/tree/feature/home-mobile-0.5.37-20261013
