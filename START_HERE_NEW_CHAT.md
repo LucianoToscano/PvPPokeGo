@@ -4,12 +4,20 @@
 
 Antes de qualquer trabalho, leia:
 
-## Guia Mestre canônico
+## Guia Mestre canônico — branch mais recente verificada (0.5.36)
 
-https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.26/docs/PROJECT_CONTINUITY_GUIDE.md
+https://github.com/LucianoToscano/PvPPokeGo/blob/feature/battle-correspondence-0.5.36-20261009/docs/PROJECT_CONTINUITY_GUIDE.md
 
 Arquivo:
 `docs/PROJECT_CONTINUITY_GUIDE.md`
+
+**Nova pasta oficial no Google Drive:** https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI
+
+**APK QA 0.5.36 no novo Drive:** https://drive.google.com/file/d/14wzZDCx0RMCFtH-olGYlFb9FDnpaATHu/view?usp=drivesdk
+
+**Checklist atual:** [0.5.36](docs/CHECKLIST-PvPPokeGo-0.5.36.md)
+
+**Links canônicos (não usar Drive antigo):** [PROJECT_LINKS](docs/PROJECT_LINKS.md)
 
 Esse Guia Mestre contém:
 - estado atual do projeto;
