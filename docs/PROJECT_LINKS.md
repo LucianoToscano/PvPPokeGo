@@ -2,7 +2,10 @@
 
 - **Código novo (privado):** https://github.com/LucianoToscano/PvPPokeGo/tree/feature/home-mobile-0.5.37-20261013
 - **Checklist da etapa:** [CHECKLIST-PvPPokeGo-0.5.37-HOME.md](CHECKLIST-PvPPokeGo-0.5.37-HOME.md)
-- **CI da prévia:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 (verificar conclusão antes de instalar)
+- **CI da prévia:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 (SUCCESS, 13/10/2026, checksum/assinatura verificados)
+- **APK QA 0.5.37:** https://drive.google.com/file/d/1Owa3oOXRhUIkrOZj8Q9X5K0Qma1ip8Kk/view?usp=drivesdk
+- **ZIP QA 0.5.37:** https://drive.google.com/file/d/1TpLMjyYd3bQSmweD7_u-xxr35DiDzM4l/view?usp=drivesdk
+- **SHA-256 do APK:** `0aa431a86f66d3cd6392330444fd3f307ef39378a28be2872aee6ea21360710d`
 - **0.5.36:** entrega anterior preservada no Drive conforme links abaixo.
 
 ---
