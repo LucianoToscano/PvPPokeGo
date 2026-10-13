@@ -21,8 +21,12 @@
 - [x] Branch de feature separada preserva integralmente a 0.5.36.
 
 ## Validação
-- [ ] Aguardar resultado do workflow Android Standard debug e dos testes unitários no run 38467721349.
-- [ ] Conferir o APK, a assinatura QA, os assets de Pokémon e checksum.
+- [x] CI Android 38467721349 concluído SUCCESS, `testStandardDebugUnitTest` e `assembleStandardDebug`.
+- [x] APK/ZIP íntegros, checksum confere com CI, GameMaster + atlas + fingerprints presentes; assinatura v2 e 1 signatário QA.
+- [x] APK e ZIP enviados e conferidos no novo Drive oficial.
+
+**0.5.37 CI VALIDADO EM 13/10/2026:** GitHub Actions run [38467721349](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349) completed/success, testStandardDebugUnitTest e assembleStandardDebug PASS. Artifact ID 11849641073, ZIP 35.982.605 bytes; APK 79.840.678 bytes; SHA-256 `0aa431a86f66d3cd6392330444fd3f307ef39378a28be2872aee6ea21360710d`; ZIP e APK `unzip -t` PASS; checksum idêntico ao CI; assets GameMaster, atlas e fingerprints presentes; assinatura QA v2 true, um signatário. **APK no novo Drive:** https://drive.google.com/file/d/1Owa3oOXRhUIkrOZj8Q9X5K0Qma1ip8Kk/view?usp=drivesdk ; **ZIP:** https://drive.google.com/file/d/1TpLMjyYd3bQSmweD7_u-xxr35DiDzM4l/view?usp=drivesdk. Falta QA físico, assinatura permanente e refino visual com feedback.
+
 - [ ] Instalar e validar a Home num telefone Android real, em especial na largura estreita.
 - [ ] Conferir clique dos três slots e retorno ao início após salvar.
 - [ ] Conferir seleção de liga e recálculo de elegibilidade da equipe.
