@@ -4,6 +4,10 @@
 
 **Checklist obrigatório:** [docs/REBUILD_MASTER_CHECKLIST_1.0.0.md](docs/REBUILD_MASTER_CHECKLIST_1.0.0.md)
 
+**Biblioteca oficial de imagens:** https://drive.google.com/drive/folders/1zAEL_PhkrvXSyJ8twCWcQFKaybEtAyWI
+
+**Inventário dos recursos visuais do APK:** [docs/IMAGE_ASSET_LIBRARY_0.5.37.md](docs/IMAGE_ASSET_LIBRARY_0.5.37.md)
+
 **Branch de planejamento:** `rebuild/1.0.0-checklist-20261013` — somente documentação, não apagar 0.5.37/0.5.36.
 
 **Primeiro APK planejado:** Home nativa Android, 2 estádios fornecidos pelo usuário, logo original, abas e três vagas vazias de equipe. Não misturar OCR, HUD e motor de previsão nessa primeira versão.
