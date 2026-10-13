@@ -9,6 +9,7 @@
 - **Branch de desenvolvimento mais recente verificada:** `feature/battle-correspondence-0.5.36-20261009`
 - **Guia Mestre canônico atualizado:** https://github.com/LucianoToscano/PvPPokeGo/blob/feature/battle-correspondence-0.5.36-20261009/docs/PROJECT_CONTINUITY_GUIDE.md
 - **Checklist atual:** https://github.com/LucianoToscano/PvPPokeGo/blob/feature/battle-correspondence-0.5.36-20261009/docs/CHECKLIST-PvPPokeGo-0.5.36.md
+- **Cópia do checklist no NOVO Google Drive:** https://drive.google.com/file/d/1j0ZqkUHPrOnM3g-zqi8MYt8lXjdS-sT5/view?usp=drivesdk
 - **Handoff da correção de correspondência 0.5.36:** https://github.com/LucianoToscano/PvPPokeGo/blob/feature/battle-correspondence-0.5.36-20261009/docs/IMPLEMENTACAO_CORRESPONDENCIA_BATALHAS_0.5.36.md
 - **Espelho histórico do Guia Mestre migrado para o Drive LucianoToscano (DOCX; não substituir GitHub):** https://docs.google.com/document/d/1CfSJ8o0r3qnoq3MSsfozYD1M5C07A1pL/edit?usp=drivesdk
 
