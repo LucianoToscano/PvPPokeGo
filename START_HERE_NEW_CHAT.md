@@ -17,9 +17,9 @@
 
 Antes de qualquer trabalho, leia:
 
-## Guia Mestre canônico — branch mais recente verificada (0.5.36)
+## Guia Mestre canônico — implementação mais recente validada em CI (0.5.37)
 
-https://github.com/LucianoToscano/PvPPokeGo/blob/feature/battle-correspondence-0.5.36-20261009/docs/PROJECT_CONTINUITY_GUIDE.md
+https://github.com/LucianoToscano/PvPPokeGo/blob/feature/home-mobile-0.5.37-20261013/docs/PROJECT_CONTINUITY_GUIDE.md
 
 Arquivo:
 `docs/PROJECT_CONTINUITY_GUIDE.md`
