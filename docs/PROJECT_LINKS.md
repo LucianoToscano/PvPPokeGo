@@ -1,3 +1,12 @@
+# Desenvolvimento da Home mobile 0.5.37 — 13/10/2026
+
+- **Código novo (privado):** https://github.com/LucianoToscano/PvPPokeGo/tree/feature/home-mobile-0.5.37-20261013
+- **Checklist da etapa:** [CHECKLIST-PvPPokeGo-0.5.37-HOME.md](CHECKLIST-PvPPokeGo-0.5.37-HOME.md)
+- **CI da prévia:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 (verificar conclusão antes de instalar)
+- **0.5.36:** entrega anterior preservada no Drive conforme links abaixo.
+
+---
+
 # PvPPokeGo — Links oficiais atualizados (13/10/2026)
 
 > **Ponto único de links ativos.** Este arquivo registra a mudança de Google Drive. Links antigos nos registros cronológicos de versões passadas são históricos e NÃO devem ser usados como destino de novas entregas.
