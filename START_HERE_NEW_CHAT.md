@@ -1,3 +1,21 @@
+# COMEÇAR AQUI — PLANO DE RECONSTRUÇÃO 1.0.0
+
+**Nova prioridade do usuário (13/10/2026):** reconstruir o PvPPokeGo do início por funções pequenas, gerando e testando cada APK. Nenhum APK 1.0.x foi criado ainda.
+
+**Checklist obrigatório:** [docs/REBUILD_MASTER_CHECKLIST_1.0.0.md](docs/REBUILD_MASTER_CHECKLIST_1.0.0.md)
+
+**Branch de planejamento:** `rebuild/1.0.0-checklist-20261013` — somente documentação, não apagar 0.5.37/0.5.36.
+
+**Primeiro APK planejado:** Home nativa Android, 2 estádios fornecidos pelo usuário, logo original, abas e três vagas vazias de equipe. Não misturar OCR, HUD e motor de previsão nessa primeira versão.
+
+**Guia Mestre deste plano:** https://github.com/LucianoToscano/PvPPokeGo/blob/rebuild/1.0.0-checklist-20261013/docs/PROJECT_CONTINUITY_GUIDE.md
+
+**Drive oficial:** https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI
+
+> Abaixo fica preservado o ponto de entrada da antiga linha de código 0.5.37, apenas como referência histórica.
+
+---
+
 # START HERE — PvPPokeGo
 
 ## Etapa atual: Home mobile 0.5.37 (APK QA pronto, teste físico pendente)
