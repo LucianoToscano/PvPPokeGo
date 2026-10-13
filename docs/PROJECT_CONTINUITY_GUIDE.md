@@ -1,3 +1,20 @@
+# PvPPokeGo — CONTINUIDADE 0.5.37 / HOME MOBILE (13/10/2026)
+
+> **Nova implementação isolada aprovada para tentativa de build, mas QA físico pendente.** Não alterar/reverter a 0.5.36. O projeto original e seu histórico permanecem preservados. A versão anterior 0.5.36 é o último APK totalmente verificado até o CI da 0.5.37 terminar.
+
+- **Branch de implementação:** [feature/home-mobile-0.5.37-20261013](https://github.com/LucianoToscano/PvPPokeGo/tree/feature/home-mobile-0.5.37-20261013), `versionName=0.5.37`, `versionCode=42`.
+- **Checklist detalhado:** [CHECKLIST-PvPPokeGo-0.5.37-HOME.md](CHECKLIST-PvPPokeGo-0.5.37-HOME.md).
+- **CI da versão 0.5.37:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 ; verificar `conclusion=success` antes de distribuir.
+- **Mirror público isolado:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/tree/preview/home-mobile-0.5.37-20261013
+- **Drive oficial:** https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI
+- **0.5.36 preservado:** APK verificado na pasta Drive e seção histórica abaixo.
+
+**Funções do novo painel inicial Android nativo:** Home vertical com painéis azul/translúcido, logo original, status do serviço Overlay, perfil com apelido editável, vitórias/batalhas/maior sequência do histórico local (não estatísticas inventadas), três Pokémon cadastrados (sprites, PC, HP, IVs, sexo, golpe rápido), média PC, seleção de liga e validação de limite, iniciar/parar HUD, nova batalha, histórico/exportação, Arena local, ferramentas e menu inferior. A seção Equipe reusa o painel scanner/manual; Ajustes conserva a tela longa e todos os controles antigos. Motores OCR, reserva e continuidade **não foram alterados**. Nenhum ranking social, prêmio online ou estatística fictícia foi anunciado.
+
+**Verificação pendente:** resultado real do GitHub Actions e Android físico; conferir cores, densidade, navegação, três slots e reconhecimento/HUD em aparelho. Fundo é gradiente nativo nesta primeira etapa — imagem original do estádio enviada pelo usuário ainda não foi incluída como recurso embutido. Patches futuros devem preservar dados e nunca substituir 0.5.36 antes de APK 0.5.37 verificado.
+
+---
+
 # PvPPokeGo — ESTADO CANÔNICO ATUALIZADO EM 13/10/2026
 
 > **Leia esta seção antes de registros históricos.** GitHub é a fonte de código/documentação. O Google Drive abaixo é o NOVO destino oficial dos binários. Registros anteriores de versão e links da conta antiga são preservados apenas como histórico — não usar como entrega corrente.
