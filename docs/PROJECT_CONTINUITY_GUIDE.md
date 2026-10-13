@@ -1,3 +1,15 @@
+## 13/10/2026 — Inventário de imagens reais do APK 0.5.37
+
+- **Biblioteca oficial Drive:** https://drive.google.com/drive/folders/1zAEL_PhkrvXSyJ8twCWcQFKaybEtAyWI
+- **Pacote real extraído APK-only (ZIP):** https://drive.google.com/file/d/12R6jqydNSux-5hq0nt6o99YEwc-HZxf0/view?usp=drivesdk
+- **Documentação:** [docs/IMAGE_ASSET_LIBRARY_0.5.37.md](IMAGE_ASSET_LIBRARY_0.5.37.md)
+- CI de extração: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38486949624 — SUCCESS. ZIP integral confirmado: 1.369 arquivos, 1.167 sprites recortados, 194 raster originais no APK incluindo atlas+launcher, SHA256 7a03bb21689609eca6c119415162a2081d27d3686363679d93150cc5115179ce. Nenhuma alteração de app nem APK novo.
+- **Fundos originais do usuário separados:** JPEG 1024x1536 (Home), JPEG 864x1536 (Equipe/Arena), uploads: https://drive.google.com/drive/folders/1qF1_Wyv8_x9MKAkbfcF4Tr10r9zeOXCp. Arquivos estavam nomeados .png na transferência mas conteúdo é JPEG; sem alteração de bytes. **Não constam no APK 0.5.37**.
+- Pacote ampliado local de 1.392 arquivos inclui também os dois fundos, capturas de referência, mockups gerados separados, catálogos HTML/CSV e ZIP histórico 0.5.10. Não confundir os mockups com os fundos do usuário.
+- Olho, cadeado e outros controles HUD podem estar desenhados em Kotlin/Canvas, sem sprites PNG separados. Consultar fonte 0.5.10 e GUIA.
+- Próximo uso: incorporar os dois backgrounds reais e somente os ícones necessários no primeiro APK 1.0.0, depois validar em aparelho.
+
+---
 # DECISÃO DE RECONSTRUÇÃO — PVPPokeGo 1.0.0 (13/10/2026)
 
 > **Novo plano canônico de desenvolvimento incremental, sem descartar o histórico.** Não interpretar a reconstrução como código já entregue.
