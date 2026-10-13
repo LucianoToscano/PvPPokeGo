@@ -1,14 +1,16 @@
 # START HERE — PvPPokeGo
 
-## Etapa atual: Home mobile 0.5.37 (QA em validação)
+## Etapa atual: Home mobile 0.5.37 (APK QA pronto, teste físico pendente)
 
 **Branch:** https://github.com/LucianoToscano/PvPPokeGo/tree/feature/home-mobile-0.5.37-20261013
 
+**APK 0.5.37:** https://drive.google.com/file/d/1Owa3oOXRhUIkrOZj8Q9X5K0Qma1ip8Kk/view?usp=drivesdk
+
 **Checklist:** [docs/CHECKLIST-PvPPokeGo-0.5.37-HOME.md](docs/CHECKLIST-PvPPokeGo-0.5.37-HOME.md)
 
-**CI do APK:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 — só considerar APK disponível após status `success` e verificação do artifact.
+**CI do APK:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 — run SUCCESS; APK e ZIP verificados, SHA-256 0aa431a86f66d3cd6392330444fd3f307ef39378a28be2872aee6ea21360710d.
 
-**Importante:** novo painel Android vertical e dados locais reais; versão 0.5.36 preservada como último APK verificado até o build novo terminar. Leia o Guia Mestre do mesmo branch da 0.5.37.
+**Importante:** novo painel Android vertical e dados locais reais; versão 0.5.36 preservada; novo APK 0.5.37 é a versão de QA mais recente, ainda não testada em aparelho. Leia o Guia Mestre do mesmo branch da 0.5.37.
 
 
 > **Este arquivo é apenas o ponto de entrada. A fonte canônica de continuidade mudou.**
