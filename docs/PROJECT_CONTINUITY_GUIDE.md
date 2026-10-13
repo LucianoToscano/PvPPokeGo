@@ -1,17 +1,18 @@
 # PvPPokeGo — CONTINUIDADE 0.5.37 / HOME MOBILE (13/10/2026)
 
-> **Nova implementação isolada aprovada para tentativa de build, mas QA físico pendente.** Não alterar/reverter a 0.5.36. O projeto original e seu histórico permanecem preservados. A versão anterior 0.5.36 é o último APK totalmente verificado até o CI da 0.5.37 terminar.
+> **Nova implementação isolada com CI Android aprovado, mas QA físico pendente.** Não alterar/reverter a 0.5.36. O projeto original e seu histórico permanecem preservados. A versão 0.5.37 é o APK QA/debug mais recente validado em CI; 0.5.36 permanece preservado.
 
 - **Branch de implementação:** [feature/home-mobile-0.5.37-20261013](https://github.com/LucianoToscano/PvPPokeGo/tree/feature/home-mobile-0.5.37-20261013), `versionName=0.5.37`, `versionCode=42`.
 - **Checklist detalhado:** [CHECKLIST-PvPPokeGo-0.5.37-HOME.md](CHECKLIST-PvPPokeGo-0.5.37-HOME.md).
-- **CI da versão 0.5.37:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 ; verificar `conclusion=success` antes de distribuir.
+- **CI da versão 0.5.37:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349 ; `conclusion=success` verificado, artifact baixado e conferido.
 - **Mirror público isolado:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/tree/preview/home-mobile-0.5.37-20261013
 - **Drive oficial:** https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI
 - **0.5.36 preservado:** APK verificado na pasta Drive e seção histórica abaixo.
+- **0.5.37 CI VALIDADO EM 13/10/2026:** GitHub Actions run [38467721349](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349) completed/success, testStandardDebugUnitTest e assembleStandardDebug PASS. Artifact ID 11849641073, ZIP 35.982.605 bytes; APK 79.840.678 bytes; SHA-256 `0aa431a86f66d3cd6392330444fd3f307ef39378a28be2872aee6ea21360710d`; ZIP e APK `unzip -t` PASS; checksum idêntico ao CI; assets GameMaster, atlas e fingerprints presentes; assinatura QA v2 true, um signatário. **APK no novo Drive:** https://drive.google.com/file/d/1Owa3oOXRhUIkrOZj8Q9X5K0Qma1ip8Kk/view?usp=drivesdk ; **ZIP:** https://drive.google.com/file/d/1TpLMjyYd3bQSmweD7_u-xxr35DiDzM4l/view?usp=drivesdk. Falta QA físico, assinatura permanente e refino visual com feedback.
 
 **Funções do novo painel inicial Android nativo:** Home vertical com painéis azul/translúcido, logo original, status do serviço Overlay, perfil com apelido editável, vitórias/batalhas/maior sequência do histórico local (não estatísticas inventadas), três Pokémon cadastrados (sprites, PC, HP, IVs, sexo, golpe rápido), média PC, seleção de liga e validação de limite, iniciar/parar HUD, nova batalha, histórico/exportação, Arena local, ferramentas e menu inferior. A seção Equipe reusa o painel scanner/manual; Ajustes conserva a tela longa e todos os controles antigos. Motores OCR, reserva e continuidade **não foram alterados**. Nenhum ranking social, prêmio online ou estatística fictícia foi anunciado.
 
-**Verificação pendente:** resultado real do GitHub Actions e Android físico; conferir cores, densidade, navegação, três slots e reconhecimento/HUD em aparelho. Fundo é gradiente nativo nesta primeira etapa — imagem original do estádio enviada pelo usuário ainda não foi incluída como recurso embutido. Patches futuros devem preservar dados e nunca substituir 0.5.36 antes de APK 0.5.37 verificado.
+**Verificação pendente:** Android físico; conferir cores, densidade, navegação, três slots e reconhecimento/HUD em aparelho. Fundo é gradiente nativo nesta primeira etapa — imagem original do estádio enviada pelo usuário ainda não foi incluída como recurso embutido. Patches futuros devem preservar dados e nunca substituir 0.5.36 antes de APK 0.5.37 verificado.
 
 ---
 
