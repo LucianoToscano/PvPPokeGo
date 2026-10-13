@@ -24,6 +24,14 @@
 - **Referência existente** = código, ideias ou arte que poderemos estudar/copiar com segurança da 0.5.37, **não** é comprovação de funcionamento na nova linha.
 - **Aprovação final de cada função:** código + teste unitário quando aplicável + APK + teste manual em aparelho + evidência visual + regressão das funções anteriores.
 
+## Organização de imagens: concluída como preparação, não implementação
+
+- [x] Extrair atlas com 1.167 sprites individuais do APK 0.5.37 e preservar o launcher PNG original.
+- [x] Inventariar 194 raster originais embutidos no APK e vetores Android compilados.
+- [x] Identificar e separar os dois backgrounds **originais do usuário** e as capturas de referência.
+- [x] Criar a [biblioteca de imagens e índice](IMAGE_ASSET_LIBRARY_0.5.37.md), pasta do Drive e ZIP de recursos do APK verificado.
+- [ ] Incorporar os dois fundos e ícones aprovados à NOVA base 1.0.0 e conferir em aparelho (ainda não feito).
+
 ## Etapa 01 — Android mínimo e identidade (primeiro APK)
 - [ ] Aplicativo Android Kotlin + Jetpack Compose inicia e reabre sem crash.
 - [ ] Ícone oficial do PvPPokeGo fiel à referência e ícones originais restaurados (não inventar emoji substituto).
