@@ -1,3 +1,19 @@
+# DECISÃO DE RECONSTRUÇÃO — PVPPokeGo 1.0.0 (13/10/2026)
+
+> **Novo plano canônico de desenvolvimento incremental, sem descartar o histórico.** Não interpretar a reconstrução como código já entregue.
+
+**Checklist mestre (274 linhas):** [REBUILD_MASTER_CHECKLIST_1.0.0.md](REBUILD_MASTER_CHECKLIST_1.0.0.md)
+
+**Branch de planejamento (somente documentação nesta atualização):** `rebuild/1.0.0-checklist-20261013` baseada na `feature/home-mobile-0.5.37-20261013`. Nada foi resetado, removido ou recompilado nesta operação.
+
+**Decisão:** reconstruir um aplicativo Android novo e enxuto, versão inicial 1.0.0, usando a antiga 0.5.37 como referência (não como aprovação). Primeira versão com Home portrait e dois backgrounds do usuário, logo, abas e três cards **vazios**; depois adicionar UMA grande função por APK, validar no aparelho, registrar aprovação e regressão. OCR, overlay, previsão, reserva e histórico aguardam as etapas seguintes. Não inventar perfis, estatísticas, ranking ou recompensas. Preservar backups/identificadores/signing da versão antiga, planejar teste lado a lado e não destruir dados do usuário.
+
+**Documentação e binário legado:** 0.5.37 tem CI Android aprovado; APK https://drive.google.com/file/d/1Owa3oOXRhUIkrOZj8Q9X5K0Qma1ip8Kk/view?usp=drivesdk ; ainda não houve QA físico completo. Drive oficial https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI . O checklist antigo de 80 requisitos e todas as análises PBE continuam preservados abaixo.
+
+**Status:** checklist criado, nenhuma versão 1.0.x gerada nesta etapa. Próximo passo é criar o projeto Android limpo na branch/módulo da reconstrução, somente após fixar o escopo do APK mínimo. Atualizar esta seção e o checklist em cada nova execução.
+
+---
+
 # PvPPokeGo — CONTINUIDADE 0.5.37 / HOME MOBILE (13/10/2026)
 
 > **Nova implementação isolada com CI Android aprovado, mas QA físico pendente.** Não alterar/reverter a 0.5.36. O projeto original e seu histórico permanecem preservados. A versão 0.5.37 é o APK QA/debug mais recente validado em CI; 0.5.36 permanece preservado.
