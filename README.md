@@ -1,3 +1,7 @@
+## Home Android 0.5.37 — etapa incremental (13/10/2026)
+
+O projeto mantém a versão 0.5.36 isolada e implementa uma Home vertical Android Compose em `feature/home-mobile-0.5.37-20261013`. Perfil local, três Pokémon de `TeamSetupRepository`, seleção de liga, botões overlay/histórico/equipe e navegação inferior; funções anteriores mantidas em Ajustes. [Checklist e status QA](docs/CHECKLIST-PvPPokeGo-0.5.37-HOME.md). A CI está [aqui](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38467721349); só divulgar APK após verificação. Estatísticas são exclusivamente de histórico local, sem ranking nem prêmio fictícios.
+
 # PvPPokeGo — estado atual 0.5.36 (QA)
 
 **Links atuais (13/10/2026):** [Drive oficial](https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI) · [APK QA 0.5.36](https://drive.google.com/file/d/14wzZDCx0RMCFtH-olGYlFb9FDnpaATHu/view?usp=drivesdk) · [Guia Mestre](docs/PROJECT_CONTINUITY_GUIDE.md) · [Checklist 0.5.36](docs/CHECKLIST-PvPPokeGo-0.5.36.md) · [Índice oficial de links](docs/PROJECT_LINKS.md).
