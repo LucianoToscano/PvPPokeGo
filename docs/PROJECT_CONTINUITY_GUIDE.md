@@ -1,3 +1,26 @@
+# PvPPokeGo — ESTADO CANÔNICO ATUALIZADO EM 13/10/2026
+
+> **Leia esta seção antes de registros históricos.** GitHub é a fonte de código/documentação. O Google Drive abaixo é o NOVO destino oficial dos binários. Registros anteriores de versão e links da conta antiga são preservados apenas como histórico — não usar como entrega corrente.
+
+## 0. Estado atual — entrega 0.5.36 e novo Google Drive
+
+- **Novo Drive PvPPokeGo (propriedade LucianoToscano):** https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI
+- **GitHub código (privado):** https://github.com/LucianoToscano/PvPPokeGo
+- **Branch de desenvolvimento mais recente verificada:** `feature/battle-correspondence-0.5.36-20261009`. HEAD base anterior à atualização documental: `8b32a050390e8b0475ca3d1579c7759424c54480`. Sempre conferir HEAD antes de alterar.
+- **Índice único de links atuais:** [docs/PROJECT_LINKS.md](PROJECT_LINKS.md).
+- **Checklist 0.5.36 atual:** [docs/CHECKLIST-PvPPokeGo-0.5.36.md](CHECKLIST-PvPPokeGo-0.5.36.md); preservar checklist de 80 itens da 0.5.26 como base histórica.
+- **APK Standard QA/debug 0.5.36:** https://drive.google.com/file/d/14wzZDCx0RMCFtH-olGYlFb9FDnpaATHu/view?usp=drivesdk
+- **ZIP com APK e comprovantes:** https://drive.google.com/file/d/1Y_ngMw12VcEPKMvBWVynMHnp6WQTyFOa/view?usp=drivesdk
+- **Espelho DOCX migrado do Guia Mestre:** https://docs.google.com/document/d/1CfSJ8o0r3qnoq3MSsfozYD1M5C07A1pL/edit?usp=drivesdk (cópia histórica da versão antiga, NÃO substitui esta página atualizada).
+- **CI definitivo validado:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37992150961 — `completed/success`, artifact `11645731162`. Versão `0.5.36`, versionCode 41.
+- **SHA-256 APK verificado:** `e1ff7e2ac9e0a5f6e940f1d334bb2c7722409d7018bc3781253652a0679c1a94`; tamanho 79.676.502 bytes, ZIP 35.916.907 bytes. `unzip -t` APK/ZIP PASS e assets preservados; relatório de CI confirma assinatura v2 e testes Standard.
+- **Status real:** build e entrega **CONCLUÍDOS**, aceitação visual Samsung Android 16 e partidas reais **PENDENTES**. Preservar backup de HUD, equipe e histórico antes da troca; assinatura debug pode ser diferente.
+- **Código:** nenhuma mudança de produção nesta atualização; continuidade/matcher e testes da 0.5.36 preservados.
+
+**Regra obrigatória:** novos builds e documentação devem usar o novo Drive; não republicar links de `12g6IITrn64y0D40YsIdzl-sN9alZty8Q` como destino atual. O link da pasta anterior fica somente nos registros históricos para rastreabilidade. Links `sandbox:` de chats anteriores não são entrega permanente.
+
+---
+
 
 ## CONCLUSÃO DO CI / APK 0.5.36 — 2026-10-09
 
@@ -274,13 +297,16 @@ Quando algo mudar, adicionar um novo registro explicando a correção/decisão.
 
 ## 3. Fonte de verdade atual
 
+> **Atenção:** Os campos abaixo registram o estado HISTÓRICO 0.5.26. O estado atual e os links oficiais da 0.5.36 são os da seção 0 no início deste arquivo. Não tratar os campos antigos como status vigente.
+
+
 ### Fonte canônica
 
 GitHub:
-https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.26/docs/PROJECT_CONTINUITY_GUIDE.md
+https://github.com/LucianoToscano/PvPPokeGo/blob/feature/battle-correspondence-0.5.36-20261009/docs/PROJECT_CONTINUITY_GUIDE.md
 
 Espelho no Google Drive:
-https://docs.google.com/document/d/178P8tWol8mjv_juy5qhyitEvE6yl1fzPnuLWGDV1cXw/edit?usp=drivesdk
+https://docs.google.com/document/d/1CfSJ8o0r3qnoq3MSsfozYD1M5C07A1pL/edit?usp=drivesdk
 
 **Regra:** o GitHub é a fonte canônica versionada; o Google Drive é um espelho de consulta/continuidade. Quando houver divergência, verificar o estado real do repositório e atualizar os dois.
 
@@ -476,7 +502,7 @@ Usar este texto:
 CONTINUAÇÃO DO PROJETO PVPPokeGo — NÃO REINICIAR.
 
 Antes de qualquer alteração, leia o Guia Mestre canônico do projeto:
-https://github.com/LucianoToscano/PvPPokeGo/blob/release/0.5.26/docs/PROJECT_CONTINUITY_GUIDE.md
+https://github.com/LucianoToscano/PvPPokeGo/blob/feature/battle-correspondence-0.5.36-20261009/docs/PROJECT_CONTINUITY_GUIDE.md
 
 Depois:
 1. verifique a branch/HEAD reais;
@@ -561,7 +587,7 @@ ALTERAÇÕES:
 GOOGLE DRIVE:
 - Documento: `PvPPokeGo — GUIA MESTRE DE CONTINUIDADE E REGISTRO`
 - ID: `178P8tWol8mjv_juy5qhyitEvE6yl1fzPnuLWGDV1cXw`
-- Link: https://docs.google.com/document/d/178P8tWol8mjv_juy5qhyitEvE6yl1fzPnuLWGDV1cXw/edit?usp=drivesdk
+- Link: https://docs.google.com/document/d/1CfSJ8o0r3qnoq3MSsfozYD1M5C07A1pL/edit?usp=drivesdk
 
 RESULTADO:
 - existe uma referência principal versionada no GitHub e um espelho persistente no Drive;
@@ -1854,3 +1880,39 @@ Próximos passos sem contratar serviço automaticamente: perfil GitHub > Setting
 
 
 **Atualização real de CI 2026-10-09:** A primeira execução 37990812354 chegou à compilação Kotlin dos testes e falhou com erro verificável em `BattleHistorySegmentMatcherTest.kt:91`: construção de `BattleHistoryEvent` com três argumentos quando `moveName` é obrigatório. O teste foi corrigido na fonte canônica, e também foi corrigida a expectativa do teste de troca simultânea (agora exige dois frames). Runs intermediárias descartadas: 37991096113, 37992007040. **Run definitiva do source compilável atual:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/37992092526, mirror HEAD `41a83803e213503af19d99342acd0b80d1be0d2e`. Comparação real da árvore Git: **129 arquivos de código/recursos de build comparáveis iguais em SHA** entre fonte privada e mirror, zero divergências. Aguardar resultado desta run antes de declarar APK pronto; o CI antigo não comprova sucesso dos testes atualizados.
+
+
+### 2026-10-13 — Drive oficial migrado, APK QA 0.5.36 recuperado e checklist atualizado
+
+Versão: 0.5.36 — Standard QA/debug; versionCode 41.
+Branch: `feature/battle-correspondence-0.5.36-20261009`.
+HEAD base do código: `8b32a050390e8b0475ca3d1579c7759424c54480` (commits desta atualização são apenas documentação).
+
+**OBJETIVO:**
+- Corrigir referências antigas à pasta Drive de outra conta e entregar APK verificado com checklist, preservando o histórico e sem conflito com funcionalidades desenvolvidas em paralelo.
+
+**ALTERAÇÕES:**
+- Identificada nova pasta oficial do projeto no Google Drive (ID `1ybogVRRnaOe0KtWjlovxS56bJOi_JewI`, conta proprietária LucianoToscano).
+- Download do artifact GitHub `11645731162` da run pública com sucesso `37992150961`; APK extraído do ZIP original, sem alterar binário nem renomear versão antiga.
+- Arquivos oficiais `PvPPokeGo-0.5.36-QA-debug.apk` e `PvPPokeGo-0.5.36-QA-debug-APK-e-verificacao.zip` enviados ao novo Drive e conferidos por leitura de metadados (IDs `14wzZDCx0RMCFtH-olGYlFb9FDnpaATHu` e `1Y_ngMw12VcEPKMvBWVynMHnp6WQTyFOa`).
+- Criados `docs/PROJECT_LINKS.md` e `docs/CHECKLIST-PvPPokeGo-0.5.36.md`; atualizados `START_HERE_NEW_CHAT.md`, `docs/CURRENT_DEVELOPMENT_HANDOFF.md`, `README.md` e este Guia Mestre.
+- Registros de versões anteriores e links de entrega históricos preservados; antigos links não devem ser utilizados como referência atual.
+
+**VERIFICAÇÃO/TESTES:**
+- SHA-256 do arquivo extraído recalculado e idêntico a `SHA256SUMS.txt`: `e1ff7e2ac9e0a5f6e940f1d334bb2c7722409d7018bc3781253652a0679c1a94`.
+- `unzip -t` ZIP original e APK: PASS. Recursos `gamemaster.json`, `pokemon_icon_atlas.json/png`, `pokemon_visual_fingerprints.json`: presentes.
+- Relatório CI `signature-verification.txt` confirma v2=true, 1 assinante. `testStandardDebugUnitTest` e `assembleStandardDebug` concluídos com sucesso na run pública anterior; **não reexecutados nesta atualização de documentação**.
+- Metadados Drive dos dois arquivos conferidos após upload: bytes/parentes corretos.
+
+**RESULTADO:**
+- APK verdadeiro da versão mais recente de código compilado disponível na nova pasta e nesta sessão. Checklist e links do projeto documentados.
+- **Não houve nova compilação nesta data**: reutilizado e verificado o build legítimo de 09/10/2026.
+
+**STATUS:** CONCLUÍDO para migração de links centrais, entrega do APK e documentação; PARCIAL para homologação funcional.
+
+**PENDÊNCIAS:**
+- QA físico em Samsung Android16: OCR 3 slots, formas e PCs, reservas, continuidade da batalha, escudos/HP, ícones, histórico, assinatura de instalação/backup.
+- Referências históricas datadas continuam no documento por rastreabilidade. Futuras branches devem consultar `docs/PROJECT_LINKS.md` antes de publicar URLs.
+
+**PRÓXIMO PASSO:**
+- Receber export de diagnóstico e vídeo de batalha do APK 0.5.36; validar defeitos restantes sem mexer em HUD ou posições desnecessariamente.
