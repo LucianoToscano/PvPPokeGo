@@ -279,3 +279,23 @@ A cada etapa, registrar nesta tabela:
 | 1.0.0 | — | não gerado | não testado | aguardando | — |
 
 **Última atualização deste plano:** 13/10/2026. Checklist inventaria recursos do legado; nenhum APK 1.0.x foi compilado ou instalado nesta etapa documental.
+
+
+## Complemento da biblioteca visual — ícones de HUD, tipos e rank (13/10/2026)
+
+Ícones dos **18 tipos** foram exportados dos contornos originais `TypeGlyphPaths.kt`; cadeado, olho, matchup (forte/neutro/fraco) foram convertidos dos métodos Canvas de `BattleOverlayView.kt` para PNG/SVG, com arquivo fonte preservado. Ranking no APK 0.5.37 é texto/emoji, portanto os badges #5/#18/#12 presentes nas imagens de referência foram incluídos SOMENTE como recortes de mockup, claramente rotulados. A extração anterior da biblioteca era incompleta por considerar só PNG embutido.
+
+**Pasta Drive:** https://drive.google.com/drive/folders/10svDEu4W1iCMkiO5attXCHduNEmW2NnP
+
+**Pacote só de ícones:** https://drive.google.com/file/d/1pzibhWTMq6Rknt23D5W2vbwncVD5ciyZ/view?usp=drivesdk
+
+**Biblioteca completa V2:** https://drive.google.com/file/d/1xSfd7xzGQspC4etEJruMgF5ZXcs0VCKM/view?usp=drivesdk
+
+**Mostruário:** https://drive.google.com/file/d/1RbGH90QkKQ8rSLGN5-CZuTzKZurbKBes/view?usp=drivesdk
+
+**Inventário/documentação:** [ICON_ASSET_HUD_TYPES_RANKS_0.5.37.md](ICON_ASSET_HUD_TYPES_RANKS_0.5.37.md)
+
+Status: pacote PNG/SVG criado, ZIP testado íntegro, Drive upload confirmado; não significa que novos sprites estão integrados em APK 1.0.0. Antes de utilizar esses ícones na reconstrução, conferir visual e toque em hardware.
+
+---
+
