@@ -308,7 +308,7 @@ Status: pacote PNG/SVG criado, ZIP testado íntegro, Drive upload confirmado; n�
 - [x] Prévia Home / equipe usa identificação Dex pelo atlas e notificação de nova imagem.
 - [x] Download/conversão local mockado: 4/4 testes, catálogo: 5/5.
 - [ ] Compilação Android e testes JUnit do código novo confirmados.
-- [ ] Download real dos retratos e conferência de identidade visual Mega.
+- [x] Download real dos 1.071 retratos WebP, hashes e decodificação PASS; 46 Megas em prancha de revisão.\n- [ ] Conferência visual individual e aprovação final das formas Mega.
 - [ ] QA aparelho: início, batalha, troca, offline e desempenho.
 - [ ] Revisão de direitos antes de redistribuir o conjunto de artes.
 - [ ] Aprovação e integração na sequência de APKs da reconstrução 1.0.0.
