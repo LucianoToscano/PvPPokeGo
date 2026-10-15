@@ -1,3 +1,5 @@
+**APK final QA standalone (Drive):** https://drive.google.com/file/d/1eGO1ALwCkcUWIeysE4oG5_gl_1-XlaE2/view?usp=drivesdk — arquivo de 80.990.041 bytes verificado no Drive. O ZIP com comprovantes continua disponível.
+
 # PvPPokeGo — Banco híbrido de retratos Pokémon / checkpoint 15-10-2026
 
 **Estado: PARCIAL.** A branch parte de `rebuild/1.0.0-checklist-20261013` (referência funcional 0.5.37). Não altera nem reverte a versão 0.5.36, não inicia um APK 1.0.0 sem aprovação e não cria coleções artificiais de imagens.
