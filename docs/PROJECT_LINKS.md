@@ -1,6 +1,8 @@
 # Banco de Imagens Pokémon 3D — entrega QA 15/10/2026
 
-- **APK QA (0.5.37 ImageDB) — ZIP final no Drive:** https://drive.google.com/file/d/1-vmbqRPp73Qp-MqpPsqxBOXxE9FBXuGm/view?usp=drivesdk
+- **APK QA (0.5.37 ImageDB) — ZIP final no Drive:**
+- **APK FINAL QA direto no Drive:** https://drive.google.com/file/d/1eGO1ALwCkcUWIeysE4oG5_gl_1-XlaE2/view?usp=drivesdk — 80.990.041 bytes.
+ https://drive.google.com/file/d/1-vmbqRPp73Qp-MqpPsqxBOXxE9FBXuGm/view?usp=drivesdk
 - **APK SHA-256:** `7828f7ad092e0f807f3a95c0f3536f3ed8164c927bf2951306ee47f316f9b9b6`; compilação/testes/assinatura v2 verificados: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38809088247 .
 - **Imagens WebP 1.071 (1.025 base + 46 Mega):** https://drive.google.com/file/d/1hScejMYPZrWSR4wuDiiQCVpuzaakPnZG/view?usp=drivesdk
 - **Prancha de Mega:** https://drive.google.com/file/d/143xIgW1f2OFUPqOsy7fgnRSW6auz0IE0/view?usp=drivesdk
