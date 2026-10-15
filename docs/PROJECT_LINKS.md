@@ -1,3 +1,14 @@
+# Banco de Imagens Pokémon 3D — entrega QA 15/10/2026
+
+- **APK QA (0.5.37 ImageDB) — ZIP final no Drive:** https://drive.google.com/file/d/1-vmbqRPp73Qp-MqpPsqxBOXxE9FBXuGm/view?usp=drivesdk
+- **APK SHA-256:** `7828f7ad092e0f807f3a95c0f3536f3ed8164c927bf2951306ee47f316f9b9b6`; compilação/testes/assinatura v2 verificados: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38809088247 .
+- **Imagens WebP 1.071 (1.025 base + 46 Mega):** https://drive.google.com/file/d/1hScejMYPZrWSR4wuDiiQCVpuzaakPnZG/view?usp=drivesdk
+- **Prancha de Mega:** https://drive.google.com/file/d/143xIgW1f2OFUPqOsy7fgnRSW6auz0IE0/view?usp=drivesdk
+- **Código isolado:** https://github.com/LucianoToscano/PvPPokeGo/tree/feature/pokemon-image-db-1.0.0-20261015 ; **PR CI draft:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/pull/1
+- **Status:** Build QA validado tecnicamente; instalação no telefone, assinatura release, redistribuição das artes e integração na reconstrução 1.0.0 pendentes. **O APK 0.5.37 anterior continua preservado.**
+
+---
+
 # Nova reconstrução PvPPokeGo 1.0.0 — planejamento
 
 - **Checklist completo:** [REBUILD_MASTER_CHECKLIST_1.0.0.md](REBUILD_MASTER_CHECKLIST_1.0.0.md)
