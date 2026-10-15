@@ -317,6 +317,9 @@ Fonte: [documento técnico](POKEMON_IMAGE_DB_IMPLEMENTATION_2026-10-15.md). Regi
 
 ### Resultado final do QA ImageDB (15/10/2026)
 
+- [x] APK direto carregado para o Drive, sem necessidade de extrair ZIP: https://drive.google.com/file/d/1eGO1ALwCkcUWIeysE4oG5_gl_1-XlaE2/view?usp=drivesdk .
+
+
 - [x] Run `38809088247`: compilação Android Standard + `testStandardDebugUnitTest` **PASS**, incluindo regressões de formas e precedência de espécie.
 - [x] `apksigner verify`: **PASS, v2 true, 1 debug signer**, pacote `com.lucianotoscano.pvppokego`, versão 0.5.37 (42).
 - [x] APK 80.990.041 bytes, SHA-256 `7828f7ad092e0f807f3a95c0f3536f3ed8164c927bf2951306ee47f316f9b9b6`; atlas offline com 1.167 entradas e Game Master empacotados.
