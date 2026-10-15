@@ -1468,6 +1468,13 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - GitHub prerelease permanece BLOQUEADO por erro de permissão HTTP 403 no token de Actions. Workflow de prerelease modificado para disparo MANUAL com token guardado em GitHub Actions Secrets (nome PVPPOKEGO_RELEASE_TOKEN), commit público ed5f5c3a272e9f7a6dd258315a9508db0c60c2ff. NÃO incluir token em texto/ZIP e NÃO afirmar que a release permanente foi publicada.
 - Ainda pendentes físico Samsung + Pokémon GO, assinatura de manifesto com chave própria, keystore permanente de APK release, rede Wi-Fi real, backend de IA com consentimento e artes finais aprovadas. Issue #38 foi atualizado. Preservar branches estáveis.
 
+### 2026-10-15 — Arquivo editável ampliado no Google Drive (verificado)
+
+- Arquivo PvPPokeGo-0.5.30-PROJETO-EDITAVEL-COMPLETO-ACERVO.zip, tamanho exato 7.300.714 bytes, SHA-256 e12272639376117ca9fb430b6434dd17e71bd422bd6be72dd29c885290db933b, integridade ZIP testada.
+- Drive ID 1UipiTkfV2TKSbUO2qvjHmYcFUGkqQlIz, URL https://drive.google.com/file/d/1UipiTkfV2TKSbUO2qvjHmYcFUGkqQlIz/view?usp=drivesdk.
+- Upload realizado; metadata lida de volta: nome e tamanho correspondem, pasta PvPPokeGo ID 1ybogVRRnaOe0KtWjlovxS56bJOi_JewI correta.
+- Conteúdo: fonte Android 0.5.30 QA compilável e editável na RAIZ, acervo privado de 06/10/2026 isolado por pasta, referência 0.5.10 ORIGINAL_ICONS de 28/09/2026 separada, inventário com origem e hashes. Histórico antigo não foi sobreposto ao código mais novo.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
