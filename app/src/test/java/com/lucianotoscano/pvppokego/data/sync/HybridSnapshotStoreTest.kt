@@ -26,6 +26,21 @@ class HybridSnapshotStoreTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun rollbackRestoresBundledDataSelection() {
+        val root = Files.createTempDirectory("hybrid-rollback").toFile()
+        try {
+            val store = HybridSnapshotStore(root)
+            val bytes = "valid".toByteArray()
+            assertTrue(store.stage("v2", mapOf("data.json" to bytes),
+                listOf(HybridSnapshotStore.Entry("data.json", sha(bytes)))))
+            assertNotNull(store.activateBetweenBattles("v2", false))
+            assertEquals("v2", store.activeVersion())
+            store.disableActiveSnapshot()
+            assertNull(store.activeVersion())
+            assertNotNull(store.snapshot("v2"))
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun rejectsPathTraversalAndIncompleteSets() {
         val root = Files.createTempDirectory("hybrid-snapshot").toFile()
         try {
