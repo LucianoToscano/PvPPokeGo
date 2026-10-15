@@ -11,6 +11,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlin.math.floor
 import kotlin.math.pow
 import java.io.File
+import com.lucianotoscano.pvppokego.data.sync.HybridSnapshotStore
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.Normalizer
@@ -41,6 +42,15 @@ class GameDataRepository(private val context: Context) {
     @Volatile var currentLeagueCp: Int = 1500
         private set
 
+    private val hybridStore by lazy { HybridSnapshotStore(File(context.filesDir, "hybrid-data")) }
+
+    private fun readSnapshotAsset(name: String): String {
+        val active = hybridStore.activeVersion()?.let { hybridStore.snapshot(it) }
+        val candidate = active?.resolve(name)
+        return if (candidate?.isFile == true) candidate.readText()
+        else context.assets.open(name).bufferedReader().use { it.readText() }
+    }
+
     suspend fun load(leagueCp: Int = 1500) = withContext(Dispatchers.IO) {
         currentLeagueCp = leagueCp
         legalFastCache.clear()
@@ -50,7 +60,7 @@ class GameDataRepository(private val context: Context) {
         battleStatsCache.clear()
         attackRangeCache.clear()
         val gmText = runCatching {
-            context.assets.open("gamemaster.json").bufferedReader().use { it.readText() }
+            readSnapshotAsset("gamemaster.json")
         }.getOrElse {
             runCatching {
                 fetchWithCache(
@@ -78,7 +88,7 @@ class GameDataRepository(private val context: Context) {
             .groupBy { it.dex }
 
         val rankingText = runCatching {
-            context.assets.open("rankings-$leagueCp.json").bufferedReader().use { it.readText() }
+            readSnapshotAsset("rankings-$leagueCp.json")
         }.getOrElse {
             fetchWithCache(
                 url = "$RANKINGS_PREFIX$leagueCp.json",
@@ -94,8 +104,8 @@ class GameDataRepository(private val context: Context) {
         }.getOrDefault(emptyMap())
 
         cpMultipliers = runCatching {
-            context.assets.open("pvpoke_cpms.json").bufferedReader().use { reader ->
-                json.parseToJsonElement(reader.readText())
+            run {
+                json.parseToJsonElement(readSnapshotAsset("pvpoke_cpms.json"))
                     .jsonObject["cpms"]
                     ?.jsonArray
                     ?.mapNotNull { it.jsonPrimitive.contentOrNull?.toDoubleOrNull() }
