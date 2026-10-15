@@ -72,11 +72,15 @@ fun SettingsScreen(
     var reserves by remember { mutableStateOf(repository.analyzeReserves) }
     var reserveTypes by remember { mutableStateOf(repository.showReserveTypes) }
     var moves by remember { mutableStateOf(repository.showEnemyMoves) }
+    var enemyTeamSlots by remember { mutableStateOf(repository.showEnemyHistory) }
     var counter by remember { mutableStateOf(repository.showChargedCounter) }
     var progress by remember { mutableStateOf(repository.showEnergyProgress) }
     var hpAssist by remember { mutableStateOf(repository.showHpAssist) }
     var timer by remember { mutableStateOf(repository.showSwitchTimer) }
     var debug by remember { mutableStateOf(repository.debugMode) }
+    var hybridAutomatic by remember { mutableStateOf(repository.automaticDataUpdates) }
+    var hybridWifiOnly by remember { mutableStateOf(repository.wifiOnlyDataUpdates) }
+    var hybridStatus by remember { mutableStateOf(repository.hybridDataStatus()) }
     var edit by remember { mutableStateOf(repository.editMode) }
     var scale by remember { mutableFloatStateOf(repository.scale) }
     var opacity by remember { mutableFloatStateOf(repository.opacity) }
@@ -317,6 +321,16 @@ fun SettingsScreen(
                     moves = it
                     repository.showEnemyMoves = it
                 }
+                Toggle("Três slots do time adversário", enemyTeamSlots) {
+                    enemyTeamSlots = it
+                    repository.showEnemyHistory = it
+                }
+                Text(
+                    "Mostra apenas Pokémon realmente reconhecidos. Slots desconhecidos ficam " +
+                        "com interrogação; PC, HP e energia são preservados por identificação e trocas.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Toggle("Pontos de carregamento", counter) {
                     counter = it
                     repository.showChargedCounter = it
@@ -387,6 +401,45 @@ fun SettingsScreen(
                     valueRange = .3f..1f,
                     steps = 6
                 )
+
+                SectionTitle("Banco de dados híbrido — offline e online")
+                Text(
+                    "O aplicativo usa a base interna sem internet. Atualizações verificadas são " +
+                        "baixadas fora da batalha e entram em uso somente após reabrir o PvPPokeGo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Toggle("Atualização automática diária", hybridAutomatic) {
+                    hybridAutomatic = it
+                    repository.automaticDataUpdates = it
+                    hybridStatus = repository.hybridDataStatus()
+                }
+                Toggle("Atualizar apenas por Wi-Fi", hybridWifiOnly) {
+                    hybridWifiOnly = it
+                    repository.wifiOnlyDataUpdates = it
+                    hybridStatus = repository.hybridDataStatus()
+                }
+                Text(
+                    hybridStatus,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(
+                    onClick = {
+                        repository.checkHybridUpdatesNow()
+                        hybridStatus = "Verificação agendada. O download respeita as condições da rede.\n" +
+                            repository.hybridDataStatus()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Verificar atualizações agora")
+                }
+                OutlinedButton(
+                    onClick = { hybridStatus = repository.hybridDataStatus() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Atualizar status da base")
+                }
 
                 SectionTitle("Backup e diagnóstico")
                 Text("Backup de configurações e posições", style = MaterialTheme.typography.titleMedium)

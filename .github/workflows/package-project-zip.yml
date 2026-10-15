@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - v04-v03-stable-base
+      - feature/hybrid-data-sync-0.5.29
+    paths:
+      - '.github/workflows/package-project-zip.yml'
   workflow_dispatch:
 
 jobs:
@@ -29,12 +32,22 @@ jobs:
           # Keep generated offline assets, but never ship the temporary Python venv.
           rm -rf .venv-visual
           zip -r PvPPokeGo_COMPLETE_PROJECT.zip . \
-            -x "./.git/*" "./.gradle/*" "./app/build/*" "./build/*"
+            -x "./.git/*" "./.gradle/*" "./app/build/*" "./build/*" "*.jks" "*.keystore" "./keystore.properties" "./local.properties" "./.env" "./.env.*"
+
+      - name: Verify editable archive
+        run: |
+          set -euo pipefail
+          unzip -t PvPPokeGo_COMPLETE_PROJECT.zip >/dev/null
+          unzip -Z1 PvPPokeGo_COMPLETE_PROJECT.zip | grep -q 'docs/PROJECT_CONTINUITY_GUIDE.md'
+          unzip -Z1 PvPPokeGo_COMPLETE_PROJECT.zip | grep -q 'app/src/main/java/com/lucianotoscano/pvppokego/MainActivity.kt'
+          sha256sum PvPPokeGo_COMPLETE_PROJECT.zip > PvPPokeGo_COMPLETE_PROJECT.zip.sha256
 
       - name: Upload project ZIP
         uses: actions/upload-artifact@v4
         with:
           name: PvPPokeGo-COMPLETE-PROJECT
-          path: PvPPokeGo_COMPLETE_PROJECT.zip
+          path: |
+            PvPPokeGo_COMPLETE_PROJECT.zip
+            PvPPokeGo_COMPLETE_PROJECT.zip.sha256
           if-no-files-found: error
           retention-days: 30

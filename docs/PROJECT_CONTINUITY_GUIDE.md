@@ -1138,6 +1138,361 @@ Ambos devem persistir, exportar/importar e atualizar imediatamente o menu rápid
 **STATUS:** este inventário/contrato visual está **REGISTRADO NO GUIA**, mas a auditoria dos toggles, sincronização, testes de Android e APK com novas correções **NÃO FOI FEITA NESTA ETAPA**. Este commit é SOMENTE de documentação; não é build/release nova. Toda mudança futura nos menus deve gerar novo registro cronológico no guia da branch ativa e (quando relevante) no espelho histórico solicitado, incluindo branch/HEAD real, arquivos alterados, teste, pendências e links de artefatos verificados.
 
 
+
+### 2026-10-15 — Início da arquitetura híbrida de dados (etapa isolada)
+
+Versão-base: 0.5.29
+Branch de trabalho: `feature/hybrid-data-sync-0.5.29`
+Checkpoint de documentação: `faca18c838d8e8be962b7afcf4b97e013f291a2b`
+
+OBJETIVO/PROBLEMA:
+- Atualização diária automática via Wi-Fi, mantendo o motor PvP totalmente offline durante a batalha.
+
+ALTERAÇÕES:
+- Auditados o empacotador PvPoke, checklist da 0.5.29 e dependências Android.
+- Criado armazenamento isolado de snapshots com verificação SHA-256, staging e ativação explícita fora de batalha.
+- Criados testes JVM de checksum, ativação e segurança de caminhos.
+- Especificação e limites em `docs/HYBRID_DATA_SYNC_2026-10-15.md`.
+
+ARQUIVOS PRINCIPAIS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStore.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStoreTest.kt`
+- `docs/HYBRID_DATA_SYNC_2026-10-15.md`
+- `docs/PROJECT_CONTINUITY_GUIDE.md`
+
+TESTES:
+- Testes criados, ainda não executados; compilação Android e APK não realizados.
+
+RESULTADO:
+- Base inicial de staging adicionada sem tocar no motor de batalha nem substituir assets existentes.
+
+STATUS:
+PARCIAL.
+
+PENDÊNCIAS:
+- Implementar e conectar WorkManager (Wi-Fi, diário), manifesto confiável, downloader, preferências e carregador.
+- Auditar ponto de troca de sessão, executar testes/build e validar em aparelho.
+
+PRÓXIMO PASSO:
+- Completar a integração no branch isolado; somente depois de testes promover à release.
+
+
+### 2026-10-15 — Agendamento híbrido diário (continuação)
+
+Versão-base: 0.5.29
+Branch: `feature/hybrid-data-sync-0.5.29`
+Commit de documentação anterior: `04cf42f4f6a34c1a57dedd8eb8cfa31c463fa63e`
+
+ALTERAÇÕES:
+- Dependência WorkManager 2.10.1 adicionada ao módulo Android.
+- `HybridSyncScheduler` registra trabalho periódico diário em rede não tarifada, com opções persistidas de automático=true e wifiOnly=true.
+- Inicialização no `PvPPokeGoApp`.
+- Worker permanece deliberadamente sem download/ativação até existir manifesto confiável, validação de esquema e integração segura com sessão de batalha.
+
+TESTES:
+- Inspeção de código; build Android e testes JVM não executados nesta etapa.
+
+STATUS:
+PARCIAL — agendamento criado; atualização remota real e carregamento de snapshots ainda pendentes.
+
+PENDÊNCIAS:
+- Definir fonte HTTPS versionada e confiável; baixar e validar manifesto/arquivos; integrar `GameDataRepository` e troca entre batalhas.
+- Corrigir/revisar qualquer problema apontado pelo compilador, executar testes e gerar APK Standard apenas após validação.
+
+
+### 2026-10-15 — Downloader HTTPS e integração do carregador (continuação)
+
+ALTERAÇÕES:
+- Worker diário lê manifesto HTTPS configurável via `pvppokego.hybridManifestUrl`; padrão vazio = nenhum download.
+- Implementadas restrições de rede, host, redirecionamento, tamanho, esquema JSON, mínimos de registros e SHA-256.
+- Downloads ficam em staging. Ativação de base pendente somente em inicialização de novo processo Android.
+- `GameDataRepository` lê snapshots ativados com fallback para assets do APK.
+- Detalhes em `docs/HYBRID_DATA_SYNC_2026-10-15.md`.
+
+STATUS: PARCIAL / NÃO VALIDADO.
+- Não existe manifesto público confiável configurado; atualização real ainda depende da publicação do feed.
+- Compilação Android, testes, assinatura e APK NÃO executados.
+- Pendente auditar possíveis falhas de compilação e de troca/rollback, executar CI, validar aparelho Samsung e assinar APK.
+- Nenhuma alteração promovida à release/0.5.29.
+
+
+### 2026-10-15 — Robustez da integração híbrida e verificação de CI
+
+- `GameDataRepository` fixa a pasta do snapshot no início de cada `load`, impedindo mistura de versões durante carregamento.
+- Se o Game Master ativo estiver ausente/inválido/vazio, o apontador de snapshot é desativado e o Game Master embarcado é recuperado.
+- `HybridSnapshotStore` não considera ponteiro ativo válido sem diretório READY e oferece rollback para os assets embarcados.
+- Teste unitário adicional para rollback.
+- Consulta de workflows de GitHub Actions para o commit de integração: nenhum workflow retornado.
+- Ambiente de execução local sem Gradle/Android SDK; testes Android e APK não realizados.
+- Sem URL de manifesto de atualizações verificada/configurada: o worker continua no modo seguro sem downloads.
+- **STATUS: IMPLEMENTAÇÃO PARCIAL, NÃO PRONTA PARA RELEASE.** Não promover PR #37 sem compilação, testes e validação real no aparelho.
+
+
+### 2026-10-15 — Pipeline de validação híbrida
+
+- Criado `.github/workflows/hybrid-data-sync.yml` para executar testes unitários Standard, montar APK debug, verificar ZIP e gerar SHA-256 como artefato.
+- Verificação de workflows do commit: nenhuma execução confirmada pela API disponível.
+- Não houve build local: ambiente sem Android SDK/Gradle e acesso de rede externo indisponível.
+- Nenhum APK novo validado. PR #37 permanece draft.
+- Para finalizar: executar pipeline real, corrigir eventuais falhas de compilação/testes, configurar/publicar feed HTTPS confiável, validar integridade do manifesto e executar QA no dispositivo.
+- Não promover mudanças para a branch de release sem essas evidências.
+
+
+### 2026-10-15 — Espelhamento público da arquitetura híbrida
+
+- Repositório público verificado: `LucianoToscano/PvPPokeGo-APK-Build` (branch estável `main` preservada).
+- Criada branch pública `preview/hybrid-data-sync-20261015`.
+- Espelhados `HybridSnapshotStore.kt`, `HybridSyncScheduler.kt`, testes, `GameDataRepository.kt`, `PvPPokeGoApp.kt` e `app/build.gradle.kts`.
+- Workflow público `.github/workflows/build-standard-apk.yml` atualizado NA BRANCH PREVIEW para disparar em push e aceitar a compilação híbrida.
+- README da branch pública registra caráter experimental e falta de validação.
+- Consulta dos runs para o commit público `0c4d92cea47139f6ebc0ff1c439c6201d1ac3555`: nenhum workflow retornado pela API.
+- Nenhum APK novo verificado, nenhuma assinatura/teste Android confirmados; não afirmar conclusão ou promover para main.
+- Fonte HTTPS do manifesto ainda sem URL publicada e confiável.
+
+
+### 2026-10-15 — CONSOLIDAÇÃO CANÔNICA: arquitetura híbrida e espelho público
+
+**Escopo e preferências aprovadas pelo usuário**
+- Projeto Android nativo PvPPokeGo; evolução incremental sem remover HUD, OCR, reconhecimento aliado/reservas, ícones, histórico, motor matemático ou assets.
+- Atualização automática: **ativada**; download: **somente rede não tarifada (preferência Wi-Fi)**; frequência: **diária**. WorkManager não garante horário exato nem transporte Wi-Fi especificamente.
+- Em batalha: **nenhuma consulta de rede nem troca de versão de dados**; o app deve continuar funcionando offline.
+
+**Repositórios e isolamento**
+- Canônico: https://github.com/LucianoToscano/PvPPokeGo
+- Base preservada: `release/0.5.29`; desenvolvimento: `feature/hybrid-data-sync-0.5.29`; revisão isolada: https://github.com/LucianoToscano/PvPPokeGo/pull/37 (draft).
+- Espelho público de build: https://github.com/LucianoToscano/PvPPokeGo-APK-Build
+- Branch pública experimental: `preview/hybrid-data-sync-20261015`; **não modificar `main` até aprovação de CI e QA**.
+- O espelho público é uma cópia de código, não uma sincronização automática nem substituto da fonte canônica; nunca publicar credenciais, keystores ou dados privados.
+
+**Arquivos criados ou modificados no repositório canônico**
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStore.kt`: staging SHA-256, validação de nomes, ativação fora de batalha e fallback.
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/sync/HybridSyncScheduler.kt`: WorkManager diário, conexão não tarifada, preferências, downloader HTTPS e manifesto.
+- `app/src/test/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStoreTest.kt`: testes escritos para hash, traversal, ativação e rollback.
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/GameDataRepository.kt`: seleção de snapshot local por carregamento e fallback para assets.
+- `app/src/main/java/com/lucianotoscano/pvppokego/PvPPokeGoApp.kt`: inicialização do agendador e ativação de snapshot pendente no início de novo processo.
+- `app/build.gradle.kts`: WorkManager e propriedade opcional `pvppokego.hybridManifestUrl`.
+- `.github/workflows/hybrid-data-sync.yml`: testes Standard, APK QA debug, verificação ZIP e SHA-256.
+- `docs/HYBRID_DATA_SYNC_2026-10-15.md`: especificação técnica e checkpoints.
+- Este `docs/PROJECT_CONTINUITY_GUIDE.md`: registro cronológico.
+
+**Arquivos alterados no espelho público, apenas na branch preview**
+- Cópia dos três arquivos de sincronização/teste e de `GameDataRepository.kt`, `PvPPokeGoApp.kt`, `app/build.gradle.kts`.
+- `.github/workflows/build-standard-apk.yml`: habilitado build na branch preview e nomeação de artefato híbrido.
+- `README.md`: aviso de branch experimental e ausência de validação.
+- Último commit público de workflow consultado: `0c4d92cea47139f6ebc0ff1c439c6201d1ac3555`; API não retornou workflow associado.
+
+**Situação comprovada / não comprovada**
+- Códigos e commits foram criados remotamente; **não há evidência de testes JVM executados, compilação Android aprovada, APK instalável novo, assinatura validada ou QA em aparelho**.
+- Nenhum manifesto remoto confiável foi publicado ou configurado. Com URL vazia, worker é no-op e não realiza atualização real.
+- Verificação SHA-256 dos arquivos não equivale a autenticação criptográfica do manifesto; assinatura/pinning e validação de consistência cruzada ainda são pendências.
+- O rollback ainda necessita de testes abrangentes de dados cruzados e ciclos de versão.
+- **STATUS: PARCIAL, NÃO PROMOVER PARA RELEASE NEM DECLARAR CONCLUÍDO.**
+
+**Próximas ações obrigatórias**
+1. Conferir HEAD e diferenças nas duas branches de trabalho, revisar os pontos de compilação e schema dos dados reais.
+2. Executar o workflow público/privado e ler logs; corrigir todos os erros até obter testes e build aprovados.
+3. Publicar feed HTTPS confiável com manifesto versionado/autenticado, tamanhos, hashes e esquema correto; testar downloads, ausência de rede e falhas.
+4. Validar transição entre batalhas, rollback completo, OCR/HUD/ícones e histórico em aparelho Android.
+5. Verificar APK (assinatura, SHA-256, conteúdo, instalação) e só então considerar merge/release.
+
+**Regra de continuidade**: consultar primeiro este Guia Mestre e o registro técnico; não reiniciar implementação, não sobrescrever a branch estável e registrar cada novo commit/resultado.
+
+
+### 2026-10-15 — IMPLEMENTAÇÃO HÍBRIDA: BUILD APROVADO, FEED PÚBLICO E DRIVE (EVIDÊNCIAS)
+
+**Fonte canônica e branches**
+- Projeto canônico: https://github.com/LucianoToscano/PvPPokeGo , branch feature/hybrid-data-sync-0.5.29, revisão PR #37 (draft).
+- Build público: https://github.com/LucianoToscano/PvPPokeGo-APK-Build , branch preview/hybrid-data-sync-20261015.
+- Feed remoto público PUBLICADO na branch isolada hybrid-feed: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/tree/hybrid-feed
+- Manifesto online VERIFICADO: https://raw.githubusercontent.com/LucianoToscano/PvPPokeGo-APK-Build/hybrid-feed/manifest.json
+- Base release/0.5.29 e espelho público main não foram sobrescritos.
+
+**Correções e implementação**
+- Resolvido erro do workflow público que chamava apksigner com o nome antigo do arquivo.
+- SnapshotStore agora persiste CHECKSUMS, revalida SHA-256 após reinicialização, rejeita corrupção/traversal, recupera staging interrompido, fixa a versão ativa e oferece rollback para assets embarcados.
+- Worker HTTPS limita domínio e caminho à origem pública fixa, impõe limites de tamanho, 7 arquivos obrigatórios e JSON mínimo; agenda atualização diária (WorkManager) e exige Wi-Fi real caso wifi_only=true.
+- Download é apenas staging; ativação somente em nova inicialização do processo, não durante uma batalha.
+- GameDataRepository valida consistência de Game Master, rankings da liga e CPM antes de selecionar os dados remotos, com fallback para assets do APK.
+- tools/generate_hybrid_feed.py prepara manifesto versionado por conteúdo; tools/test_generate_hybrid_feed.py testa determinismo, integridade do tamanho e rejeição de ranking inválido.
+- Fluxo de build público publica dados validados para branch hybrid-feed após testes/compilação/assinatura. Inclui licença e provenance pvpoke_snapshot.json.
+- Execução pública de CI 38801861207 APROVADA para testes do gerador; CI 38800587467 APROVADA para assinatura e publicação de dados.
+- Publicação da branch hybrid-feed verificada no commit 83a9f717ef9f8b392416095708756d084eb31557, versão pvpoke-c6a8aa396f84df1914503921, 7 arquivos.
+- Nova validação Android 35 via emulador foi adicionada à CI pública no commit 0d81f301fec925bef2b9745a3928bba879b48151; **resultado ainda não conhecido no momento deste registro**.
+
+**APK e evidências**
+- GitHub Actions 38798974370: primeiro build híbrido aprovado, arquivo SHA-256 5e9594cd76dc0779cd1a50753b6e414ab6aad0f5eab4ff3152020472decd5547.
+- GitHub Actions 38800587467: pacote híbrido com feed padrão (QA debug) aprovado, artefato 12004582000.
+- APK da segunda compilação extraído e verificado localmente por ZIP e hash SHA-256 3d6c0b8b44937f044cf91a0db87add7daff3dc832e778865ed5c83bc8e66ebee. apksigner: assinatura APK Signature Scheme V2 válida, uma assinatura debug.
+- Cópia ZIP APK + SHA256SUMS + signature-verification enviada ao Drive do projeto:
+  https://drive.google.com/file/d/18kM8F-wCIL3nMQPpEyk6z3X78y80gh3-/view?usp=drivesdk
+  arquivo PvPPokeGo-0.5.29-Hybrid-QA-2026-10-15.zip, pasta id 1ybogVRRnaOe0KtWjlovxS56bJOi_JewI; upload e readback Drive confirmados.
+
+**Limitações e regras de aprovação**
+- CI e assinatura debug não comprovam funcionamento real de HUD/OCR/captura em aparelho físico; QA manual ainda necessária.
+- Modelo atual de confiança HTTPS fixado em repositório Github + SHA-256 de payload NÃO é assinatura criptográfica independente do manifesto. Para lançamento produção seria ideal chave de assinatura gerida pelo dono e verificação da assinatura.
+- A compilação tem assinatura de TESTES; instalação por cima de versão com assinatura diferente pode exigir desinstalar versão antiga, com risco de perda de dados locais. Exportar configurações antes.
+- NÃO marcar PR #37 pronto para release nem mesclar à release/0.5.29 sem validação adicional em dispositivo.
+- Próxima sessão: ler primeiro este guia, conferir HEAD nas duas branches, últimos GitHub Actions, run de emulador 38802346032 e depois registrar resultado real.
+
+
+### 2026-10-15 — Smoke test de instalação Android 35 APROVADO
+
+- Workflow público ampliado com job independente smoke usando reactivecircus/android-emulator-runner@v2 e APK publicado pelo job build.
+- GitHub Actions 38802346032 terminou com sucesso: build/testes APK Standard e job Android 35 smoke verde.
+- Teste smoke instalou o APK QA, iniciou a activity com adb, esperou e confirmou PID ativo. Screenshot capturado como artefato 12005831245. A captura ainda mostra diálogo normal de autorização de notificações; não equivale a teste completo da interface e do overlay.
+- Caminho da imagem extraída nesta sessão: hybrid-smoke/launcher-smoke.png.
+- Sem testes reais de visão, batalhas, overlays ou conexão Wi-Fi de aparelho físico; continuam pendentes.
+- Outra execução final 38802898336 foi iniciada para verificar manifesto estável por conteúdo (exclui timestamp variável do snapshot) e não publicar bases repetidas sem mudança real nos dados/ licença.
+- Não mesclar a branch canônica na release por este teste isolado.
+
+### 2026-10-15 — FECHAMENTO DA BUILD HÍBRIDA: EXECUÇÃO FINAL 38802898336 (APROVADA)
+
+**Ponto recuperado**: o trabalho estava interrompido durante `Unit tests and Standard debug APK` do GitHub Actions 38802898336, commit público 797330db330b0db887ccb89d90591dec6c6185db. Retomado diretamente desse run, sem reinício de projeto.
+
+**Resultados verificados do GitHub Actions**
+- Execução pública: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38802898336
+- Conclusão: success, 2026-10-15 20:45:00 UTC. Jobs `build` e `Android 35 install and launcher smoke`: success.
+- Passaram: teste Python do gerador de feed, empacotamento do banco PvPoke e atlas visual, `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, verificação ZIP, SHA-256, assinatura com apksigner, construção/publicação do manifesto e instalação/abertura no emulador Android 35.
+- Emulador verificou instalação do APK com adb, inicialização de MainActivity e processo vivo; não testou batalha real, OCR/captura ao vivo ou HUD em aparelho físico.
+- Último artefato GitHub: ID 12004839451, `PvPPokeGo-0.5.29-Hybrid-QA-debug`, ZIP de 36.157.916 bytes contendo APK, `SHA256SUMS.txt` e `signature-verification.txt`.
+
+**Verificação independente do artefato**
+- APK extraído do ZIP: `PvPPokeGo-0.5.29-Hybrid-QA-debug.apk` de 80.318.297 bytes.
+- SHA-256 do APK: `97e0b919b6de2daf0c0211f59ceb75398fcf345cec55aaaf268c9d130a7c7ae5`, idêntico ao arquivo de checksum dentro do artefato.
+- `unzip -t` passou sem erros. Relatório apksigner confirma APK Signature Scheme v2=true, 1 signatário; assinatura **debug**, não substitui assinatura definitiva de produção.
+- Os dez recursos essenciais offline (Game Master, rankings 1500/2500/10000, CPMS, snapshot/licença PvPoke, reconhecimento visual e atlas de ícones) existem no APK.
+- Hash SHA-256 e tamanho dos SETE arquivos do feed foram comparados aos arquivos embarcados no APK: todos correspondem.
+
+**Feed remoto verificado**
+- URL: https://raw.githubusercontent.com/LucianoToscano/PvPPokeGo-APK-Build/hybrid-feed/manifest.json
+- Branch pública `hybrid-feed`, HEAD verificado `054fe923a722e5c87a7283d8a0f78cbdc22cb383`.
+- Versão publicada no momento do fechamento: `pvpoke-6f188deab6e057566a6e0fca`, manifesto de 7 arquivos.
+- Corrigido e testado gerador para NÃO mudar a versão somente por alteração no timestamp de `pvpoke_snapshot.json`; workflow de publicação não substitui o banco se a versão calculada não mudou. Essa lógica passou nos testes Python do run final.
+
+**Arquivamento no Google Drive**
+- Cópia final verificada do ZIP enviado à pasta `PvPPokeGo` (ID `1ybogVRRnaOe0KtWjlovxS56bJOi_JewI`), preservando os QA anteriores.
+- Arquivo: `PvPPokeGo-0.5.29-Hybrid-QA-FINAL-2026-10-15.zip`.
+- Link: https://drive.google.com/file/d/1qGpsg04zqNuNEU82yRVbBI7QSpmDh4Dy/view?usp=drivesdk
+- ID Drive `1qGpsg04zqNuNEU82yRVbBI7QSpmDh4Dy`; tamanho de 36.157.916 bytes e pasta confirmados em leitura de metadados.
+
+**Estado de segurança e regressões**
+- Branch privada de desenvolvimento `feature/hybrid-data-sync-0.5.29` e branch pública `preview/hybrid-data-sync-20261015` preservadas; versão estável privada `release/0.5.29` e pública `main` não substituídas.
+- PR privado #37 permanece draft; NÃO mesclar automaticamente por causa de QA debug.
+- O app verifica HTTPS de repositório fixo, hashes SHA-256, estrutura de arquivos, Wi-Fi real quando configurado, ativação na próxima inicialização e rollback. A autenticação do MANIFESTO ainda não usa assinatura criptográfica independente; risco residual para produção.
+- Pendências para lançamento oficial: QA de batalha/OCR/captura/overlay em dispositivo físico, política de atualização assinada com chave própria e geração de APK de release com assinatura permanente. Evitar desinstalar versão anterior sem exportar configurações, porque chaves de assinatura podem diferir.
+
+**Ponto de continuidade**: finalizar QA físico e procedimento de lançamento assinado, sem refazer CI 38802898336 nem reexecutar o empacotamento que já foi aprovado. Aplicar futuras alterações primeiro na fonte canônica, depois no espelho público isolado, registrando cada mudança.
+
+
+### 2026-10-15 — CICLO 0.5.30 Hybrid QA: código aplicado, build final em validação
+
+**Solicitação:** implementar as pendências possíveis, gerar APK e ZIP com projeto editável, registrar tudo no Guia Mestre e distribuir pelo GitHub público e Drive, preservando versão estável.
+
+**Branches preservadas:** canônica \`feature/hybrid-data-sync-0.5.29\` contra \`release/0.5.29\`; espelho público \`preview/hybrid-data-sync-20261015\` contra \`main\`. O projeto NÃO foi reiniciado e nenhuma branch estável recebeu merge.
+
+**Recursos aplicados no código canônico e espelhados no público:**
+- Nova versão experimental \`0.5.30\` / versionCode \`35\`.
+- \`SettingsRepository.kt\`: controles de atualização híbrida diária/Wi-Fi e status da base ativa/pedente; preferência de sincronização incluída em backup/import JSON.
+- \`SettingsScreen.kt\`: seção de dados híbridos com toggles e status, botão funcional para solicitar verificação manual, controle opcional de três slots inimigos.
+- \`HybridSyncScheduler.kt\`: WorkManager one-shot manual com restrição de rede, mesmo com agenda diária desligada; continua respeitando Wi-Fi real quando selecionado.
+- \`MainActivity.kt\`: ZIP de diagnóstico inclui \`hybrid_sync.txt\`.
+- \`OpponentTeamTracker.kt\` (novo): roster por ordem de observação, máximo de três identidades confirmadas, CP/HP, estado ativo/desmaiado, placeholders desconhecidos; não inventa quarto slot; não adiciona slot fantasma se a mesma espécie está ambígua sem CP; permite upgrade OCR para forma exata com nome+CP confirmados.
+- \`BattleEngine.kt\`: integra roster, mantém energia do inimigo associada ao slot reconhecido, restaura estado após troca e evita reutilizar HP de oponente anterior.
+- \`OpponentTeamTrackerTest.kt\` (novo): cobre três identidades, retornos, duplicata com CP distinto, CP incerto e atualização OCR→forma.
+- CI público \`.github/workflows/build-standard-apk.yml\`: gera APK QA debug e ZIP editável do projeto compilável; incorpora assets PvPoke offline e atlas e gera Gradle Wrapper 8.11.1, checksum e verificação ZIP.
+- CI canônica \`.github/workflows/package-project-zip.yml\`: configurada para exportar ZIP completo do repositório privado pela feature branch; execução 38813504687 FAILED antes de produzir passos/logs de runner; não afirmar que ZIP canônico foi entregue.
+- Matriz de verificação \`docs/FEATURE_AUDIT_0.5.30.md\`; issue de bloqueios externos #38: https://github.com/LucianoToscano/PvPPokeGo/issues/38.
+
+**Evidências intermediárias verificadas:**
+- CI pública 38813448792: build 0.5.29 com source artifact 12009507794 e APK, ambos criados; ZIP extraído e íntegro.
+- CI pública 38814583388: job build de 0.5.30 CONCLUÍDO COM SUCESSO; artefatos APK 12009574157 e fonte editável 12010676577. ZIP de fontes extraído; arquivo interno checksum confere, Gradle Wrapper, MainActivity, icon atlas e OpponentTeamTracker estão presentes.
+- Smoke emulator do run 38814583388 e CI mais recente 38815466466 (última correção de roster) ainda pendentes no momento deste registro. Não confundir artefato intermediário com último commit.
+- CI pública 38813112040 falhou por YAML corrompido na primeira tentativa de inserir pacote fonte; workflow foi recuperado com base no último workflow válido. Nova CI 38813448792 passou.
+- Source build pública inclui todos os arquivos necessários para compilar o Android 0.5.30 e editar telas/motor/dados, mas NÃO substitui o ZIP integral do repositório privado com históricos antigos. O git canônico completo permanece no repositório privado.
+
+**Bloqueios externos e não concluídos:** QA em Samsung/Pokémon GO real, reconhecimento e HUD durante batalha, atualização em Wi-Fi físico, imagens/backgrounds finais aprovadas, assinatura de manifesto com chave privada guardada fora do GitHub, assinatura permanente de release e backend de IA remoto com consentimento. Não marcar essas atividades como realizadas por emulador. Não mesclar PR #37 na release sem cumprir os critérios.
+
+
+
+### 2026-10-15 — ENTREGA REAL 0.5.30 HYBRID QA: APK + ZIP EDITÁVEL + DRIVE + CI
+
+**Execução final verificada**: GitHub Actions público https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38815466466; commit \`d838a44a3bf6ded5110e82589f2961cc205f14af\`; execução e ambos os jobs **build** e **Android 35 install and launcher smoke** encerrados com **SUCCESS**. Corrigido o YAML de workflow inválido que causou falha no run 38813112040; o último workflow foi validado em build e instalação do emulador.
+
+**Código alterado e integrado no build QA 0.5.30, versionCode 35**: \`SettingsRepository.kt\`, \`SettingsScreen.kt\`, \`MainActivity.kt\`, \`HybridSyncScheduler.kt\`, \`BattleEngine.kt\`, novo \`OpponentTeamTracker.kt\`, novo \`OpponentTeamTrackerTest.kt\`, \`app/build.gradle.kts\`, pipeline público \`.github/workflows/build-standard-apk.yml\`. Configuração de sincronização agora na tela e backup, botão de solicitação manual, diagnóstico da base e HUD opcional de três slots observados do adversário com CP/HP/energia/marcação sem inferir espécies não observadas. Testes incluem casos de duas instâncias da mesma espécie e CP desconhecido, evitando slot fantasma.
+
+**Testes efetivamente verificados**: JUnit app \`:app:testStandardDebugUnitTest\`, \`:app:assembleStandardDebug\`, testes Python do manifesto, atlas/asset packaging, APK apksigner V2, ZIP e SHA-256; no emulador Android 35 o APK instalou, MainActivity abriu e processo ficou vivo. Não houve teste em batalha real Samsung, captura OCR dinâmica, sessão longa, atualização diária real Wi-Fi, nem QA estética em aparelho — continuar marcando como pendente.
+
+**Entregáveis do CI final**:
+- Artefato APK: ID 12009579817, \`PvPPokeGo-0.5.30-Hybrid-QA-debug\` (ZIP de artefato 36.170.637 bytes). APK extraído \`PvPPokeGo-0.5.30-Hybrid-QA-debug.apk\` 80.351.065 bytes, SHA-256 \`7823de5c280179369a6a25ebbb95c33546bb11b8538f1da430e177d94f2c2d4d\` — corresponde a SHA256SUMS.txt. \`unzip -t\` PASS; apksigner confirma v2=true, um signatário debug.
+- Artefato fonte: ID 12009909537, \`PvPPokeGo-0.5.30-Hybrid-FONTE-EDITAVEL\`. ZIP editável extraído \`PvPPokeGo-0.5.30-Hybrid-FONTE-EDITAVEL.zip\` 6.280.245 bytes, SHA-256 \`47e73c1a966fcce7ced4a66e8310563aacc21a69750b83b67634a5f7dc974a46\` — corresponde a .sha256. Integridade ZIP PASS; inclui 129 arquivos reais entre código Kotlin, testes, \`gradlew\`, \`gradle/wrapper/gradle-wrapper.jar\`, Gradle build scripts, assets de Pokémon e dados PvPoke.
+- Distribuição Google Drive **confirmada por metadata read-back** na pasta \`PvPPokeGo\` ID \`1ybogVRRnaOe0KtWjlovxS56bJOi_JewI\`:
+  APK QA junto dos arquivos SHA/assinatura: https://drive.google.com/file/d/1cDZ_GHE_vMpjieFl2Al38wdUWYfmncz-/view?usp=drivesdk (ZIP externo de 36.170.637 bytes).
+  Código Android editável atual: https://drive.google.com/file/d/1LTrMj6DaUTOiJgQr7TYqHQE71VGNfOln/view?usp=drivesdk (ZIP interno de 6.280.245 bytes).
+- Extra local opcional, sem sobrescrever fontes atuais: pacote \`PvPPokeGo-0.5.30-PROJETO-EDITAVEL-COM-ARQUIVO-HISTORICO.zip\` (~7.183.126 bytes; SHA-256 \`8c303bdcc7a7e19173d2930c54650c53614c6219a18c5a036b2c3d9744fe11aa\`). Usa na raiz a fonte Android atual e numa subpasta isolada um histórico privado de 06/10/2026 recuperado do run canônico bem-sucedido 37525286145; o histórico é antigo e não pode ser confundido com o HEAD canônico atual. README interno registra proveniência/limitação. Esse pacote é entregue como arquivo de apoio local, não afirmar upload no Drive/GitHub sem verificação.
+- Fonte da branch pública: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/tree/preview/hybrid-data-sync-20261015
+- Fonte canônica privada: https://github.com/LucianoToscano/PvPPokeGo/tree/feature/hybrid-data-sync-0.5.29
+- Mapa de funcionalidades pendentes e implementadas: \`docs/FEATURE_AUDIT_0.5.30.md\`.
+- Questões físicas/credenciais ainda abertas: https://github.com/LucianoToscano/PvPPokeGo/issues/38. PR #37 segue rascunho.
+
+**Delimitação importante**: a entrega QA do APK + ZIP Android buildável + GitHub público + cópias Drive está concluída e verificada. **NÃO** foi possível garantir produção, IA remota multiusuário, assinatura de manifesto independente, keystore permanente, nem comportamento visual durante batalhas em Samsung sem credenciais/hardware/testes externos. O arquivo ZIP do espelho público é integral e editável para compilar ESTE Android, mas não é snapshot integral e atual de TODOS os históricos/docs/branches do repositório canônico privado. Preservar as branches estáveis \`release/0.5.29\` e \`main\` e os backups anteriores.
+
+
+
+### 2026-10-15 — Revisão adicional da entrega e validação visual de startup
+
+- Confirmado por inspeção local: QA APK 0.5.30 SHA-256 \`7823de5c280179369a6a25ebbb95c33546bb11b8538f1da430e177d94f2c2d4d\`, size 80.351.065 bytes, Android Signature Scheme v2 true (debug).
+- ZIP de fonte editável QA: SHA-256 \`47e73c1a966fcce7ced4a66e8310563aacc21a69750b83b67634a5f7dc974a46\`, 6.280.245 bytes, integridade ZIP PASS; inclui Gradle Wrapper, fontes, testes e assets offline.
+- Pacote combinado (fonte 0.5.30 na raiz + acervo privado **histórico** em pasta isolada): \`PvPPokeGo-0.5.30-PROJETO-EDITAVEL-COM-ARQUIVO-HISTORICO.zip\`, 7.183.126 bytes, SHA-256 \`8c303bdcc7a7e19173d2930c54650c53614c6219a18c5a036b2c3d9744fe11aa\`, ZIP íntegro.
+- Cópia desse pacote combinado **enviada ao Google Drive** nesta etapa e readback confirmado: https://drive.google.com/file/d/1TNVfXolp6YnFw5tjV9VE5gUDVcpa8hmk/view?usp=drivesdk, pasta do projeto id \`1ybogVRRnaOe0KtWjlovxS56bJOi_JewI\`. As outras cópias APK/source do run 38815466466 permanecem disponíveis separadamente no Drive.
+- Revisão **visual** da captura de tela gerada pelo smoke do run 38815466466 mostrou aviso do Android "Pixel Launcher isn't responding" sobre o diálogo de notificações. Portanto, o smoke antigo só prova instalação/abertura/PID do app; **NÃO PROVA que a UI do PvPPokeGo estava visível sem interposição**. Não afirmar QA visual completo com base nele.
+- CI público foi aperfeiçoado com verificação por \`uiautomator dump\` de texto da interface PvPPokeGo e rejeição de diálogos ANR/launcher e exceções app. Workflow commit público \`ce318c669f69c6b14d6a1a852140f1d1f4ebb05c\`. Resultado ainda em execução no momento desta anotação; marcar somente após conclusão confirmada.
+- Criado workflow público \`.github/workflows/publish-qa-release.yml\` para criar **prerelease QA imutável** no GitHub contendo APK, checksums, relatório de assinatura e ZIP do fonte editável. Ele baixa EXATAMENTE o artefato aprovado do CI 38815466466 e só publica depois de verificar commit/conclusão/hashes. Primeira execução 38821056294 falhou porque SHA256SUMS.txt usava prefixo \`delivery/\`; corrigido na commit \`b2e6789fcbf5116e916ef6837fdaed368ee56c01\`; nova execução ainda não confirmada como sucesso.
+- Segurança e limites sem mudança: assinatura permanente de release, assinatura independente do manifesto remoto, QA Wi-Fi/Samsung/PvP real e IA multiusuário ainda não concluídos. Consultar issue #38 e \`docs/FEATURE_AUDIT_0.5.30.md\`. Não alterar branch estável por esse QA.
+
+
+### 2026-10-15 — Tentativa de prerelease permanente GitHub: permissão da integração bloqueada
+
+- O workflow de prerelease público verificou com SUCESSO os checksums SHA-256 do APK e do ZIP de fontes do run aprovado 38815466466.
+- A publicação do GitHub Release falhou na etapa gh release create com **HTTP 403 Resource not accessible by integration**, run 38821135771. O token efêmero de Actions tinha contents:write indicado nos logs, mas o endpoint de Releases recusou a integração.
+- O workflow foi ajustado para **execução manual** e exige Secret de repositório PVPPOKEGO_RELEASE_TOKEN com permissão de publicação de releases; não inclui token embutido, nunca colocar chave no código. Commit público ed5f5c3a272e9f7a6dd258315a9508db0c60c2ff.
+- **GitHub Release NÃO foi criado.** O GitHub contém código completo da branch de compilação e artefatos de Actions com retenção limitada. As cópias confirmadas no Google Drive permanecem a distribuição dos pacotes (APK QA, projeto editável e pacote com acervo histórico).
+- O issue #38 foi atualizado com bloqueio de release e observação da captura do emulador. Nova validação UiAutomator foi adicionada à CI, mas NÃO declarar aprovada enquanto estiver em execução.
+
+### 2026-10-15 — Pacote editável ampliado e validação UiAutomator (checkpoint)
+
+- Distribuição já confirmada do APK QA 0.5.30 e ZIP editável public build no Google Drive: IDs 1cDZ_GHE_vMpjieFl2Al38wdUWYfmncz- e 1LTrMj6DaUTOiJgQr7TYqHQE71VGNfOln.
+- Distribuição do pacote complementar editável com histórico privado separado (snapshot 06/10) confirmada no Drive: https://drive.google.com/file/d/1TNVfXolp6YnFw5tjV9VE5gUDVcpa8hmk/view?usp=drivesdk.
+- Fonte histórica ORIGINAL_ICONS versão 0.5.10, fornecida originalmente nesta conversa e preservada, copiada para a mesma pasta Drive como arquivo separado: https://drive.google.com/file/d/1_RGnnsnZXLJ1pJwUXswxFcUKYd0D3RMS/view?usp=drivesdk. Trata-se de um ZIP histórico de código/ícones, NÃO substituir automaticamente os ícones do build 0.5.30.
+- Pacote local alternativo NOVO inclui o snapshot Android buildável atual na raiz, o acervo privado datado 06/10/2026 sob diretório isolado e material histórico 0.5.10 sob outra pasta isolada, mais manifesto de proveniência/links; nome: PvPPokeGo-0.5.30-FONTE-EDITAVEL-E-ACERVO-COMPLETO.zip, 7.300.714 bytes, SHA-256 e12272639376117ca9fb430b6434dd17e71bd422bd6be72dd29c885290db933b; 346 arquivos testados com zipfile.testzip() PASS. Esse pacote está no ambiente local da sessão, NÃO afirmar upload ao Drive até verificar.
+- Inspeção da captura do emulador 0.5.30 encontrou modal Pixel Launcher ANR no screenshot apesar do job antigo verde. Novo job UiAutomator run 38820881551 confirmou que o aplicativo continha 'PvPPokeGo' e 'Assistente visual' na hierarquia, mas falhou no script shell pois emulator-runner executa as linhas individualmente; não foi detectada falha Kotlin/Java nesse run. O erro de sintaxe foi corrigido usando condicionais numa única linha, commit público 8ee99c3a7e41e4ac10b1b76a3a2f1eeea131c09d. Aguardar novo job strict UI antes de marcar smoke visual aprovado.
+- GitHub prerelease permanece BLOQUEADO por erro de permissão HTTP 403 no token de Actions. Workflow de prerelease modificado para disparo MANUAL com token guardado em GitHub Actions Secrets (nome PVPPOKEGO_RELEASE_TOKEN), commit público ed5f5c3a272e9f7a6dd258315a9508db0c60c2ff. NÃO incluir token em texto/ZIP e NÃO afirmar que a release permanente foi publicada.
+- Ainda pendentes físico Samsung + Pokémon GO, assinatura de manifesto com chave própria, keystore permanente de APK release, rede Wi-Fi real, backend de IA com consentimento e artes finais aprovadas. Issue #38 foi atualizado. Preservar branches estáveis.
+
+### 2026-10-15 — Arquivo editável ampliado no Google Drive (verificado)
+
+- Arquivo PvPPokeGo-0.5.30-PROJETO-EDITAVEL-COMPLETO-ACERVO.zip, tamanho exato 7.300.714 bytes, SHA-256 e12272639376117ca9fb430b6434dd17e71bd422bd6be72dd29c885290db933b, integridade ZIP testada.
+- Drive ID 1UipiTkfV2TKSbUO2qvjHmYcFUGkqQlIz, URL https://drive.google.com/file/d/1UipiTkfV2TKSbUO2qvjHmYcFUGkqQlIz/view?usp=drivesdk.
+- Upload realizado; metadata lida de volta: nome e tamanho correspondem, pasta PvPPokeGo ID 1ybogVRRnaOe0KtWjlovxS56bJOi_JewI correta.
+- Conteúdo: fonte Android 0.5.30 QA compilável e editável na RAIZ, acervo privado de 06/10/2026 isolado por pasta, referência 0.5.10 ORIGINAL_ICONS de 28/09/2026 separada, inventário com origem e hashes. Histórico antigo não foi sobreposto ao código mais novo.
+
+### 2026-10-15 — Inspeção de interface acessível do Android 35 (recuperação de artefato)
+
+- Do run público 38820881551, artefato UiAutomator XML ID 12012906748, obtido e analisado por XML parser offline.
+- A árvore raiz e os 17 nós com textos eram do pacote com.lucianotoscano.pvppokego, incluindo PvPPokeGo, Assistente visual de batalhas PvP, Iniciar, Parar, Gravar, Nova batalha, Reconhecimento automático, Modo Batalha Assistido e Versão 0.5.30.
+- NENHUM nó da árvore continha Pixel Launcher ou alerta de ANR. Isto demonstra que a UI inicial estava presente na hierarquia de acessibilidade desse run e melhora substancialmente a evidência anterior.
+- Mesmo assim, job CI 38820881551 resultou failure porque o action emulator-runner executou um comando if ... then multilinha como comandos shell separados, erro de sintaxe 'expecting fi'. Erro do script corrigido no commit público 8ee99c3a7e41e4ac10b1b76a3a2f1eeea131c09d; próximo run rígido 38821812163 não confirmado no momento da atualização.
+- Confirmação de tela inicial por UI XML não prova funcionamento de HUD/OCR em batalha; QA físico continua aberto no issue #38.
+
+### 2026-10-15 — Pacote geral local de 175,6 MB (substitui a entrega incompleta de 7 MB)
+
+- O antigo arquivo `PvPPokeGo-0.5.30-PROJETO-EDITAVEL-COMPLETO.zip` de 7.300.714 bytes possuía 346 registros e ~14,9 MB descompactados, mas **não incluía nenhum APK**. Não descrevê-lo como distribuição binária integral.
+- Novo ZIP consolidado da sessão: `PvPPokeGo-0.5.30-TUDO-PROJETO-APK-CODIGO-HISTORICO.zip`, 175.617.919 bytes, 479 registros, 186.981.686 bytes descompactados; `unzip/zipfile testzip` passou; SHA-256 `425c006c0f68b7bb491ab29be659d3aae0471a71def5f7cc2d6749b6f666474c`.
+- Inclui projeto Android 0.5.30 editável com código e Gradle Wrapper, APK real 0.5.30 QA (~80 MB), APK 0.5.29 QA (~80 MB), projeto 0.5.29, ZIP bruto dos ícones 0.5.10, snapshot privado histórico de 2026-10-06, resultados de assinatura e checksum, capturas de emulador, README e inventário com SHA-256 por item.
+- O conteúdo do ZIP atual **não é um clone integral do histórico Git da branch privada**. O snapshot privado incluído é antigo e está isolado; histórico/HEAD canônico precisa ser obtido da conta GitHub com acesso autorizado. Não há keystore, tokens nem dados pessoais de terceiros no pacote.
+- Foi tentado upload do ZIP único no Google Drive via conector. Falhou com HTTP 413 porque 175.617.919 bytes excedem o limite de download do conector de 104.857.600 bytes. Isso **não é prova de upload bem-sucedido**.
+- Para distribuição Drive, o mesmo conteúdo foi separado em **dois ZIPs autônomos** extraíveis na mesma pasta: `PvPPokeGo-0.5.30-PARTE-1-APK-E-CODIGO.zip` de 87.717.386 bytes, SHA-256 `8aa91cb6a580c5107314e46462a3792fde372692ba78fda400fd8d96a82e4e33`; `PvPPokeGo-0.5.30-PARTE-2-BACKUPS-HISTORICOS.zip` de 87.882.092 bytes, SHA-256 `654e8b388a1323df7c067a9764992f8c82bdcebcabaad575a3a776bbe2ec6f2a`. Ambos passaram testzip. **Somente marcar Drive publicado se confirmação explícita do conector existir.**
+- O pacote único de 175,6 MB foi criado e validado na sessão, disponível via sandbox no chat correspondente. O download da distribuição anterior QA + fonte pelo Drive continua existente e verificado.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
