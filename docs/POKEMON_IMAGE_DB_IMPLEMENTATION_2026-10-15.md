@@ -37,3 +37,12 @@
 5. Apenas após QA e aprovação, integrar ao fluxo da reconstrução incremental 1.0.0; atualizar este Guia Mestre, checklist e espelho Drive; SHA256 do APK real.
 
 **Nunca substituir um APK estável com um arquivo não compilado ou baseado em versão anterior.**
+
+## Resultado posterior: imagens reais obtidas e verificadas
+
+- Runner público 38801519020: 1.071/1.071 retratos WEBP baixados; nenhum erro. ZIP com 1.072 membros (inclui relatório), 13.843.453 bytes, SHA256 `2d0a6434e1965596e2d05a23b395436e33a8694f0d71e5985579d86a13da0eaf`.
+- Testes Python no ZIP: `testzip` PASS, 1.071 sha256 corretos, 1.071 imagens decodificáveis WebP RGBA 256x256. Prancha visual de todas as 46 Megas gerada (avaliação humana de nomes/identidade continua aberta).
+- Link Drive: https://drive.google.com/file/d/1hScejMYPZrWSR4wuDiiQCVpuzaakPnZG/view
+- Prancha: https://drive.google.com/file/d/143xIgW1f2OFUPqOsy7fgnRSW6auz0IE0/view
+- Para uso rápido sem esperar lotes diários, acrescentado importador ZIP via Android OpenDocument com validação de nomes/arquivos/tamanho, execução em corrotina e armazenamento interno. UI contém botão Importar banco completo (ZIP).
+- Primeiro CI APK identificou declaração duplicada `context` na UI; corrigido no fonte e na cópia pública. CI Android ainda em execução — não declarar APK testado nem entregue.
