@@ -1,3 +1,18 @@
+## 15/10/2026 — ENTREGA DE QA IMAGE DB 0.5.37: BUILD FINAL VERIFICADO
+
+**Status:** COMPILAÇÃO, TESTES E ENTREGA DE QA CONCLUÍDOS; **QA no aparelho, licença das artes e integração 1.0.0 continuam PENDENTES**. Este checkpoint complementa os registros preliminares abaixo sem apagá-los.
+
+- **Build final:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38809088247 — `completed/success` conferido; todas as etapas PASS, incluindo scripts de GameMaster, atlas/fingerprints, `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, validação de assets, `apksigner verify`, metadados e upload.
+- **Artefato final:** `12008576522`, `PvPPokeGo-0.5.37-image-db-standard-debug`. APK `80.990.041` bytes; SHA-256 exato `7828f7ad092e0f807f3a95c0f3536f3ed8164c927bf2951306ee47f316f9b9b6`. ZIP de artefato íntegro; APK ZIP íntegro; `539` entradas e os assets GameMaster, PvPoke snapshot, atlas PNG/JSON e fingerprints presentes. Atlas empacotado: **1.167** identidades.
+- **Assinatura:** `apksigner verify` PASS, APK Signature Scheme v2 `true`, 1 signatário debug; certificado SHA-256 `ddd060c7a46b3581399b6012473936cdcd43a9fccb51473c9a6b3d9b71b85454`. Pacote `com.lucianotoscano.pvppokego`, versionName `0.5.37`, versionCode `42`. **NÃO é assinatura release permanente nem garantia de atualização sobre APK já instalado.**
+- **APK FINAL QA no NOVO Drive oficial (ZIP com APK, hash, assinatura e metadata):** https://drive.google.com/file/d/1-vmbqRPp73Qp-MqpPsqxBOXxE9FBXuGm/view?usp=drivesdk . Pacote anterior foi retido e renomeado `HISTORICO-PRELIMINAR` no Drive, não foi apagado.
+- **Banco Pokémon 3D separado:** https://drive.google.com/file/d/1hScejMYPZrWSR4wuDiiQCVpuzaakPnZG/view?usp=drivesdk . **1.071 arquivos WebP RGBA 256×256** (1.025 espécies-base + 46 Mega candidatas), nomes/hash únicos, integridade e transparência verificados; pacote SHA-256 `2d0a6434e1965596e2d05a23b395436e33a8694f0d71e5985579d86a13da0eaf`. Prancha Megas: https://drive.google.com/file/d/143xIgW1f2OFUPqOsy7fgnRSW6auz0IE0/view .
+- **Arquitetura Android:** cache persistente + LRU; downloads automáticos diários, preferencialmente Wi-Fi; importação direta do ZIP em **Configurações → Banco de imagens Pokémon → Importar banco completo (ZIP)**. HOME Pokémon 3D é fonte candidata, NÃO imagens exatamente extraídas de Pokémon GO. O atlas GO offline existente continua funcionando sem rede. Não foi embutido o ZIP HOME no APK.
+- **Correções verificadas em código e CI:** manter imagem própria para Mewtwo Armored, Pikachu Libre, Giratina e demais formas catalogadas no atlas; Mega X/Y independentes; reconhecer "Meganium" como espécie-base; espécie/formato exatos têm prioridade sobre Dex ambíguo vindo do OCR. Política conservadora inferida das entradas do atlas + testes adicionados, CI do HEAD público `02773db33ba39f7c6d914c9263daa218ce386e8d` PASS. Branch privada isolada `feature/pokemon-image-db-1.0.0-20261015`, PR público de QA #1 (draft); releases anteriores preservadas.
+- **Pendências honestas:** não houve instalação/teste físico; conferir atualização com assinatura pré-existente e fazer backup antes de qualquer reinstalação; testar importação ZIP, Home, três slots, reconhecimento, Mega, continuidade de batalhas e Wi-Fi/offline; revisar permissões de redistribuição da arte © The Pokémon Company. A reconstrução 1.0.0 permanece incremental, **NÃO concluída**.
+
+---
+
 ## 15/10/2026 — Banco de imagens Pokémon 3D (implementação isolada / PARCIAL)
 
 - **Ramo ativo:** `feature/pokemon-image-db-1.0.0-20261015`, baseado no checklist da reconstrução 1.0.0 / Home 0.5.37. Não alterar as releases legadas.
