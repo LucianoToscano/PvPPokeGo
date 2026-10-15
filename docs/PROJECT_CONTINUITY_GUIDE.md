@@ -1176,6 +1176,29 @@ PENDÊNCIAS:
 PRÓXIMO PASSO:
 - Completar a integração no branch isolado; somente depois de testes promover à release.
 
+
+### 2026-10-15 — Agendamento híbrido diário (continuação)
+
+Versão-base: 0.5.29
+Branch: `feature/hybrid-data-sync-0.5.29`
+Commit de documentação anterior: `04cf42f4f6a34c1a57dedd8eb8cfa31c463fa63e`
+
+ALTERAÇÕES:
+- Dependência WorkManager 2.10.1 adicionada ao módulo Android.
+- `HybridSyncScheduler` registra trabalho periódico diário em rede não tarifada, com opções persistidas de automático=true e wifiOnly=true.
+- Inicialização no `PvPPokeGoApp`.
+- Worker permanece deliberadamente sem download/ativação até existir manifesto confiável, validação de esquema e integração segura com sessão de batalha.
+
+TESTES:
+- Inspeção de código; build Android e testes JVM não executados nesta etapa.
+
+STATUS:
+PARCIAL — agendamento criado; atualização remota real e carregamento de snapshots ainda pendentes.
+
+PENDÊNCIAS:
+- Definir fonte HTTPS versionada e confiável; baixar e validar manifesto/arquivos; integrar `GameDataRepository` e troca entre batalhas.
+- Corrigir/revisar qualquer problema apontado pelo compilador, executar testes e gerar APK Standard apenas após validação.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
