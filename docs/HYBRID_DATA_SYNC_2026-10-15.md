@@ -48,3 +48,15 @@ Branch: `feature/hybrid-data-sync-0.5.29` based on `release/0.5.29`.
 - A GitHub Actions run has **not** been confirmed; do not report a successful build or link an APK before a real run produces an artifact.
 - The update feed is deliberately disabled until an operator publishes a trusted HTTPS manifest and sets `pvppokego.hybridManifestUrl` in the build. Untrusted feeds must never be enabled.
 - Rollback currently covers an invalid Game Master; broader cross-file consistency and Android on-device regression checks are still necessary.
+
+## Verified public build and feed hardening (2026-10-15)
+
+- Public branch: LucianoToscano/PvPPokeGo-APK-Build / preview/hybrid-data-sync-20261015. Original main untouched.
+- GitHub Actions run 38796466877 compiled and passed tests but failed at apksigner due obsolete file name. Filename fixed; run 38798974370 completed successfully.
+- Verified artifact ID 12004061276: PvPPokeGo-0.5.29-Hybrid-QA-debug APK with ZIP integrity and APK Signature Scheme v2 verification; SHA-256 5e9594cd76dc0779cd1a50753b6e414ab6aad0f5eab4ff3152020472decd5547. Debug signature is not a permanent release key.
+- Later additions not yet validated by completed Android build: explicit Wi-Fi network transport, WorkManager UPDATE, repository-pinned HTTPS feed, seven required data files, SHA-256 checksum ledger re-verification, cross-file validation and rollback tests.
+- New tools/generate_hybrid_feed.py constructs deterministic versioned manifest, file sizes and SHA-256 for five core datasets plus metadata and license.
+- Public workflow prepares to publish feed to isolated hybrid-feed branch ONLY after successful APK build and signature verification. Actual feed publication still needs proof.
+- Expected manifest URL: https://raw.githubusercontent.com/LucianoToscano/PvPPokeGo-APK-Build/hybrid-feed/manifest.json
+- Security limit: pinned GitHub HTTPS plus file checksums DOES NOT cryptographically sign the manifest. Production hardening would require owner-managed signing key and signature verification.
+- Remaining: prove latest CI, verify public feed, test on Wi-Fi Android device and overlay/OCR continuity, and use signed release process for installable production.
