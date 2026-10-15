@@ -36,7 +36,7 @@ internal object PokemonImageCatalog {
     }
 
     fun lookup(dex: Int?, speciesId: String?): Image? {
-        if (dex == null || dex !in 1..1025) return null
+        if (dex == null || dex !in 1..1025 || speciesId.isNullOrBlank()) return null
         val normalized = speciesId.orEmpty().lowercase(Locale.ROOT)
             .replace(Regex("[^a-z0-9]+"), "_").trim('_')
         val tokens = normalized.split('_').filter(String::isNotBlank)
