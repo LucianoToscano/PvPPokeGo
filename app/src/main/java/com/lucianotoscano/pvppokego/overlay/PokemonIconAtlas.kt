@@ -123,11 +123,12 @@ internal class PokemonIconAtlas(context: Context, onImageReady: () -> Unit = {})
                 return true
             }
         }
-        val atlas = snapshot?.bitmap?.takeUnless { it.isRecycled } ?: return false
+        val data = snapshot ?: return false
+        val atlas = data.bitmap.takeUnless { it.isRecycled } ?: return false
         val entry = speciesId
             ?.takeIf { it.isNotBlank() }
-            ?.let { snapshot.bySpecies[normalize(it)] }
-            ?: dex?.takeUnless { PokemonImageCatalog.isDistinctForm(speciesId) }?.let(snapshot.uniqueByDex::get)
+            ?.let { data.bySpecies[normalize(it)] }
+            ?: dex?.takeUnless { PokemonImageCatalog.isDistinctForm(speciesId) }?.let(data.uniqueByDex::get)
             ?: return false
 
         val source = Rect(entry.x, entry.y, entry.x + entry.w, entry.y + entry.h)
