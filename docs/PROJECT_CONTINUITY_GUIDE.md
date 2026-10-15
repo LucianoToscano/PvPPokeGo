@@ -1199,6 +1199,22 @@ PENDÊNCIAS:
 - Definir fonte HTTPS versionada e confiável; baixar e validar manifesto/arquivos; integrar `GameDataRepository` e troca entre batalhas.
 - Corrigir/revisar qualquer problema apontado pelo compilador, executar testes e gerar APK Standard apenas após validação.
 
+
+### 2026-10-15 — Downloader HTTPS e integração do carregador (continuação)
+
+ALTERAÇÕES:
+- Worker diário lê manifesto HTTPS configurável via `pvppokego.hybridManifestUrl`; padrão vazio = nenhum download.
+- Implementadas restrições de rede, host, redirecionamento, tamanho, esquema JSON, mínimos de registros e SHA-256.
+- Downloads ficam em staging. Ativação de base pendente somente em inicialização de novo processo Android.
+- `GameDataRepository` lê snapshots ativados com fallback para assets do APK.
+- Detalhes em `docs/HYBRID_DATA_SYNC_2026-10-15.md`.
+
+STATUS: PARCIAL / NÃO VALIDADO.
+- Não existe manifesto público confiável configurado; atualização real ainda depende da publicação do feed.
+- Compilação Android, testes, assinatura e APK NÃO executados.
+- Pendente auditar possíveis falhas de compilação e de troca/rollback, executar CI, validar aparelho Samsung e assinar APK.
+- Nenhuma alteração promovida à release/0.5.29.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
