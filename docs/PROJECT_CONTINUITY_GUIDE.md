@@ -1475,6 +1475,14 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Upload realizado; metadata lida de volta: nome e tamanho correspondem, pasta PvPPokeGo ID 1ybogVRRnaOe0KtWjlovxS56bJOi_JewI correta.
 - Conteúdo: fonte Android 0.5.30 QA compilável e editável na RAIZ, acervo privado de 06/10/2026 isolado por pasta, referência 0.5.10 ORIGINAL_ICONS de 28/09/2026 separada, inventário com origem e hashes. Histórico antigo não foi sobreposto ao código mais novo.
 
+### 2026-10-15 — Inspeção de interface acessível do Android 35 (recuperação de artefato)
+
+- Do run público 38820881551, artefato UiAutomator XML ID 12012906748, obtido e analisado por XML parser offline.
+- A árvore raiz e os 17 nós com textos eram do pacote com.lucianotoscano.pvppokego, incluindo PvPPokeGo, Assistente visual de batalhas PvP, Iniciar, Parar, Gravar, Nova batalha, Reconhecimento automático, Modo Batalha Assistido e Versão 0.5.30.
+- NENHUM nó da árvore continha Pixel Launcher ou alerta de ANR. Isto demonstra que a UI inicial estava presente na hierarquia de acessibilidade desse run e melhora substancialmente a evidência anterior.
+- Mesmo assim, job CI 38820881551 resultou failure porque o action emulator-runner executou um comando if ... then multilinha como comandos shell separados, erro de sintaxe 'expecting fi'. Erro do script corrigido no commit público 8ee99c3a7e41e4ac10b1b76a3a2f1eeea131c09d; próximo run rígido 38821812163 não confirmado no momento da atualização.
+- Confirmação de tela inicial por UI XML não prova funcionamento de HUD/OCR em batalha; QA físico continua aberto no issue #38.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
