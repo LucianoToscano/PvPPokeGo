@@ -60,3 +60,18 @@ Branch: `feature/hybrid-data-sync-0.5.29` based on `release/0.5.29`.
 - Expected manifest URL: https://raw.githubusercontent.com/LucianoToscano/PvPPokeGo-APK-Build/hybrid-feed/manifest.json
 - Security limit: pinned GitHub HTTPS plus file checksums DOES NOT cryptographically sign the manifest. Production hardening would require owner-managed signing key and signature verification.
 - Remaining: prove latest CI, verify public feed, test on Wi-Fi Android device and overlay/OCR continuity, and use signed release process for installable production.
+
+## Final CI verification and handoff — 2026-10-15
+
+The previously in-progress public workflow run 38802898336 (commit 797330db330b0db887ccb89d90591dec6c6185db) completed successfully at 20:45 UTC. Both the build job and the Android 35 emulator smoke job succeeded. This supersedes earlier entries above that described builds, publishing and device smoke checks as pending.
+
+- Tested: Python `tools/test_generate_hybrid_feed.py`, offline PvPoke packaging, icon atlas generation, Gradle `testStandardDebugUnitTest` and `assembleStandardDebug`, APK ZIP integrity, SHA-256, v2 signature validation and emulator APK install/MainActivity startup/process check.
+- Latest GitHub Actions URL: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38802898336
+- QA artifact ID 12004839451: downloaded ZIP size 36,157,916 bytes; extracted APK size 80,318,297 bytes; APK SHA-256 `97e0b919b6de2daf0c0211f59ceb75398fcf345cec55aaaf268c9d130a7c7ae5`. SHA-256 checked against bundled SHA256SUMS.txt, ZIP passed, apksigner output reports APK Signature Scheme v2=true, one signer.
+- All 10 offline resources present: Game Master, rankings for CP 1500/2500/10000, CP multipliers, metadata/license, visual fingerprints, icon atlas PNG and JSON. The seven feed files embedded in the APK exactly matched the size and SHA-256 of the currently published manifest.
+- Public feed at `https://raw.githubusercontent.com/LucianoToscano/PvPPokeGo-APK-Build/hybrid-feed/manifest.json`, branch HEAD `054fe923a722e5c87a7283d8a0f78cbdc22cb383`, version `pvpoke-6f188deab6e057566a6e0fca` (seven files). Generator excludes timestamp-only snapshot metadata from the version digest and rejects malformed ranking inputs. Public publisher avoids rewriting the feed when the digest is unchanged.
+- Final tested archive copied to Google Drive PvPPokeGo folder and verified by metadata read-back: `https://drive.google.com/file/d/1qGpsg04zqNuNEU82yRVbBI7QSpmDh4Dy/view?usp=drivesdk`, name `PvPPokeGo-0.5.29-Hybrid-QA-FINAL-2026-10-15.zip`, size 36,157,916 bytes. Older QA archives remain untouched.
+
+### Release caveats
+
+Build is **QA/debug**, not production-signed. Actual game battle capture, recognition, HUD placement and continuous Wi-Fi background update behavior require testing on a physical Android device. Manifest bytes are HTTPS repository pinned with per-file SHA-256 validation but the manifest itself is not independently digitally signed. Do not merge draft PR #37 into stable release before those production checks. Existing release/0.5.29 and public main are unchanged.
