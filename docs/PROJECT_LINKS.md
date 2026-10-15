@@ -1,3 +1,16 @@
+# Checkpoint QA 0.5.38 ImageDB — 15/10/2026 (não definitivo)
+
+- **APK Android:** https://drive.google.com/file/d/1ZbeORZKaidpDohUUArFBO67zBAlc7B69/view?usp=drivesdk — SHA256 `fda159820a46ce7952341583427fbaea8f3efc6f82198c15cdf87668e2b84ffc`, 81.006.425 bytes.
+- **Fonte Android editável:** https://drive.google.com/file/d/1hW0oqCDHQbbszItvgRmd7oiL3_zsXBJX/view?usp=drivesdk — SHA256 `1fc8199bee91790144f15775a6189f3d90999321cb5c58a70b6d839af75a0bbe`, 163 arquivos, 6.307.248 bytes compactados.
+- **Pacote combinado APK + fonte + assinaturas:** https://drive.google.com/file/d/1qR4Tz_RNUka5iesNuA-uHREXiBEhqwPz/view?usp=drivesdk
+- **Backup separado dos módulos Hybrid 0.5.30:** https://drive.google.com/file/d/1i5796ptB_cqVH_8Zl0WqAGn73B2Oex-t/view?usp=drivesdk
+- **CI final:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38826162546 — SUCCESS (Gradle tests + APK + fonte ZIP).
+- **Branch privada:** https://github.com/LucianoToscano/PvPPokeGo/tree/feature/definitive-imagedb-audit-0.5.38-20261015 ; **PR draft:** https://github.com/LucianoToscano/PvPPokeGo/pull/39
+- **Relatório e pendências:** [AUDITORIA_DEFINITIVA_0.5.38_2026-10-15.md](AUDITORIA_DEFINITIVA_0.5.38_2026-10-15.md)
+- **Limite:** QA de ImageDB, sem a fusão definitiva de Hybrid Sync e sem teste físico ou assinatura release permanente; manter a reconstrução planejada 1.0.0 e todos os registros históricos abaixo sem descarte.
+
+---
+
 # Banco de Imagens Pokémon 3D — entrega QA 15/10/2026
 
 - **APK QA (0.5.37 ImageDB) — ZIP final no Drive:**
