@@ -99,6 +99,17 @@ class HybridSyncWorker(context: Context, params: WorkerParameters) :
                 require(bytes.size == size)
                 name to bytes
             }
+            val gm = Json.parseToJsonElement(downloaded.getValue("gamemaster.json").decodeToString()).jsonObject
+            require(gm.getValue("pokemon").jsonArray.size > 100 &&
+                gm.getValue("moves").jsonArray.size > 100)
+            for (cp in listOf(1500, 2500, 10000)) {
+                require(Json.parseToJsonElement(
+                    downloaded.getValue("rankings-$cp.json").decodeToString()
+                ).jsonArray.size > 100)
+            }
+            require(Json.parseToJsonElement(
+                downloaded.getValue("pvpoke_cpms.json").decodeToString()
+            ).jsonObject.getValue("cpms").jsonArray.size >= 100)
             require(store.stage(version, downloaded, entries))
             prefs.edit().putString("pending_version", version)
                 .putLong("last_success_ms", System.currentTimeMillis()).apply()
