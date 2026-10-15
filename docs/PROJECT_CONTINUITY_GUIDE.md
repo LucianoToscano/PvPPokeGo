@@ -1215,6 +1215,18 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Pendente auditar possíveis falhas de compilação e de troca/rollback, executar CI, validar aparelho Samsung e assinar APK.
 - Nenhuma alteração promovida à release/0.5.29.
 
+
+### 2026-10-15 — Robustez da integração híbrida e verificação de CI
+
+- `GameDataRepository` fixa a pasta do snapshot no início de cada `load`, impedindo mistura de versões durante carregamento.
+- Se o Game Master ativo estiver ausente/inválido/vazio, o apontador de snapshot é desativado e o Game Master embarcado é recuperado.
+- `HybridSnapshotStore` não considera ponteiro ativo válido sem diretório READY e oferece rollback para os assets embarcados.
+- Teste unitário adicional para rollback.
+- Consulta de workflows de GitHub Actions para o commit de integração: nenhum workflow retornado.
+- Ambiente de execução local sem Gradle/Android SDK; testes Android e APK não realizados.
+- Sem URL de manifesto de atualizações verificada/configurada: o worker continua no modo seguro sem downloads.
+- **STATUS: IMPLEMENTAÇÃO PARCIAL, NÃO PRONTA PARA RELEASE.** Não promover PR #37 sem compilação, testes e validação real no aparelho.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
