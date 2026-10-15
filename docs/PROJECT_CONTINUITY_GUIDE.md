@@ -1249,6 +1249,54 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Nenhum APK novo verificado, nenhuma assinatura/teste Android confirmados; não afirmar conclusão ou promover para main.
 - Fonte HTTPS do manifesto ainda sem URL publicada e confiável.
 
+
+### 2026-10-15 — CONSOLIDAÇÃO CANÔNICA: arquitetura híbrida e espelho público
+
+**Escopo e preferências aprovadas pelo usuário**
+- Projeto Android nativo PvPPokeGo; evolução incremental sem remover HUD, OCR, reconhecimento aliado/reservas, ícones, histórico, motor matemático ou assets.
+- Atualização automática: **ativada**; download: **somente rede não tarifada (preferência Wi-Fi)**; frequência: **diária**. WorkManager não garante horário exato nem transporte Wi-Fi especificamente.
+- Em batalha: **nenhuma consulta de rede nem troca de versão de dados**; o app deve continuar funcionando offline.
+
+**Repositórios e isolamento**
+- Canônico: https://github.com/LucianoToscano/PvPPokeGo
+- Base preservada: `release/0.5.29`; desenvolvimento: `feature/hybrid-data-sync-0.5.29`; revisão isolada: https://github.com/LucianoToscano/PvPPokeGo/pull/37 (draft).
+- Espelho público de build: https://github.com/LucianoToscano/PvPPokeGo-APK-Build
+- Branch pública experimental: `preview/hybrid-data-sync-20261015`; **não modificar `main` até aprovação de CI e QA**.
+- O espelho público é uma cópia de código, não uma sincronização automática nem substituto da fonte canônica; nunca publicar credenciais, keystores ou dados privados.
+
+**Arquivos criados ou modificados no repositório canônico**
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStore.kt`: staging SHA-256, validação de nomes, ativação fora de batalha e fallback.
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/sync/HybridSyncScheduler.kt`: WorkManager diário, conexão não tarifada, preferências, downloader HTTPS e manifesto.
+- `app/src/test/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStoreTest.kt`: testes escritos para hash, traversal, ativação e rollback.
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/GameDataRepository.kt`: seleção de snapshot local por carregamento e fallback para assets.
+- `app/src/main/java/com/lucianotoscano/pvppokego/PvPPokeGoApp.kt`: inicialização do agendador e ativação de snapshot pendente no início de novo processo.
+- `app/build.gradle.kts`: WorkManager e propriedade opcional `pvppokego.hybridManifestUrl`.
+- `.github/workflows/hybrid-data-sync.yml`: testes Standard, APK QA debug, verificação ZIP e SHA-256.
+- `docs/HYBRID_DATA_SYNC_2026-10-15.md`: especificação técnica e checkpoints.
+- Este `docs/PROJECT_CONTINUITY_GUIDE.md`: registro cronológico.
+
+**Arquivos alterados no espelho público, apenas na branch preview**
+- Cópia dos três arquivos de sincronização/teste e de `GameDataRepository.kt`, `PvPPokeGoApp.kt`, `app/build.gradle.kts`.
+- `.github/workflows/build-standard-apk.yml`: habilitado build na branch preview e nomeação de artefato híbrido.
+- `README.md`: aviso de branch experimental e ausência de validação.
+- Último commit público de workflow consultado: `0c4d92cea47139f6ebc0ff1c439c6201d1ac3555`; API não retornou workflow associado.
+
+**Situação comprovada / não comprovada**
+- Códigos e commits foram criados remotamente; **não há evidência de testes JVM executados, compilação Android aprovada, APK instalável novo, assinatura validada ou QA em aparelho**.
+- Nenhum manifesto remoto confiável foi publicado ou configurado. Com URL vazia, worker é no-op e não realiza atualização real.
+- Verificação SHA-256 dos arquivos não equivale a autenticação criptográfica do manifesto; assinatura/pinning e validação de consistência cruzada ainda são pendências.
+- O rollback ainda necessita de testes abrangentes de dados cruzados e ciclos de versão.
+- **STATUS: PARCIAL, NÃO PROMOVER PARA RELEASE NEM DECLARAR CONCLUÍDO.**
+
+**Próximas ações obrigatórias**
+1. Conferir HEAD e diferenças nas duas branches de trabalho, revisar os pontos de compilação e schema dos dados reais.
+2. Executar o workflow público/privado e ler logs; corrigir todos os erros até obter testes e build aprovados.
+3. Publicar feed HTTPS confiável com manifesto versionado/autenticado, tamanhos, hashes e esquema correto; testar downloads, ausência de rede e falhas.
+4. Validar transição entre batalhas, rollback completo, OCR/HUD/ícones e histórico em aparelho Android.
+5. Verificar APK (assinatura, SHA-256, conteúdo, instalação) e só então considerar merge/release.
+
+**Regra de continuidade**: consultar primeiro este Guia Mestre e o registro técnico; não reiniciar implementação, não sobrescrever a branch estável e registrar cada novo commit/resultado.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
