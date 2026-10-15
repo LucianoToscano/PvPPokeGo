@@ -67,6 +67,12 @@ class HybridSnapshotStore(private val root: File) {
     }
 
     fun activeVersion(): String? = File(root, "active-version").readTextOrNull()
+        ?.takeIf { snapshot(it) != null }
+
+    /** Roll back to the bundled assets if a snapshot cannot be loaded. */
+    fun disableActiveSnapshot() {
+        File(root, "active-version").delete()
+    }
     fun snapshot(version: String): File? {
         if (!version.matches(safeName) || version == "." || version == "..") return null
         return File(root, "staged-$version").takeIf {
