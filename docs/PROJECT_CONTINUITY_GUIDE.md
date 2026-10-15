@@ -2010,3 +2010,15 @@ HEAD base do código: `8b32a050390e8b0475ca3d1579c7759424c54480` (commits desta 
 
 **PRÓXIMO PASSO:**
 - Receber export de diagnóstico e vídeo de batalha do APK 0.5.36; validar defeitos restantes sem mexer em HUD ou posições desnecessariamente.
+
+
+    
+### 2026-10-15 — Auditoria incremental 0.5.38 sobre a base ImageDB (PARCIAL)
+    
+Versão candidata: 0.5.38 / versionCode 43. Branch: `feature/definitive-imagedb-audit-0.5.38-20261015`. Base ImageDB 0.5.37 congelada em `backup/pre-audit-imagedb-0.5.37-20261015` (HEAD 6ea367a9fa52c4198a7398aa6417b8b8d3c10d16); branch Home 0.5.37 também congelada em backup próprio. Sem reset, sem remoção de funções.
+    
+ALTERAÇÕES: CP OCR invalida streak temporário sem perder CP confirmado (StableCpTracker.kt), StatStageTracker suporta buffsSelf/buffsOpponent mesmo com buffs genérico vazio em alvo "both", atlas ImageDB passa a carregar PNG/index fora da thread UI, realiza redraw e recicla memória no release do BattleOverlayView. Três testes novos em StableCpTrackerTest e StatStageTrackerTest; versão candidata atualizada em app/build.gradle.kts. Códigos espelhados com SHA de conteúdo igual no repositório público exclusivo de compilação.
+    
+AUDITORIA COMPLETA E DIFF FUNCIONAL: `docs/AUDITORIA_DEFINITIVA_0.5.38_2026-10-15.md` (nesta branch). CI da Home 0.5.38 SEM ImageDB passou https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38825544494 mas NÃO é o release final. Run desta candidata ImageDB: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38825913916; verificar status, testes e hash antes de afirmar entrega.
+    
+BLOQUEIO DE RELEASE: Hybrid 0.5.30 (OpponentTeamTracker, HybridSnapshotStore, generate_hybrid_feed e pytest) está em OUTRA árvore. CI próprio híbrido 38821812163 passou, mas não comprova integração nesta candidata ImageDB. A fusão sem regressão, modularização BattleEngine, replay/Android Samsung QA, assinatura permanente e verificação de feed permanecem pendentes. Não chamar definitiva, não usar APK antigo renomeado e não declarar todas funções implementadas. Pasta Drive oficial atual: https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI.
