@@ -1483,6 +1483,16 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Mesmo assim, job CI 38820881551 resultou failure porque o action emulator-runner executou um comando if ... then multilinha como comandos shell separados, erro de sintaxe 'expecting fi'. Erro do script corrigido no commit público 8ee99c3a7e41e4ac10b1b76a3a2f1eeea131c09d; próximo run rígido 38821812163 não confirmado no momento da atualização.
 - Confirmação de tela inicial por UI XML não prova funcionamento de HUD/OCR em batalha; QA físico continua aberto no issue #38.
 
+### 2026-10-15 — Pacote geral local de 175,6 MB (substitui a entrega incompleta de 7 MB)
+
+- O antigo arquivo `PvPPokeGo-0.5.30-PROJETO-EDITAVEL-COMPLETO.zip` de 7.300.714 bytes possuía 346 registros e ~14,9 MB descompactados, mas **não incluía nenhum APK**. Não descrevê-lo como distribuição binária integral.
+- Novo ZIP consolidado da sessão: `PvPPokeGo-0.5.30-TUDO-PROJETO-APK-CODIGO-HISTORICO.zip`, 175.617.919 bytes, 479 registros, 186.981.686 bytes descompactados; `unzip/zipfile testzip` passou; SHA-256 `425c006c0f68b7bb491ab29be659d3aae0471a71def5f7cc2d6749b6f666474c`.
+- Inclui projeto Android 0.5.30 editável com código e Gradle Wrapper, APK real 0.5.30 QA (~80 MB), APK 0.5.29 QA (~80 MB), projeto 0.5.29, ZIP bruto dos ícones 0.5.10, snapshot privado histórico de 2026-10-06, resultados de assinatura e checksum, capturas de emulador, README e inventário com SHA-256 por item.
+- O conteúdo do ZIP atual **não é um clone integral do histórico Git da branch privada**. O snapshot privado incluído é antigo e está isolado; histórico/HEAD canônico precisa ser obtido da conta GitHub com acesso autorizado. Não há keystore, tokens nem dados pessoais de terceiros no pacote.
+- Foi tentado upload do ZIP único no Google Drive via conector. Falhou com HTTP 413 porque 175.617.919 bytes excedem o limite de download do conector de 104.857.600 bytes. Isso **não é prova de upload bem-sucedido**.
+- Para distribuição Drive, o mesmo conteúdo foi separado em **dois ZIPs autônomos** extraíveis na mesma pasta: `PvPPokeGo-0.5.30-PARTE-1-APK-E-CODIGO.zip` de 87.717.386 bytes, SHA-256 `8aa91cb6a580c5107314e46462a3792fde372692ba78fda400fd8d96a82e4e33`; `PvPPokeGo-0.5.30-PARTE-2-BACKUPS-HISTORICOS.zip` de 87.882.092 bytes, SHA-256 `654e8b388a1323df7c067a9764992f8c82bdcebcabaad575a3a776bbe2ec6f2a`. Ambos passaram testzip. **Somente marcar Drive publicado se confirmação explícita do conector existir.**
+- O pacote único de 175,6 MB foi criado e validado na sessão, disponível via sandbox no chat correspondente. O download da distribuição anterior QA + fonte pelo Drive continua existente e verificado.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
