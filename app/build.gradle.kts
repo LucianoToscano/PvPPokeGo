@@ -34,6 +34,9 @@ android {
         targetSdk = 36
         versionCode = 34
         versionName = "0.5.29"
+        val hybridManifestUrl = providers.gradleProperty("pvppokego.hybridManifestUrl").orElse("").get()
+        require(hybridManifestUrl.isBlank() || (hybridManifestUrl.startsWith("https://") && !hybridManifestUrl.contains("\\\"")))
+        buildConfigField("String", "HYBRID_MANIFEST_URL", "\\\"" + hybridManifestUrl + "\\\"")
     }
 
     buildFeatures {
