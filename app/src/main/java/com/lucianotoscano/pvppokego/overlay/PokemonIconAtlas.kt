@@ -49,6 +49,7 @@ internal class PokemonIconAtlas(context: Context, onLoaded: (() -> Unit)? = null
     // parsing an atlas index here would stall rendering, even before the first draw.
     @Volatile
     private var loaded: AtlasData? = null
+    @Volatile private var released: Boolean = false
 
     init {
         val assets = context.applicationContext.assets
@@ -80,10 +81,20 @@ internal class PokemonIconAtlas(context: Context, onLoaded: (() -> Unit)? = null
                 null
             }
             withContext(Dispatchers.Main) {
-                loaded = data
-                if (data != null) onLoaded?.invoke()
+                if (released) {
+                    data?.bitmap?.recycle()
+                } else {
+                    loaded = data
+                    if (data != null) onLoaded?.invoke()
+                }
             }
         }
+    }
+
+    fun release() {
+        released = true
+        loaded?.bitmap?.takeUnless { it.isRecycled }?.recycle()
+        loaded = null
     }
 
     val isAvailable: Boolean get() = loaded != null
