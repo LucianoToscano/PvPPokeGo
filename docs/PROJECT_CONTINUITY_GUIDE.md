@@ -1458,6 +1458,16 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - **GitHub Release NÃO foi criado.** O GitHub contém código completo da branch de compilação e artefatos de Actions com retenção limitada. As cópias confirmadas no Google Drive permanecem a distribuição dos pacotes (APK QA, projeto editável e pacote com acervo histórico).
 - O issue #38 foi atualizado com bloqueio de release e observação da captura do emulador. Nova validação UiAutomator foi adicionada à CI, mas NÃO declarar aprovada enquanto estiver em execução.
 
+### 2026-10-15 — Pacote editável ampliado e validação UiAutomator (checkpoint)
+
+- Distribuição já confirmada do APK QA 0.5.30 e ZIP editável public build no Google Drive: IDs 1cDZ_GHE_vMpjieFl2Al38wdUWYfmncz- e 1LTrMj6DaUTOiJgQr7TYqHQE71VGNfOln.
+- Distribuição do pacote complementar editável com histórico privado separado (snapshot 06/10) confirmada no Drive: https://drive.google.com/file/d/1TNVfXolp6YnFw5tjV9VE5gUDVcpa8hmk/view?usp=drivesdk.
+- Fonte histórica ORIGINAL_ICONS versão 0.5.10, fornecida originalmente nesta conversa e preservada, copiada para a mesma pasta Drive como arquivo separado: https://drive.google.com/file/d/1_RGnnsnZXLJ1pJwUXswxFcUKYd0D3RMS/view?usp=drivesdk. Trata-se de um ZIP histórico de código/ícones, NÃO substituir automaticamente os ícones do build 0.5.30.
+- Pacote local alternativo NOVO inclui o snapshot Android buildável atual na raiz, o acervo privado datado 06/10/2026 sob diretório isolado e material histórico 0.5.10 sob outra pasta isolada, mais manifesto de proveniência/links; nome: PvPPokeGo-0.5.30-FONTE-EDITAVEL-E-ACERVO-COMPLETO.zip, 7.300.714 bytes, SHA-256 e12272639376117ca9fb430b6434dd17e71bd422bd6be72dd29c885290db933b; 346 arquivos testados com zipfile.testzip() PASS. Esse pacote está no ambiente local da sessão, NÃO afirmar upload ao Drive até verificar.
+- Inspeção da captura do emulador 0.5.30 encontrou modal Pixel Launcher ANR no screenshot apesar do job antigo verde. Novo job UiAutomator run 38820881551 confirmou que o aplicativo continha 'PvPPokeGo' e 'Assistente visual' na hierarquia, mas falhou no script shell pois emulator-runner executa as linhas individualmente; não foi detectada falha Kotlin/Java nesse run. O erro de sintaxe foi corrigido usando condicionais numa única linha, commit público 8ee99c3a7e41e4ac10b1b76a3a2f1eeea131c09d. Aguardar novo job strict UI antes de marcar smoke visual aprovado.
+- GitHub prerelease permanece BLOQUEADO por erro de permissão HTTP 403 no token de Actions. Workflow de prerelease modificado para disparo MANUAL com token guardado em GitHub Actions Secrets (nome PVPPOKEGO_RELEASE_TOKEN), commit público ed5f5c3a272e9f7a6dd258315a9508db0c60c2ff. NÃO incluir token em texto/ZIP e NÃO afirmar que a release permanente foi publicada.
+- Ainda pendentes físico Samsung + Pokémon GO, assinatura de manifesto com chave própria, keystore permanente de APK release, rede Wi-Fi real, backend de IA com consentimento e artes finais aprovadas. Issue #38 foi atualizado. Preservar branches estáveis.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
