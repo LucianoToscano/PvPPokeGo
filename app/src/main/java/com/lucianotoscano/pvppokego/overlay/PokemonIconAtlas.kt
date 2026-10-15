@@ -69,7 +69,8 @@ internal class PokemonIconAtlas(context: Context, onImageReady: () -> Unit = {})
         destination: RectF,
         paint: Paint
     ): Boolean {
-        currentImages.find(dex, speciesId)?.let {
+        val resolvedDex = dex ?: speciesId?.let { bySpecies[normalize(it)]?.dex }?.takeIf { it > 0 }
+        currentImages.find(resolvedDex, speciesId)?.let {
             canvas.drawBitmap(it, null, destination, paint)
             return true
         }
