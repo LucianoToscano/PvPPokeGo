@@ -1138,6 +1138,44 @@ Ambos devem persistir, exportar/importar e atualizar imediatamente o menu rápid
 **STATUS:** este inventário/contrato visual está **REGISTRADO NO GUIA**, mas a auditoria dos toggles, sincronização, testes de Android e APK com novas correções **NÃO FOI FEITA NESTA ETAPA**. Este commit é SOMENTE de documentação; não é build/release nova. Toda mudança futura nos menus deve gerar novo registro cronológico no guia da branch ativa e (quando relevante) no espelho histórico solicitado, incluindo branch/HEAD real, arquivos alterados, teste, pendências e links de artefatos verificados.
 
 
+
+### 2026-10-15 — Início da arquitetura híbrida de dados (etapa isolada)
+
+Versão-base: 0.5.29
+Branch de trabalho: `feature/hybrid-data-sync-0.5.29`
+Checkpoint de documentação: `faca18c838d8e8be962b7afcf4b97e013f291a2b`
+
+OBJETIVO/PROBLEMA:
+- Atualização diária automática via Wi-Fi, mantendo o motor PvP totalmente offline durante a batalha.
+
+ALTERAÇÕES:
+- Auditados o empacotador PvPoke, checklist da 0.5.29 e dependências Android.
+- Criado armazenamento isolado de snapshots com verificação SHA-256, staging e ativação explícita fora de batalha.
+- Criados testes JVM de checksum, ativação e segurança de caminhos.
+- Especificação e limites em `docs/HYBRID_DATA_SYNC_2026-10-15.md`.
+
+ARQUIVOS PRINCIPAIS:
+- `app/src/main/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStore.kt`
+- `app/src/test/java/com/lucianotoscano/pvppokego/data/sync/HybridSnapshotStoreTest.kt`
+- `docs/HYBRID_DATA_SYNC_2026-10-15.md`
+- `docs/PROJECT_CONTINUITY_GUIDE.md`
+
+TESTES:
+- Testes criados, ainda não executados; compilação Android e APK não realizados.
+
+RESULTADO:
+- Base inicial de staging adicionada sem tocar no motor de batalha nem substituir assets existentes.
+
+STATUS:
+PARCIAL.
+
+PENDÊNCIAS:
+- Implementar e conectar WorkManager (Wi-Fi, diário), manifesto confiável, downloader, preferências e carregador.
+- Auditar ponto de troca de sessão, executar testes/build e validar em aparelho.
+
+PRÓXIMO PASSO:
+- Completar a integração no branch isolado; somente depois de testes promover à release.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
