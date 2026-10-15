@@ -4,10 +4,12 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import com.lucianotoscano.pvppokego.data.sync.HybridSyncScheduler
 
 class PvPPokeGoApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        HybridSyncScheduler.install(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
