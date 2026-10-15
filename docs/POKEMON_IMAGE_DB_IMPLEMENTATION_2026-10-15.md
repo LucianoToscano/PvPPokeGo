@@ -46,3 +46,16 @@
 - Prancha: https://drive.google.com/file/d/143xIgW1f2OFUPqOsy7fgnRSW6auz0IE0/view
 - Para uso rápido sem esperar lotes diários, acrescentado importador ZIP via Android OpenDocument com validação de nomes/arquivos/tamanho, execução em corrotina e armazenamento interno. UI contém botão Importar banco completo (ZIP).
 - Primeiro CI APK identificou declaração duplicada `context` na UI; corrigido no fonte e na cópia pública. CI Android ainda em execução — não declarar APK testado nem entregue.
+
+## Fechamento do build QA — 15/10/2026
+
+**SUCESSO VERIFICADO:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38809088247 ; todos os jobs e etapas concluíram com sucesso, com `testStandardDebugUnitTest`, `assembleStandardDebug`, validação do Manifest/APK e `apksigner verify`.
+
+- **APK**: `PvPPokeGo-0.5.37-ImageDB-FINAL-QA-debug.apk`, 80.990.041 bytes, SHA-256 `7828f7ad092e0f807f3a95c0f3536f3ed8164c927bf2951306ee47f316f9b9b6`.
+- **Artefato GH** `12008576522`, branch pública HEAD `02773db33ba39f7c6d914c9263daa218ce386e8d`.
+- **Drive do APK:** https://drive.google.com/file/d/1-vmbqRPp73Qp-MqpPsqxBOXxE9FBXuGm/view — ZIP contém APK, SHA256SUMS, texto de assinatura e metadados.
+- **Verificação:** ZIP exterior e APK íntegros; Game Master, PvPoke snapshot, atlas 1.167 identidades e fingerprints empacotados; `apksigner v2=true`, 1 signatário Android Debug (cert SHA-256 `ddd060c7a46b3581399b6012473936cdcd43a9fccb51473c9a6b3d9b71b85454`), pacote `com.lucianotoscano.pvppokego`, 0.5.37 (code 42).
+- **Conteúdo opcional externo:** 1.071 WebPs RGBA 256×256, todos únicos e válidos (incluindo 46 Mega), banco no Drive https://drive.google.com/file/d/1hScejMYPZrWSR4wuDiiQCVpuzaakPnZG/view .
+- **Correções adicionais e testes JUnit:** dedução da forma-base a partir do atlas 1.167 (preservar Mewtwo Armored, Pikachu Libre, Giratina/Deoxys etc), impedir confusão "Meganium" com "Mega", manter prioridade da espécie exata em relação ao Dex de OCR. Todos os testes Gradle do build final passaram.
+- **No Android:** em `Configurações → Banco de imagens Pokémon → Importar banco completo (ZIP)`, selecionar o banco WebP salvo no aparelho. Atlas GO acompanha o APK para uso offline antes do import; os 1.071 WebPs não estão embutidos no APK, por padrão, para economizar espaço.
+- **PENDÊNCIAS:** QA físico, teste de importar 1.071 imagens no aparelho, desempenho/consumo e OCR/reserva/troca; conferir atualização de assinatura do app atual; revisar direitos de artes © The Pokémon Company; não promover esta QA debug a release permanente nem considerar o APK 1.0.0 reconstruído.
