@@ -1237,6 +1237,18 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Para finalizar: executar pipeline real, corrigir eventuais falhas de compilação/testes, configurar/publicar feed HTTPS confiável, validar integridade do manifesto e executar QA no dispositivo.
 - Não promover mudanças para a branch de release sem essas evidências.
 
+
+### 2026-10-15 — Espelhamento público da arquitetura híbrida
+
+- Repositório público verificado: `LucianoToscano/PvPPokeGo-APK-Build` (branch estável `main` preservada).
+- Criada branch pública `preview/hybrid-data-sync-20261015`.
+- Espelhados `HybridSnapshotStore.kt`, `HybridSyncScheduler.kt`, testes, `GameDataRepository.kt`, `PvPPokeGoApp.kt` e `app/build.gradle.kts`.
+- Workflow público `.github/workflows/build-standard-apk.yml` atualizado NA BRANCH PREVIEW para disparar em push e aceitar a compilação híbrida.
+- README da branch pública registra caráter experimental e falta de validação.
+- Consulta dos runs para o commit público `0c4d92cea47139f6ebc0ff1c439c6201d1ac3555`: nenhum workflow retornado pela API.
+- Nenhum APK novo verificado, nenhuma assinatura/teste Android confirmados; não afirmar conclusão ou promover para main.
+- Fonte HTTPS do manifesto ainda sem URL publicada e confiável.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
