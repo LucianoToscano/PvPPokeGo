@@ -110,6 +110,7 @@ class BattleOverlayView(
 
     fun release() {
         clearPokemonPortraits()
+        pokemonIconAtlas.release()
     }
 
     private fun replaceReservePortrait(index: Int, next: Bitmap?) {
