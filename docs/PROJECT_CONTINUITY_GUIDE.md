@@ -1383,6 +1383,36 @@ STATUS: PARCIAL / NÃO VALIDADO.
 
 **Ponto de continuidade**: finalizar QA físico e procedimento de lançamento assinado, sem refazer CI 38802898336 nem reexecutar o empacotamento que já foi aprovado. Aplicar futuras alterações primeiro na fonte canônica, depois no espelho público isolado, registrando cada mudança.
 
+
+### 2026-10-15 — CICLO 0.5.30 Hybrid QA: código aplicado, build final em validação
+
+**Solicitação:** implementar as pendências possíveis, gerar APK e ZIP com projeto editável, registrar tudo no Guia Mestre e distribuir pelo GitHub público e Drive, preservando versão estável.
+
+**Branches preservadas:** canônica \`feature/hybrid-data-sync-0.5.29\` contra \`release/0.5.29\`; espelho público \`preview/hybrid-data-sync-20261015\` contra \`main\`. O projeto NÃO foi reiniciado e nenhuma branch estável recebeu merge.
+
+**Recursos aplicados no código canônico e espelhados no público:**
+- Nova versão experimental \`0.5.30\` / versionCode \`35\`.
+- \`SettingsRepository.kt\`: controles de atualização híbrida diária/Wi-Fi e status da base ativa/pedente; preferência de sincronização incluída em backup/import JSON.
+- \`SettingsScreen.kt\`: seção de dados híbridos com toggles e status, botão funcional para solicitar verificação manual, controle opcional de três slots inimigos.
+- \`HybridSyncScheduler.kt\`: WorkManager one-shot manual com restrição de rede, mesmo com agenda diária desligada; continua respeitando Wi-Fi real quando selecionado.
+- \`MainActivity.kt\`: ZIP de diagnóstico inclui \`hybrid_sync.txt\`.
+- \`OpponentTeamTracker.kt\` (novo): roster por ordem de observação, máximo de três identidades confirmadas, CP/HP, estado ativo/desmaiado, placeholders desconhecidos; não inventa quarto slot; não adiciona slot fantasma se a mesma espécie está ambígua sem CP; permite upgrade OCR para forma exata com nome+CP confirmados.
+- \`BattleEngine.kt\`: integra roster, mantém energia do inimigo associada ao slot reconhecido, restaura estado após troca e evita reutilizar HP de oponente anterior.
+- \`OpponentTeamTrackerTest.kt\` (novo): cobre três identidades, retornos, duplicata com CP distinto, CP incerto e atualização OCR→forma.
+- CI público \`.github/workflows/build-standard-apk.yml\`: gera APK QA debug e ZIP editável do projeto compilável; incorpora assets PvPoke offline e atlas e gera Gradle Wrapper 8.11.1, checksum e verificação ZIP.
+- CI canônica \`.github/workflows/package-project-zip.yml\`: configurada para exportar ZIP completo do repositório privado pela feature branch; execução 38813504687 FAILED antes de produzir passos/logs de runner; não afirmar que ZIP canônico foi entregue.
+- Matriz de verificação \`docs/FEATURE_AUDIT_0.5.30.md\`; issue de bloqueios externos #38: https://github.com/LucianoToscano/PvPPokeGo/issues/38.
+
+**Evidências intermediárias verificadas:**
+- CI pública 38813448792: build 0.5.29 com source artifact 12009507794 e APK, ambos criados; ZIP extraído e íntegro.
+- CI pública 38814583388: job build de 0.5.30 CONCLUÍDO COM SUCESSO; artefatos APK 12009574157 e fonte editável 12010676577. ZIP de fontes extraído; arquivo interno checksum confere, Gradle Wrapper, MainActivity, icon atlas e OpponentTeamTracker estão presentes.
+- Smoke emulator do run 38814583388 e CI mais recente 38815466466 (última correção de roster) ainda pendentes no momento deste registro. Não confundir artefato intermediário com último commit.
+- CI pública 38813112040 falhou por YAML corrompido na primeira tentativa de inserir pacote fonte; workflow foi recuperado com base no último workflow válido. Nova CI 38813448792 passou.
+- Source build pública inclui todos os arquivos necessários para compilar o Android 0.5.30 e editar telas/motor/dados, mas NÃO substitui o ZIP integral do repositório privado com históricos antigos. O git canônico completo permanece no repositório privado.
+
+**Bloqueios externos e não concluídos:** QA em Samsung/Pokémon GO real, reconhecimento e HUD durante batalha, atualização em Wi-Fi físico, imagens/backgrounds finais aprovadas, assinatura de manifesto com chave privada guardada fora do GitHub, assinatura permanente de release e backend de IA remoto com consentimento. Não marcar essas atividades como realizadas por emulador. Não mesclar PR #37 na release sem cumprir os critérios.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
