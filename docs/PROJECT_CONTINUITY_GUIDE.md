@@ -1227,6 +1227,16 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Sem URL de manifesto de atualizações verificada/configurada: o worker continua no modo seguro sem downloads.
 - **STATUS: IMPLEMENTAÇÃO PARCIAL, NÃO PRONTA PARA RELEASE.** Não promover PR #37 sem compilação, testes e validação real no aparelho.
 
+
+### 2026-10-15 — Pipeline de validação híbrida
+
+- Criado `.github/workflows/hybrid-data-sync.yml` para executar testes unitários Standard, montar APK debug, verificar ZIP e gerar SHA-256 como artefato.
+- Verificação de workflows do commit: nenhuma execução confirmada pela API disponível.
+- Não houve build local: ambiente sem Android SDK/Gradle e acesso de rede externo indisponível.
+- Nenhum APK novo validado. PR #37 permanece draft.
+- Para finalizar: executar pipeline real, corrigir eventuais falhas de compilação/testes, configurar/publicar feed HTTPS confiável, validar integridade do manifesto e executar QA no dispositivo.
+- Não promover mudanças para a branch de release sem essas evidências.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
