@@ -1450,6 +1450,14 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Segurança e limites sem mudança: assinatura permanente de release, assinatura independente do manifesto remoto, QA Wi-Fi/Samsung/PvP real e IA multiusuário ainda não concluídos. Consultar issue #38 e \`docs/FEATURE_AUDIT_0.5.30.md\`. Não alterar branch estável por esse QA.
 
 
+### 2026-10-15 — Tentativa de prerelease permanente GitHub: permissão da integração bloqueada
+
+- O workflow de prerelease público verificou com SUCESSO os checksums SHA-256 do APK e do ZIP de fontes do run aprovado 38815466466.
+- A publicação do GitHub Release falhou na etapa gh release create com **HTTP 403 Resource not accessible by integration**, run 38821135771. O token efêmero de Actions tinha contents:write indicado nos logs, mas o endpoint de Releases recusou a integração.
+- O workflow foi ajustado para **execução manual** e exige Secret de repositório PVPPOKEGO_RELEASE_TOKEN com permissão de publicação de releases; não inclui token embutido, nunca colocar chave no código. Commit público ed5f5c3a272e9f7a6dd258315a9508db0c60c2ff.
+- **GitHub Release NÃO foi criado.** O GitHub contém código completo da branch de compilação e artefatos de Actions com retenção limitada. As cópias confirmadas no Google Drive permanecem a distribuição dos pacotes (APK QA, projeto editável e pacote com acervo histórico).
+- O issue #38 foi atualizado com bloqueio de release e observação da captura do emulador. Nova validação UiAutomator foi adicionada à CI, mas NÃO declarar aprovada enquanto estiver em execução.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
