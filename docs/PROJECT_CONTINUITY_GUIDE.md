@@ -1,3 +1,16 @@
+## 15/10/2026 — Banco de imagens Pokémon 3D (implementação isolada / PARCIAL)
+
+- **Ramo ativo:** `feature/pokemon-image-db-1.0.0-20261015`, baseado no checklist da reconstrução 1.0.0 / Home 0.5.37. Não alterar as releases legadas.
+- **Documento técnico:** [POKEMON_IMAGE_DB_IMPLEMENTATION_2026-10-15.md](POKEMON_IMAGE_DB_IMPLEMENTATION_2026-10-15.md).
+- **Implementação:** 1.025 entradas-base e 46 Mega candidatas, atualizações Wi-Fi/24h, WorkManager, WebP 256px, LRU 16MB, fallback atlas, HUD/Home/Equipe; controles de configuração preservando backups.
+- **Evidência:** 5 testes de catálogo + 4 testes sintéticos de conversão PASS; **0 PNG reais baixados** por falta de acesso DNS neste ambiente; JUnit/Gradle e QA físico pendentes. Não há novo APK confirmado.
+- **Drive oficial (ZIP Fase 3):** https://drive.google.com/file/d/1qgvRaI7zz8G8CS3sdIyfSnL1tMOMhP8X/view?usp=drivesdk .
+- **CI público isolado / PR:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/pull/1 . Primeiro build falhou no setup SDK; workflow corrigido, segunda tentativa pendente à data deste registro.
+- **Direitos:** os PNGs Pokémon HOME são copyright da The Pokémon Company (licença do repositório de código PokeAPI não os torna CC0). Não redistribuir imagens sem revisão.
+- **Próxima etapa:** confirmar run de CI, corrigir compile se necessário, obter retratos reais, conferir Megas, validar aparelhos e atualizar status. Preservar reconstrução incremental 1.0.0.
+
+---
+
 ## Complemento da biblioteca visual — ícones de HUD, tipos e rank (13/10/2026)
 
 Ícones dos **18 tipos** foram exportados dos contornos originais `TypeGlyphPaths.kt`; cadeado, olho, matchup (forte/neutro/fraco) foram convertidos dos métodos Canvas de `BattleOverlayView.kt` para PNG/SVG, com arquivo fonte preservado. Ranking no APK 0.5.37 é texto/emoji, portanto os badges #5/#18/#12 presentes nas imagens de referência foram incluídos SOMENTE como recortes de mockup, claramente rotulados. A extração anterior da biblioteca era incompleta por considerar só PNG embutido.
