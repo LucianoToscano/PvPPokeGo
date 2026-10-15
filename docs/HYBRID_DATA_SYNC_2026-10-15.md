@@ -32,3 +32,13 @@ Branch: `feature/hybrid-data-sync-0.5.29` based on `release/0.5.29`.
 - This is scheduling infrastructure, NOT live data synchronization. Wi-Fi-only means Android `NetworkType.UNMETERED` (not a literal Wi-Fi transport guarantee).
 - WorkManager periodic tasks are inexact; daily means periodic eligibility, not execution at an exact clock time.
 - No Gradle build or test execution performed. No APK generated.
+
+## Third checkpoint — downloader and loader (unverified)
+- WorkManager worker reads optional `pvppokego.hybridManifestUrl` Gradle property. When unset it is a safe no-op. The project has no verified public update manifest yet.
+- Expected manifest: HTTPS JSON with `schema: "pvppokego-hybrid-v1"`, `version`, `files: [{name,sha256,size}]`. Five required datasets: `gamemaster.json`, `pvpoke_cpms.json`, `rankings-1500.json`, `rankings-2500.json`, `rankings-10000.json`.
+- HTTPS, same-host file fetch, no redirects, timeouts, maximum file size, SHA-256 and minimum JSON record counts enforced.
+- Downloads staged only. Activation happens at the next Android application process start, before the battle engine exists. No active dataset changes during a running process.
+- `GameDataRepository` reads activated local snapshots with bundled assets fallback; existing online fallback remains only for absent assets.
+- Automatic daily work is inexact and unmetered-network constrained; no exact-hour guarantee.
+- **Not tested**: Gradle compilation, Android instrumentation, on-device regressions, remote endpoint and APK.
+- **Security follow-up**: pin manifest integrity/signature and test update rollback before production deployment.
