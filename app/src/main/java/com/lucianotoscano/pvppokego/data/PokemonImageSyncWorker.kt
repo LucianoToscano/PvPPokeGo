@@ -9,9 +9,7 @@ import android.os.Build
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkerParameters
 import androidx.work.WorkManager
@@ -70,15 +68,16 @@ internal class PokemonImageSyncWorker(
         val tmp = File(target.parentFile, target.name + ".tmp")
         return try {
             // The catalog only constructs HTTPS URLs to this known fixed host.
-            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 9_000
                 readTimeout = 15_000
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", "PvPPokeGo-ImageDB/2.0")
             }
-            if (connection.responseCode != 200) return false
+            connection = conn
+            if (conn.responseCode != 200) return false
             val buffer = java.io.ByteArrayOutputStream()
-            connection.inputStream.use { source ->
+            conn.inputStream.use { source ->
                 val bytes = ByteArray(8192)
                 var length: Int
                 while (source.read(bytes).also { length = it } != -1) {
@@ -129,14 +128,12 @@ internal class PokemonImageSyncWorker(
         private const val MAX_DOWNLOAD_BYTES = 6 * 1024 * 1024
         private const val REFRESH_AFTER_MS = 7L * 24 * 60 * 60 * 1000
         private const val PERIODIC_NAME = "pvppokego-pokemon-images-daily"
-        private const val FIRST_NAME = "pvppokego-pokemon-images-first"
 
         fun schedule(context: Context) {
             val manager = WorkManager.getInstance(context)
             val prefs = context.getSharedPreferences("pvppokego_prefs", Context.MODE_PRIVATE)
             if (!prefs.getBoolean("pokemon_images_auto_update", true)) {
                 manager.cancelUniqueWork(PERIODIC_NAME)
-                manager.cancelUniqueWork(FIRST_NAME)
                 return
             }
             val network = if (prefs.getBoolean("pokemon_images_wifi_only", true)) {
@@ -144,13 +141,8 @@ internal class PokemonImageSyncWorker(
             } else NetworkType.CONNECTED
             val constraints = Constraints.Builder().setRequiredNetworkType(network).build()
             manager.enqueueUniquePeriodicWork(
-                PERIODIC_NAME, ExistingPeriodicWorkPolicy.KEEP,
+                PERIODIC_NAME, ExistingPeriodicWorkPolicy.UPDATE,
                 PeriodicWorkRequestBuilder<PokemonImageSyncWorker>(24, TimeUnit.HOURS)
-                    .setConstraints(constraints).build()
-            )
-            manager.enqueueUniqueWork(
-                FIRST_NAME, ExistingWorkPolicy.KEEP,
-                OneTimeWorkRequestBuilder<PokemonImageSyncWorker>()
                     .setConstraints(constraints).build()
             )
         }
