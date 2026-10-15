@@ -1,3 +1,18 @@
+## 15/10/2026 — BANCO DE IMAGENS 3D POKÉMON: ARTES OBTIDAS, APK QA ANDROID GERADO (CONTINUIDADE)
+
+**Status PARCIAL — não confundir com aprovação do novo app 1.0.0.** O trabalho foi preservado em branch isolada a partir deste checklist de reconstrução; não foi mesclado ao aplicativo 1.0.0 nem foram alteradas as releases antigas.
+
+- **Branch de código (origem):** `feature/pokemon-image-db-1.0.0-20261015` — https://github.com/LucianoToscano/PvPPokeGo/tree/feature/pokemon-image-db-1.0.0-20261015 . Código de catálogo e cache 1.025 espécies-base + 46 Mega candidatas; atualização diária automática com Wi-Fi como padrão; importação ZIP pelo seletor nativo; LRU WebP e fallback atlas offline, HUD/Home/Equipe. Integração preserva os dados e motor de batalha do legado.
+- **Build público isolado:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/tree/preview/pokemon-image-db-20261015 ; PR #1 (draft): https://github.com/LucianoToscano/PvPPokeGo-APK-Build/pull/1 .
+- **Assets obtidos pelo runner:** 1.071 WebPs (1.025 base + 46 Mega) e relatório de validação (0 falhas de download, ZIP íntegro). É arte Pokémon HOME obtida de `PokeAPI/sprites`, NÃO reprodução exata do banco de Pokémon GO. Megas reunidas em prancha visual; conferência individual e situação dos direitos de redistribuição ainda exigem atenção. Arte © The Pokémon Company.
+- **Drive oficial imagens:** https://drive.google.com/file/d/1hScejMYPZrWSR4wuDiiQCVpuzaakPnZG/view ; **prancha Mega:** https://drive.google.com/file/d/143xIgW1f2OFUPqOsy7fgnRSW6auz0IE0/view .
+- **Android QA inicial:** run https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38803142499 ; todas as etapas PASS (GameMaster, atlas, fingerprints, JUnit Standard, assembleStandardDebug, integridade de resources). Artefato `12004779278`; APK 80.990.041 bytes, SHA-256 `fde1930477522054cae77120aaca9f2c1738abda3a9ae4e3e70260e1fefc3225`. ZIP do APK com checksum no novo Drive: https://drive.google.com/file/d/1SRN5YAtuCx1RlF6JzZ3tBkDLVr_HiCnz/view .
+- **Assinatura APK:** assinatura v2 detectada no APK pela estrutura do Signing Block, verificação criptográfica Android/identidade do pacote em execução adicional de CI; NÃO confundir com assinatura release permanente. **QA físico Android, OCR/trocas, importação e compatibilidade da assinatura do aparelho permanecem pendentes.**
+- **Documento técnico detalhado:** https://github.com/LucianoToscano/PvPPokeGo/blob/feature/pokemon-image-db-1.0.0-20261015/docs/POKEMON_IMAGE_DB_IMPLEMENTATION_2026-10-15.md .
+- **Continuidade:** conferir resultado do workflow final com `apksigner` e pacote; depois testar APK em dispositivo, importação ZIP, offline, Megas X/Y, regressão dos três cards e overlay. Não mesclar a branch ao plano 1.0.0 antes da validação/instrução apropriada; nunca descartar versões anteriores.
+
+---
+
 ## Complemento da biblioteca visual — ícones de HUD, tipos e rank (13/10/2026)
 
 Ícones dos **18 tipos** foram exportados dos contornos originais `TypeGlyphPaths.kt`; cadeado, olho, matchup (forte/neutro/fraco) foram convertidos dos métodos Canvas de `BattleOverlayView.kt` para PNG/SVG, com arquivo fonte preservado. Ranking no APK 0.5.37 é texto/emoji, portanto os badges #5/#18/#12 presentes nas imagens de referência foram incluídos SOMENTE como recortes de mockup, claramente rotulados. A extração anterior da biblioteca era incompleta por considerar só PNG embutido.
