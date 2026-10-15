@@ -38,3 +38,13 @@
 
 ## Próximo passo obrigatório antes de release definitiva
 Integrar via revisão de PR o Hybrid 0.5.30 na árvore ImageDB 0.5.38 sem sobrescrever módulos recentes, conservar todos os testes e assets, validar hashes offline e status de Settings, executar suíte Standard Android e pytest do feed no mesmo build, comparar APK com baseline e executar QA real. Só então publicar ZIP completo editável e APK assinado, atualizar este guia e o Drive **novo**: https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI.
+
+
+## Entrega adicional comprovada — CI ImageDB 0.5.38 com ZIP editável
+- **GitHub Actions:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38826162546 — `completed/success`, build+testes Standard, empacotamento da fonte e artefato `PvPPokeGo-0.5.38-QA-debug` (id 12015047648).
+- **APK QA/debug real:** `PvPPokeGo-0.5.38-ImageDB-QA-debug.apk`, 81.006.425 bytes, SHA256 `fda159820a46ce7952341583427fbaea8f3efc6f82198c15cdf87668e2b84ffc`, ZIP interno testado, 1 assinatura v2 pelo `apksigner` do CI. Arquivo Drive oficial: https://drive.google.com/file/d/1ZbeORZKaidpDohUUArFBO67zBAlc7B69/view?usp=drivesdk
+- **Fonte Android editável desta branch:** `PvPPokeGo-0.5.38-ImageDB-PROJETO-EDITAVEL-COMPLETO.zip`, 6.307.248 bytes compactados, 10,15 MB descompactados, 163 arquivos (119 `.kt/.java/.py/.kts`), SHA256 `1fc8199bee91790144f15775a6189f3d90999321cb5c58a70b6d839af75a0bbe`. Contém código, scripts, testes, resources, gamemaster, rankings, atlas, fingerprint, settings Gradle (não contém `gradlew`, requer Gradle 8.11.1 / Android SDK adequados para build). Drive: https://drive.google.com/file/d/1hW0oqCDHQbbszItvgRmd7oiL3_zsXBJX/view?usp=drivesdk
+- **Pacote conjunto com APK + ZIP fonte + SHA256SUMS + relatório de assinatura:** https://drive.google.com/file/d/1qR4Tz_RNUka5iesNuA-uHREXiBEhqwPz/view?usp=drivesdk. ZIP original/ZIP fonte/APK testados via `unzip -t`, hashes comparados localmente com o manifesto do CI (PASS).
+- **Backup histórico original Hybrid 0.5.30 independente, NÃO mesclado**: https://drive.google.com/file/d/1i5796ptB_cqVH_8Zl0WqAGn73B2Oex-t/view?usp=drivesdk. ZIP de fonte recuperado da run pública 38821812163, checksum `0a2c44319d1aa72cad87c5ee749b31757cb1cfd5f94ccb9b66a61b8cf9094119` validado e conteúdo HybridSnapshotStore/OpponentTeamTracker/generate_hybrid_feed presente; 129 arquivos, cerca de 10MB descompactados. Fonte editável da versão anterior retida **sem importar código obsoleto por cima da base ImageDB**.
+- **Limites:** não chamar 0.5.38 de definitiva; Hybrid 0.5.30 ainda não integrado, sem QA físico, assinatura permanente ou auditoria de todo BattleEngine. Debug pode ser incompatível com chave de outra instalação: exportar backup antes de reinstalar.
+
