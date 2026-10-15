@@ -299,3 +299,18 @@ Status: pacote PNG/SVG criado, ZIP testado íntegro, Drive upload confirmado; n�
 
 ---
 
+
+## Anexo de banco de imagens — 15/10/2026
+
+- [x] Catálogo Base 1..1025 e 46 candidatos Mega codificados por (Dex, forma), incluindo Mega X/Y.
+- [x] Camada de cache WebP local e fallback no atlas offline, sem rede dentro do HUD draw.
+- [x] Worker 24h com Wi-Fi como padrão e controles de configuração.
+- [x] Prévia Home / equipe usa identificação Dex pelo atlas e notificação de nova imagem.
+- [x] Download/conversão local mockado: 4/4 testes, catálogo: 5/5.
+- [ ] Compilação Android e testes JUnit do código novo confirmados.
+- [ ] Download real dos retratos e conferência de identidade visual Mega.
+- [ ] QA aparelho: início, batalha, troca, offline e desempenho.
+- [ ] Revisão de direitos antes de redistribuir o conjunto de artes.
+- [ ] Aprovação e integração na sequência de APKs da reconstrução 1.0.0.
+
+Fonte: [documento técnico](POKEMON_IMAGE_DB_IMPLEMENTATION_2026-10-15.md). Registro na branch isolada, sem alterar o escopo do primeiro APK mínimo.
