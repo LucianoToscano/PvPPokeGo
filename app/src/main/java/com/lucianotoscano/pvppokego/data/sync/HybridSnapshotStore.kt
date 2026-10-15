@@ -50,9 +50,17 @@ class HybridSnapshotStore(private val root: File) {
             parentFile?.mkdirs()
             val temp = File(root, "active-version.tmp")
             temp.writeText(version)
-            if (!temp.renameTo(this)) {
-                temp.delete()
-                return null
+            try {
+                java.nio.file.Files.move(
+                    temp.toPath(), toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
+                )
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                java.nio.file.Files.move(
+                    temp.toPath(), toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
             }
         }
         return staged
