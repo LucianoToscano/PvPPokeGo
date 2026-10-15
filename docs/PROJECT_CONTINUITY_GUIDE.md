@@ -1345,6 +1345,44 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - Outra execução final 38802898336 foi iniciada para verificar manifesto estável por conteúdo (exclui timestamp variável do snapshot) e não publicar bases repetidas sem mudança real nos dados/ licença.
 - Não mesclar a branch canônica na release por este teste isolado.
 
+### 2026-10-15 — FECHAMENTO DA BUILD HÍBRIDA: EXECUÇÃO FINAL 38802898336 (APROVADA)
+
+**Ponto recuperado**: o trabalho estava interrompido durante `Unit tests and Standard debug APK` do GitHub Actions 38802898336, commit público 797330db330b0db887ccb89d90591dec6c6185db. Retomado diretamente desse run, sem reinício de projeto.
+
+**Resultados verificados do GitHub Actions**
+- Execução pública: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38802898336
+- Conclusão: success, 2026-10-15 20:45:00 UTC. Jobs `build` e `Android 35 install and launcher smoke`: success.
+- Passaram: teste Python do gerador de feed, empacotamento do banco PvPoke e atlas visual, `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, verificação ZIP, SHA-256, assinatura com apksigner, construção/publicação do manifesto e instalação/abertura no emulador Android 35.
+- Emulador verificou instalação do APK com adb, inicialização de MainActivity e processo vivo; não testou batalha real, OCR/captura ao vivo ou HUD em aparelho físico.
+- Último artefato GitHub: ID 12004839451, `PvPPokeGo-0.5.29-Hybrid-QA-debug`, ZIP de 36.157.916 bytes contendo APK, `SHA256SUMS.txt` e `signature-verification.txt`.
+
+**Verificação independente do artefato**
+- APK extraído do ZIP: `PvPPokeGo-0.5.29-Hybrid-QA-debug.apk` de 80.318.297 bytes.
+- SHA-256 do APK: `97e0b919b6de2daf0c0211f59ceb75398fcf345cec55aaaf268c9d130a7c7ae5`, idêntico ao arquivo de checksum dentro do artefato.
+- `unzip -t` passou sem erros. Relatório apksigner confirma APK Signature Scheme v2=true, 1 signatário; assinatura **debug**, não substitui assinatura definitiva de produção.
+- Os dez recursos essenciais offline (Game Master, rankings 1500/2500/10000, CPMS, snapshot/licença PvPoke, reconhecimento visual e atlas de ícones) existem no APK.
+- Hash SHA-256 e tamanho dos SETE arquivos do feed foram comparados aos arquivos embarcados no APK: todos correspondem.
+
+**Feed remoto verificado**
+- URL: https://raw.githubusercontent.com/LucianoToscano/PvPPokeGo-APK-Build/hybrid-feed/manifest.json
+- Branch pública `hybrid-feed`, HEAD verificado `054fe923a722e5c87a7283d8a0f78cbdc22cb383`.
+- Versão publicada no momento do fechamento: `pvpoke-6f188deab6e057566a6e0fca`, manifesto de 7 arquivos.
+- Corrigido e testado gerador para NÃO mudar a versão somente por alteração no timestamp de `pvpoke_snapshot.json`; workflow de publicação não substitui o banco se a versão calculada não mudou. Essa lógica passou nos testes Python do run final.
+
+**Arquivamento no Google Drive**
+- Cópia final verificada do ZIP enviado à pasta `PvPPokeGo` (ID `1ybogVRRnaOe0KtWjlovxS56bJOi_JewI`), preservando os QA anteriores.
+- Arquivo: `PvPPokeGo-0.5.29-Hybrid-QA-FINAL-2026-10-15.zip`.
+- Link: https://drive.google.com/file/d/1qGpsg04zqNuNEU82yRVbBI7QSpmDh4Dy/view?usp=drivesdk
+- ID Drive `1qGpsg04zqNuNEU82yRVbBI7QSpmDh4Dy`; tamanho de 36.157.916 bytes e pasta confirmados em leitura de metadados.
+
+**Estado de segurança e regressões**
+- Branch privada de desenvolvimento `feature/hybrid-data-sync-0.5.29` e branch pública `preview/hybrid-data-sync-20261015` preservadas; versão estável privada `release/0.5.29` e pública `main` não substituídas.
+- PR privado #37 permanece draft; NÃO mesclar automaticamente por causa de QA debug.
+- O app verifica HTTPS de repositório fixo, hashes SHA-256, estrutura de arquivos, Wi-Fi real quando configurado, ativação na próxima inicialização e rollback. A autenticação do MANIFESTO ainda não usa assinatura criptográfica independente; risco residual para produção.
+- Pendências para lançamento oficial: QA de batalha/OCR/captura/overlay em dispositivo físico, política de atualização assinada com chave própria e geração de APK de release com assinatura permanente. Evitar desinstalar versão anterior sem exportar configurações, porque chaves de assinatura podem diferir.
+
+**Ponto de continuidade**: finalizar QA físico e procedimento de lançamento assinado, sem refazer CI 38802898336 nem reexecutar o empacotamento que já foi aprovado. Aplicar futuras alterações primeiro na fonte canônica, depois no espelho público isolado, registrando cada mudança.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
