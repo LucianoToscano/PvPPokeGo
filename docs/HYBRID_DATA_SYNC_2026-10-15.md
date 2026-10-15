@@ -23,3 +23,12 @@ Branch: `feature/hybrid-data-sync-0.5.29` based on `release/0.5.29`.
 ## Validation / pending
 - Static review performed; tests added but not executed; Android build not run; no APK produced.
 - Next: inspect runtime loader and battle session lifecycle, implement Wi-Fi daily scheduling, run unit tests and Standard Android build, validate on device and document the SHA-256 of any produced APK.
+
+## Second checkpoint — Android scheduling
+- Added `androidx.work:work-runtime-ktx:2.10.1`.
+- Added `HybridSyncScheduler`: unique periodic WorkManager task every 24h, unmetered network by default, enabled by default, with a configuration method for future settings UI.
+- Registered the scheduler in `PvPPokeGoApp.onCreate()`.
+- Worker is deliberately no-op until trusted manifest endpoint, schema validation and battle-session integration are implemented. It records only its last scheduler invocation.
+- This is scheduling infrastructure, NOT live data synchronization. Wi-Fi-only means Android `NetworkType.UNMETERED` (not a literal Wi-Fi transport guarantee).
+- WorkManager periodic tasks are inexact; daily means periodic eligibility, not execution at an exact clock time.
+- No Gradle build or test execution performed. No APK generated.
