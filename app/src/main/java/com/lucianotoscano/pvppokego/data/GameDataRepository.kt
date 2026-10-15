@@ -44,14 +44,17 @@ class GameDataRepository(private val context: Context) {
 
     private val hybridStore by lazy { HybridSnapshotStore(File(context.filesDir, "hybrid-data")) }
 
+    private var selectedSnapshot: File? = null
+
     private fun readSnapshotAsset(name: String): String {
-        val active = hybridStore.activeVersion()?.let { hybridStore.snapshot(it) }
+        val active = selectedSnapshot
         val candidate = active?.resolve(name)
         return if (candidate?.isFile == true) candidate.readText()
         else context.assets.open(name).bufferedReader().use { it.readText() }
     }
 
     suspend fun load(leagueCp: Int = 1500) = withContext(Dispatchers.IO) {
+        selectedSnapshot = hybridStore.activeVersion()?.let { hybridStore.snapshot(it) }
         currentLeagueCp = leagueCp
         legalFastCache.clear()
         legalChargedCache.clear()
@@ -71,6 +74,16 @@ class GameDataRepository(private val context: Context) {
             }.getOrElse { "{\"pokemon\":[],\"moves\":[]}" }
         }
         gameMaster = runCatching { json.decodeFromString<GameMaster>(gmText) }.getOrNull()
+        if (selectedSnapshot != null && (gameMaster?.pokemon.isNullOrEmpty() ||
+                gameMaster?.moves.isNullOrEmpty())) {
+            hybridStore.disableActiveSnapshot()
+            selectedSnapshot = null
+            gameMaster = runCatching {
+                context.assets.open("gamemaster.json").bufferedReader().use {
+                    json.decodeFromString<GameMaster>(it.readText())
+                }
+            }.getOrNull()
+        }
         movesById = gameMaster?.moves?.associateBy { normalizeId(it.moveId) }.orEmpty()
         uniquePokemon = gameMaster?.pokemon
             ?.map { p ->
