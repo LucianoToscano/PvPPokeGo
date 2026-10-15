@@ -1,6 +1,8 @@
 ## 15/10/2026 — ENTREGA DE QA IMAGE DB 0.5.37: BUILD FINAL VERIFICADO
 
-**Status:** COMPILAÇÃO, TESTES E ENTREGA DE QA CONCLUÍDOS; **QA no aparelho, licença das artes e integração 1.0.0 continuam PENDENTES**. Este checkpoint complementa os registros preliminares abaixo sem apagá-los.
+**Status:** COMPILAÇÃO, TESTES E ENTREGA DE QA CONCLUÍDOS;
+- **APK direto no Drive (sem descompactar):** https://drive.google.com/file/d/1eGO1ALwCkcUWIeysE4oG5_gl_1-XlaE2/view?usp=drivesdk — verificado por metadados do Drive: 80.990.041 bytes, mesmo tamanho do APK cujo SHA-256 consta abaixo.
+ **QA no aparelho, licença das artes e integração 1.0.0 continuam PENDENTES**. Este checkpoint complementa os registros preliminares abaixo sem apagá-los.
 
 - **Build final:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38809088247 — `completed/success` conferido; todas as etapas PASS, incluindo scripts de GameMaster, atlas/fingerprints, `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, validação de assets, `apksigner verify`, metadados e upload.
 - **Artefato final:** `12008576522`, `PvPPokeGo-0.5.37-image-db-standard-debug`. APK `80.990.041` bytes; SHA-256 exato `7828f7ad092e0f807f3a95c0f3536f3ed8164c927bf2951306ee47f316f9b9b6`. ZIP de artefato íntegro; APK ZIP íntegro; `539` entradas e os assets GameMaster, PvPoke snapshot, atlas PNG/JSON e fingerprints presentes. Atlas empacotado: **1.167** identidades.
