@@ -1437,6 +1437,19 @@ STATUS: PARCIAL / NÃO VALIDADO.
 **Delimitação importante**: a entrega QA do APK + ZIP Android buildável + GitHub público + cópias Drive está concluída e verificada. **NÃO** foi possível garantir produção, IA remota multiusuário, assinatura de manifesto independente, keystore permanente, nem comportamento visual durante batalhas em Samsung sem credenciais/hardware/testes externos. O arquivo ZIP do espelho público é integral e editável para compilar ESTE Android, mas não é snapshot integral e atual de TODOS os históricos/docs/branches do repositório canônico privado. Preservar as branches estáveis \`release/0.5.29\` e \`main\` e os backups anteriores.
 
 
+
+### 2026-10-15 — Revisão adicional da entrega e validação visual de startup
+
+- Confirmado por inspeção local: QA APK 0.5.30 SHA-256 \`7823de5c280179369a6a25ebbb95c33546bb11b8538f1da430e177d94f2c2d4d\`, size 80.351.065 bytes, Android Signature Scheme v2 true (debug).
+- ZIP de fonte editável QA: SHA-256 \`47e73c1a966fcce7ced4a66e8310563aacc21a69750b83b67634a5f7dc974a46\`, 6.280.245 bytes, integridade ZIP PASS; inclui Gradle Wrapper, fontes, testes e assets offline.
+- Pacote combinado (fonte 0.5.30 na raiz + acervo privado **histórico** em pasta isolada): \`PvPPokeGo-0.5.30-PROJETO-EDITAVEL-COM-ARQUIVO-HISTORICO.zip\`, 7.183.126 bytes, SHA-256 \`8c303bdcc7a7e19173d2930c54650c53614c6219a18c5a036b2c3d9744fe11aa\`, ZIP íntegro.
+- Cópia desse pacote combinado **enviada ao Google Drive** nesta etapa e readback confirmado: https://drive.google.com/file/d/1TNVfXolp6YnFw5tjV9VE5gUDVcpa8hmk/view?usp=drivesdk, pasta do projeto id \`1ybogVRRnaOe0KtWjlovxS56bJOi_JewI\`. As outras cópias APK/source do run 38815466466 permanecem disponíveis separadamente no Drive.
+- Revisão **visual** da captura de tela gerada pelo smoke do run 38815466466 mostrou aviso do Android "Pixel Launcher isn't responding" sobre o diálogo de notificações. Portanto, o smoke antigo só prova instalação/abertura/PID do app; **NÃO PROVA que a UI do PvPPokeGo estava visível sem interposição**. Não afirmar QA visual completo com base nele.
+- CI público foi aperfeiçoado com verificação por \`uiautomator dump\` de texto da interface PvPPokeGo e rejeição de diálogos ANR/launcher e exceções app. Workflow commit público \`ce318c669f69c6b14d6a1a852140f1d1f4ebb05c\`. Resultado ainda em execução no momento desta anotação; marcar somente após conclusão confirmada.
+- Criado workflow público \`.github/workflows/publish-qa-release.yml\` para criar **prerelease QA imutável** no GitHub contendo APK, checksums, relatório de assinatura e ZIP do fonte editável. Ele baixa EXATAMENTE o artefato aprovado do CI 38815466466 e só publica depois de verificar commit/conclusão/hashes. Primeira execução 38821056294 falhou porque SHA256SUMS.txt usava prefixo \`delivery/\`; corrigido na commit \`b2e6789fcbf5116e916ef6837fdaed368ee56c01\`; nova execução ainda não confirmada como sucesso.
+- Segurança e limites sem mudança: assinatura permanente de release, assinatura independente do manifesto remoto, QA Wi-Fi/Samsung/PvP real e IA multiusuário ainda não concluídos. Consultar issue #38 e \`docs/FEATURE_AUDIT_0.5.30.md\`. Não alterar branch estável por esse QA.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
