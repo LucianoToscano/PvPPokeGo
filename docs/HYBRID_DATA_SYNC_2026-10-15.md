@@ -42,3 +42,9 @@ Branch: `feature/hybrid-data-sync-0.5.29` based on `release/0.5.29`.
 - Automatic daily work is inexact and unmetered-network constrained; no exact-hour guarantee.
 - **Not tested**: Gradle compilation, Android instrumentation, on-device regressions, remote endpoint and APK.
 - **Security follow-up**: pin manifest integrity/signature and test update rollback before production deployment.
+
+## CI checkpoint
+- Added `.github/workflows/hybrid-data-sync.yml` to run `:app:testStandardDebugUnitTest`, `:app:assembleStandardDebug`, ZIP integrity check, and artifact SHA256.
+- A GitHub Actions run has **not** been confirmed; do not report a successful build or link an APK before a real run produces an artifact.
+- The update feed is deliberately disabled until an operator publishes a trusted HTTPS manifest and sets `pvppokego.hybridManifestUrl` in the build. Untrusted feeds must never be enabled.
+- Rollback currently covers an invalid Game Master; broader cross-file consistency and Android on-device regression checks are still necessary.
