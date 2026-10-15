@@ -299,3 +299,20 @@ Status: pacote PNG/SVG criado, ZIP testado íntegro, Drive upload confirmado; n�
 
 ---
 
+
+## 15/10/2026 — Biblioteca Pokémon 3D: checkpoint do projeto (branch isolada)
+
+Este bloco registra uma extensão do legado 0.5.37 em teste, **sem declarar a reconstrução 1.0.0 entregue**.
+
+- [x] 1.071 retratos Pokémon HOME WebP (1.025 base e 46 Mega) obtidos, integridade ZIP/WebP comprovada, salvos no Drive oficial.
+- [x] Download completo, manifesto por espécie/forma, Mega X/Y e prancha de conferência produzidos.
+- [x] Cache offline + atualização automática diária/Wi-Fi por padrão; importação ZIP e fallback para atlas original codificados em branch isolada.
+- [x] Home, Equipe e HUD consultam a nova camada, preservando os motores existentes.
+- [x] CI Android `38803142499`: Game Master + atlas/fingerprints + testes JUnit + build Standard PASS; APK 80.990.041 B, SHA256 `fde1930477522054cae77120aaca9f2c1738abda3a9ae4e3e70260e1fefc3225`; APK/ZIP íntegros.
+- [x] ZIP de QA enviado ao Drive: https://drive.google.com/file/d/1SRN5YAtuCx1RlF6JzZ3tBkDLVr_HiCnz/view .
+- [ ] Atestar `apksigner verify` e versão/pacote via último workflow GitHub.
+- [ ] Validar aparelho real (incluindo assinatura/backup), importação ZIP, velocidade, Wi-Fi, formas Mega, reservas, trocas e reconhecimento visual sem regressão.
+- [ ] Revisar direitos de redistribuição dos retratos © The Pokémon Company e conferir as formas individualmente.
+- [ ] Não confundir a versão de testes com APK inicial da reconstrução 1.0.0; essa etapa precisa de seu próprio aceite.
+
+**Ramos e documentos:** [branch isolada](https://github.com/LucianoToscano/PvPPokeGo/tree/feature/pokemon-image-db-1.0.0-20261015) · [PR QA](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/pull/1) · [Guia Mestre](PROJECT_CONTINUITY_GUIDE.md).
