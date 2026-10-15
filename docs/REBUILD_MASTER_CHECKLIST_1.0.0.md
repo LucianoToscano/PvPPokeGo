@@ -314,3 +314,16 @@ Status: pacote PNG/SVG criado, ZIP testado íntegro, Drive upload confirmado; n�
 - [ ] Aprovação e integração na sequência de APKs da reconstrução 1.0.0.
 
 Fonte: [documento técnico](POKEMON_IMAGE_DB_IMPLEMENTATION_2026-10-15.md). Registro na branch isolada, sem alterar o escopo do primeiro APK mínimo.
+
+### Resultado final do QA ImageDB (15/10/2026)
+
+- [x] Run `38809088247`: compilação Android Standard + `testStandardDebugUnitTest` **PASS**, incluindo regressões de formas e precedência de espécie.
+- [x] `apksigner verify`: **PASS, v2 true, 1 debug signer**, pacote `com.lucianotoscano.pvppokego`, versão 0.5.37 (42).
+- [x] APK 80.990.041 bytes, SHA-256 `7828f7ad092e0f807f3a95c0f3536f3ed8164c927bf2951306ee47f316f9b9b6`; atlas offline com 1.167 entradas e Game Master empacotados.
+- [x] Entrega final de QA no Drive: https://drive.google.com/file/d/1-vmbqRPp73Qp-MqpPsqxBOXxE9FBXuGm/view ; pacote anterior preservado como histórico.
+- [x] Banco externo 1.071 WebPs validado e armazenado no Drive: https://drive.google.com/file/d/1hScejMYPZrWSR4wuDiiQCVpuzaakPnZG/view .
+- [ ] QA em dispositivo (3 cards, Mega, formas regionais, seleção da equipe, cache/importação e continuidade do overlay).
+- [ ] Verificar a assinatura do APK instalado antes de tentar atualização; salvar dados/backup se for necessário reinstalar.
+- [ ] Revisão de direitos da arte Pokémon HOME antes de redistribuir o banco; obter aprovação para integrar a feature à reconstrução 1.0.0.
+
+**Nota:** isso conclui somente o **QA técnico da branch isolada 0.5.37 ImageDB**, não a reconstrução 1.0.0 nem a validação em aparelho.
