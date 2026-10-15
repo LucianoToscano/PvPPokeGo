@@ -1297,6 +1297,43 @@ STATUS: PARCIAL / NÃO VALIDADO.
 
 **Regra de continuidade**: consultar primeiro este Guia Mestre e o registro técnico; não reiniciar implementação, não sobrescrever a branch estável e registrar cada novo commit/resultado.
 
+
+### 2026-10-15 — IMPLEMENTAÇÃO HÍBRIDA: BUILD APROVADO, FEED PÚBLICO E DRIVE (EVIDÊNCIAS)
+
+**Fonte canônica e branches**
+- Projeto canônico: https://github.com/LucianoToscano/PvPPokeGo , branch feature/hybrid-data-sync-0.5.29, revisão PR #37 (draft).
+- Build público: https://github.com/LucianoToscano/PvPPokeGo-APK-Build , branch preview/hybrid-data-sync-20261015.
+- Feed remoto público PUBLICADO na branch isolada hybrid-feed: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/tree/hybrid-feed
+- Manifesto online VERIFICADO: https://raw.githubusercontent.com/LucianoToscano/PvPPokeGo-APK-Build/hybrid-feed/manifest.json
+- Base release/0.5.29 e espelho público main não foram sobrescritos.
+
+**Correções e implementação**
+- Resolvido erro do workflow público que chamava apksigner com o nome antigo do arquivo.
+- SnapshotStore agora persiste CHECKSUMS, revalida SHA-256 após reinicialização, rejeita corrupção/traversal, recupera staging interrompido, fixa a versão ativa e oferece rollback para assets embarcados.
+- Worker HTTPS limita domínio e caminho à origem pública fixa, impõe limites de tamanho, 7 arquivos obrigatórios e JSON mínimo; agenda atualização diária (WorkManager) e exige Wi-Fi real caso wifi_only=true.
+- Download é apenas staging; ativação somente em nova inicialização do processo, não durante uma batalha.
+- GameDataRepository valida consistência de Game Master, rankings da liga e CPM antes de selecionar os dados remotos, com fallback para assets do APK.
+- tools/generate_hybrid_feed.py prepara manifesto versionado por conteúdo; tools/test_generate_hybrid_feed.py testa determinismo, integridade do tamanho e rejeição de ranking inválido.
+- Fluxo de build público publica dados validados para branch hybrid-feed após testes/compilação/assinatura. Inclui licença e provenance pvpoke_snapshot.json.
+- Execução pública de CI 38801861207 APROVADA para testes do gerador; CI 38800587467 APROVADA para assinatura e publicação de dados.
+- Publicação da branch hybrid-feed verificada no commit 83a9f717ef9f8b392416095708756d084eb31557, versão pvpoke-c6a8aa396f84df1914503921, 7 arquivos.
+- Nova validação Android 35 via emulador foi adicionada à CI pública no commit 0d81f301fec925bef2b9745a3928bba879b48151; **resultado ainda não conhecido no momento deste registro**.
+
+**APK e evidências**
+- GitHub Actions 38798974370: primeiro build híbrido aprovado, arquivo SHA-256 5e9594cd76dc0779cd1a50753b6e414ab6aad0f5eab4ff3152020472decd5547.
+- GitHub Actions 38800587467: pacote híbrido com feed padrão (QA debug) aprovado, artefato 12004582000.
+- APK da segunda compilação extraído e verificado localmente por ZIP e hash SHA-256 3d6c0b8b44937f044cf91a0db87add7daff3dc832e778865ed5c83bc8e66ebee. apksigner: assinatura APK Signature Scheme V2 válida, uma assinatura debug.
+- Cópia ZIP APK + SHA256SUMS + signature-verification enviada ao Drive do projeto:
+  https://drive.google.com/file/d/18kM8F-wCIL3nMQPpEyk6z3X78y80gh3-/view?usp=drivesdk
+  arquivo PvPPokeGo-0.5.29-Hybrid-QA-2026-10-15.zip, pasta id 1ybogVRRnaOe0KtWjlovxS56bJOi_JewI; upload e readback Drive confirmados.
+
+**Limitações e regras de aprovação**
+- CI e assinatura debug não comprovam funcionamento real de HUD/OCR/captura em aparelho físico; QA manual ainda necessária.
+- Modelo atual de confiança HTTPS fixado em repositório Github + SHA-256 de payload NÃO é assinatura criptográfica independente do manifesto. Para lançamento produção seria ideal chave de assinatura gerida pelo dono e verificação da assinatura.
+- A compilação tem assinatura de TESTES; instalação por cima de versão com assinatura diferente pode exigir desinstalar versão antiga, com risco de perda de dados locais. Exportar configurações antes.
+- NÃO marcar PR #37 pronto para release nem mesclar à release/0.5.29 sem validação adicional em dispositivo.
+- Próxima sessão: ler primeiro este guia, conferir HEAD nas duas branches, últimos GitHub Actions, run de emulador 38802346032 e depois registrar resultado real.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
