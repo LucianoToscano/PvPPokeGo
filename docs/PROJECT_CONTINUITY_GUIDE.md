@@ -1334,6 +1334,17 @@ STATUS: PARCIAL / NÃO VALIDADO.
 - NÃO marcar PR #37 pronto para release nem mesclar à release/0.5.29 sem validação adicional em dispositivo.
 - Próxima sessão: ler primeiro este guia, conferir HEAD nas duas branches, últimos GitHub Actions, run de emulador 38802346032 e depois registrar resultado real.
 
+
+### 2026-10-15 — Smoke test de instalação Android 35 APROVADO
+
+- Workflow público ampliado com job independente smoke usando reactivecircus/android-emulator-runner@v2 e APK publicado pelo job build.
+- GitHub Actions 38802346032 terminou com sucesso: build/testes APK Standard e job Android 35 smoke verde.
+- Teste smoke instalou o APK QA, iniciou a activity com adb, esperou e confirmou PID ativo. Screenshot capturado como artefato 12005831245. A captura ainda mostra diálogo normal de autorização de notificações; não equivale a teste completo da interface e do overlay.
+- Caminho da imagem extraída nesta sessão: hybrid-smoke/launcher-smoke.png.
+- Sem testes reais de visão, batalhas, overlays ou conexão Wi-Fi de aparelho físico; continuam pendentes.
+- Outra execução final 38802898336 foi iniciada para verificar manifesto estável por conteúdo (exclui timestamp variável do snapshot) e não publicar bases repetidas sem mudança real nos dados/ licença.
+- Não mesclar a branch canônica na release por este teste isolado.
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
