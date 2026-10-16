@@ -2051,3 +2051,25 @@ Branch isolada pública de QA: https://github.com/LucianoToscano/PvPPokeGo-APK-B
 ZIP editável 0.5.40 (193 arquivos, manifesto individual 191 SHA): https://drive.google.com/file/d/1YuOA4_fb2wcPNjBmYTXI9itvhV3JOvYy/view?usp=drivesdk, SHA256 ad2b24facd820031cc64281c29f22d48116a09263df7a07be69ec5646113db65. Testes locais executados: 14 Kotlin JVM puros e 2 Python do Hybrid (todos PASS). **Continua pendente QA físico e paridade de replay, modularização total e assinatura de produção.** Não confundir 0.5.40 QA com release definitiva.
 
 **Validação CI concluída com sucesso (2026-10-15/16).** GitHub Actions run https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38833405832 passou no passo `:app:testStandardDebugUnitTest :app:assembleStandardDebug`, validação do APK e assinatura v2; artifact ID 12017737719. APK real 0.5.40 QA versionCode45 = 81.088.400 bytes, SHA256 `1c97a3eef4bf5653cdc2fb5dbbd1f664852c0fbf17a7a6043e4f02f137443fb5`. ZIP fonte compilada 0.5.40 SHA256 `4cb38eab6e55f46ab1eb350e376fc022ac2e9a2dea2eedf379d30f52c10b5fe1`. Entrega conjunta ZIP CI (APK+fonte+checksum+relatório de assinatura): https://drive.google.com/file/d/1FxE5Xv3xcvIhlbqMXIbNEdfS--JmOSMq/view?usp=drivesdk ; fonte CI: https://drive.google.com/file/d/16t7b27f5btlUY5fJ4aXDFeFux--2wCnN/view?usp=drivesdk. **Não foi testado fisicamente**; preservada homologação pendente de OCR/HUD e assinatura permanente do proprietário.
+
+
+## 2026-10-15 — Continuação 0.5.40 QA-R1: trackers resilientes e dados offline
+
+**Status:** PARCIAL — fonte íntegra com validação offline, **não compilada como APK Android** nesta continuação. A versão da fonte permanece `0.5.40`, `versionCode=45` até build e QA real; não renomear APK antigo.
+
+**Fonte editável completa (210 arquivos):** https://drive.google.com/file/d/1QeLf0nYsjYxlAYgDVcxLO4MsVdfI4r_v/view?usp=drivesdk  
+**SHA-256 ZIP:** `d20338b317ed8ac11c8ad7ccb34af71d1dabaede3823fe011856bdf28dd1e7fb`
+
+**Modificações nesta continuação (no ZIP do Drive, não sincronizadas como commits de código neste branch):**
+- `EnemyEnergyTracker.kt`: sanitização de consistência/pesos não finitos em snapshots, limitação de lotes Fast inválidos e de confiança NaN, sem reduzir hipóteses discretas.
+- `FastMovePhaseTracker.kt`: observações inválidas e relógio retrocedendo não geram timing confiável.
+- `EnemyChargedHistory.kt`: capacidade inválida não provoca crash.
+- `tools/validate_offline_assets.py`: valida SHA-256 de PvPoke, atlas e fingerprints; confere dimensões/IDs/limites sem rede. 1.751 Pokémon, 352 ataques, 1.167 sprites e 1.167 fingerprints conferidos.
+- `.github/workflows/qa-regressions-0.5.40.yml`: workflow no ZIP usa o atlas offline incluído em vez de tentar baixar APK histórico externo.
+- **Testes adicionados:** 5 Kotlin (não executados sem Gradle) e 3 Python (passaram).
+
+**Testes executados:** 5 testes Python passaram (2 pré-existentes + 3 novos), validador de assets passou, ZIP self-check e checksums passaram, scripts Python compilaram. **Bloqueios:** Gradle 8.11.1 sem DNS/cache local; sem Android SDK e sem execução no dispositivo. **Nenhum APK novo produzido**. O script online de reempacotamento PvPoke falhou por falta de DNS; os assets já empacotados foram preservados.
+
+**Pendências:** executar `gradle :app:testStandardDebugUnitTest :app:assembleStandardDebug` em CI com SDK 36/JDK17; validar recursos launcher/adaptive, assinatura, upgrade e crash com dados inválidos no aparelho; confirmar OCR/slots/HUD/captura sem regressões. Atualizar esta entrada após build efetivo.
+
+**Preservação:** o branch deste registro apenas documenta o estado; fonte integral está no ZIP Drive acima. Não fazer merge de branches históricos na source de 0.5.40 e não afirmar que a fonte foi sincronizada ao GitHub quando apenas o registro foi.
