@@ -2090,3 +2090,17 @@ ZIP editável 0.5.40 (193 arquivos, manifesto individual 191 SHA): https://drive
 **Pendências:** executar `gradle :app:testStandardDebugUnitTest :app:assembleStandardDebug` em CI com SDK 36/JDK17; validar recursos launcher/adaptive, assinatura, upgrade e crash com dados inválidos no aparelho; confirmar OCR/slots/HUD/captura sem regressões. Atualizar esta entrada após build efetivo.
 
 **Preservação:** o branch deste registro apenas documenta o estado; fonte integral está no ZIP Drive acima. Não fazer merge de branches históricos na source de 0.5.40 e não afirmar que a fonte foi sincronizada ao GitHub quando apenas o registro foi.
+
+
+## 2026-10-15 — APK público 0.5.41 QA recuperado e verificado
+
+**Não confundir com o código 0.5.40 QA-R1.** O build existente da fonte **0.5.41 QA** foi identificado no repositório público de build `LucianoToscano/PvPPokeGo-APK-Build` e seu artifact foi baixado e inspecionado. Inclui a revisão de previsibilidade/startup 0.5.41; **não inclui o hardening adicional 0.5.40 QA-R1**, elaborado depois.
+
+- Branch público: `preview/prediction-startup-0.5.41-20261015`, SHA `e7de5d055a780b2cefe6e2daabccedc098309af3`.
+- Run CI: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38837050271 — **completed/success**, testes StandardDebug, assemble APK e artifact PASS.
+- Artifact GitHub ID: `12019349333`, `PvPPokeGo-0.5.41-QA-debug`.
+- APK extraído: `PvPPokeGo-0.5.41-QA-debug.apk`, **81.104.784 bytes**, SHA-256 `d964ff59ab79ed10a3d7385a82327639a0e0b540f0dcbb3088d6cb1249ef7324`.
+- Testes de integridade ZIP interno: PASS; `AndroidManifest.xml`, `assets/gamemaster.json`, `assets/pokemon_icon_atlas.json/png` presentes. Relatório de assinatura da execução: v2 **true**, 1 signatário de QA/debug (não assinatura release).
+- **Drive com ZIP oficial do artifact (APK + fonte 0.5.41 + SHA256 + assinatura):** https://drive.google.com/file/d/1CtDDcSWjUprzXjfFFxq5Kv6b0uJT1C0a/view?usp=drivesdk.
+- QA físico em celular: **pendente**; possível conflito de assinatura em atualização sobre versão anterior.
+- Para disponibilizar **APK que contenha também QA-R1**, sincronizar alterações exatas no branch de QA do repositório público, executar novo CI, conferir artefato/hash e registrar como build distinto. **Não usar o APK 0.5.41 acima como prova do código QA-R1.**
