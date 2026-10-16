@@ -1,3 +1,13 @@
+# Atualização de QA 15/10/2026 — PvPPokeGo 0.5.38 ImageDB (PARCIAL)
+
+Antes de qualquer alteração, leia [o Guia Mestre desta branch](docs/PROJECT_CONTINUITY_GUIDE.md), [o checklist técnico 0.5.38](docs/AUDITORIA_DEFINITIVA_0.5.38_2026-10-15.md) e [os links de entrega](docs/PROJECT_LINKS.md).
+- Código experimental preservando ImageDB: `feature/definitive-imagedb-audit-0.5.38-20261015` (base backup `backup/pre-audit-imagedb-0.5.37-20261015`).
+- CI Android Standard: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38826162546 — SUCCESS.
+- APK e projeto ZIP editável entregues na pasta Drive oficial: https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI
+- **NÃO é versão definitiva:** Hybrid 0.5.30 preservado como ZIP/branch separados; resta fusão dos trackers/sync e QA físico. Não apagar a proposta de reconstrução 1.0.0 nem usar código do arquivo histórico como raiz compilável.
+
+---
+
 # COMEÇAR AQUI — PLANO DE RECONSTRUÇÃO 1.0.0
 
 **Nova prioridade do usuário (13/10/2026):** reconstruir o PvPPokeGo do início por funções pequenas, gerando e testando cada APK. Nenhum APK 1.0.x foi criado ainda.

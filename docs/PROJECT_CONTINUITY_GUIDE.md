@@ -2010,3 +2010,36 @@ HEAD base do código: `8b32a050390e8b0475ca3d1579c7759424c54480` (commits desta 
 
 **PRÓXIMO PASSO:**
 - Receber export de diagnóstico e vídeo de batalha do APK 0.5.36; validar defeitos restantes sem mexer em HUD ou posições desnecessariamente.
+
+
+    
+### 2026-10-15 — Auditoria incremental 0.5.38 sobre a base ImageDB (PARCIAL)
+    
+Versão candidata: 0.5.38 / versionCode 43. Branch: `feature/definitive-imagedb-audit-0.5.38-20261015`. Base ImageDB 0.5.37 congelada em `backup/pre-audit-imagedb-0.5.37-20261015` (HEAD 6ea367a9fa52c4198a7398aa6417b8b8d3c10d16); branch Home 0.5.37 também congelada em backup próprio. Sem reset, sem remoção de funções.
+    
+ALTERAÇÕES: CP OCR invalida streak temporário sem perder CP confirmado (StableCpTracker.kt), StatStageTracker suporta buffsSelf/buffsOpponent mesmo com buffs genérico vazio em alvo "both", atlas ImageDB passa a carregar PNG/index fora da thread UI, realiza redraw e recicla memória no release do BattleOverlayView. Três testes novos em StableCpTrackerTest e StatStageTrackerTest; versão candidata atualizada em app/build.gradle.kts. Códigos espelhados com SHA de conteúdo igual no repositório público exclusivo de compilação.
+    
+AUDITORIA COMPLETA E DIFF FUNCIONAL: `docs/AUDITORIA_DEFINITIVA_0.5.38_2026-10-15.md` (nesta branch). CI da Home 0.5.38 SEM ImageDB passou https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38825544494 mas NÃO é o release final. Run desta candidata ImageDB: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38825913916; verificar status, testes e hash antes de afirmar entrega.
+    
+BLOQUEIO DE RELEASE: Hybrid 0.5.30 (OpponentTeamTracker, HybridSnapshotStore, generate_hybrid_feed e pytest) está em OUTRA árvore. CI próprio híbrido 38821812163 passou, mas não comprova integração nesta candidata ImageDB. A fusão sem regressão, modularização BattleEngine, replay/Android Samsung QA, assinatura permanente e verificação de feed permanecem pendentes. Não chamar definitiva, não usar APK antigo renomeado e não declarar todas funções implementadas. Pasta Drive oficial atual: https://drive.google.com/drive/folders/1ybogVRRnaOe0KtWjlovxS56bJOi_JewI.
+
+
+    
+### 2026-10-15 — ENTREGA VERIFICADA 0.5.38 ImageDB QA (não definitiva)
+    
+CI público isolado `38826162546`: https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38826162546 — SUCCESS. Fonte canônica corrigida `feature/definitive-imagedb-audit-0.5.38-20261015`, versionCode 43. Originais preservados nas branches `backup/pre-audit-imagedb-0.5.37-20261015` e `backup/pre-definitive-0.5.37-20261015` (Home).
+    
+Entregas conferidas na nova pasta oficial Drive, TODOS uploads com metadados/parentes verificados:
+- APK QA: https://drive.google.com/file/d/1ZbeORZKaidpDohUUArFBO67zBAlc7B69/view?usp=drivesdk — 81.006.425 bytes; SHA256 fda159820a46ce7952341583427fbaea8f3efc6f82198c15cdf87668e2b84ffc; assinatura v2 1 signatário, `unzip -t` PASS.
+- Projeto Android fonte editável ZIP: https://drive.google.com/file/d/1hW0oqCDHQbbszItvgRmd7oiL3_zsXBJX/view?usp=drivesdk — 6.307.248 bytes compactados (163 arquivos, 10,15 MB extraídos), SHA256 1fc8199bee91790144f15775a6189f3d90999321cb5c58a70b6d839af75a0bbe, `unzip -t` PASS, contém atlas offline/GM/motor/testes; não contém wrapper Gradle, exigir Gradle externo/Android Studio.
+- Pacote combinado APK/fonte/SHA256/assinatura: https://drive.google.com/file/d/1qR4Tz_RNUka5iesNuA-uHREXiBEhqwPz/view?usp=drivesdk.
+- BACKUP fonte Hybrid 0.5.30, guardada SEPARADA sem misturar código: https://drive.google.com/file/d/1i5796ptB_cqVH_8Zl0WqAGn73B2Oex-t/view?usp=drivesdk — SHA256 0a2c44319d1aa72cad87c5ee749b31757cb1cfd5f94ccb9b66a61b8cf9094119.
+    
+`PYTHONPATH=tools pytest -q tools/test_generate_hybrid_feed.py` rodado localmente na cópia exata dos arquivos Git do Hybrid 0.5.30, 2 testes PASS. Gradle Android Standard passou no CI 0.5.38 ImageDB. Documento de auditoria `docs/AUDITORIA_DEFINITIVA_0.5.38_2026-10-15.md`. PR draft https://github.com/LucianoToscano/PvPPokeGo/pull/39.
+    
+**ATENÇÃO: ENTREGUE QA PARCIAL, NÃO RELEASE FINAL DEFINITIVA.** Ainda falta integrar corretamente `OpponentTeamTracker`/`HybridSnapshotStore`/feed 0.5.30 à branch ImageDB, modularizar BattleEngine de forma regressivamente segura e realizar testes físicos Samsung (incluindo OCR/trocas/histórico/HUD) + assinatura release permanente. Nunca declarar essas pendências como resolvidas apenas pelo CI.
+    
+
+
+### 2026-10-15 — ARQUIVO MESTRE GERAL preservado no novo Drive
+Criado e testado `PvPPokeGo-ARQUIVO-MESTRE-0.5.38-ImageDB-Hybrid-BACKUPS.zip`, 48.038.660 bytes compactados, 296 arquivos, SHA256 `23ffa2a5b0788c33097c25e874084660cbf6189f9979924bf4cb0e9bedbe5d90`. Drive oficial (upload e metadados conferidos): https://drive.google.com/file/d/1dPFLjGKlJRN1Oror92hWAIGbZ_jIhKxY/view?usp=drivesdk. Contém APK QA 0.5.38, árvore editável ImageDB 0.5.38, árvore editável Hybrid 0.5.30 **SEPARADA**, backup original de ícones 0.5.10, leia-primeiro e SHA256. Código legado NÃO foi misturado ao app atual; a integração funcional desses módulos permanece pendente. Arquivo mestre NÃO implica APK definitivo homologado.
