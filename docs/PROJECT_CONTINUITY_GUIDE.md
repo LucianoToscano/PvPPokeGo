@@ -1,3 +1,20 @@
+# REGRA OBRIGATÓRIA — APK SEMPRE PELO REPOSITÓRIO PÚBLICO DE BUILD
+
+**Decisão reiterada pelo proprietário em 15/10/2026. Aplicar em TODA tarefa de compilar, corrigir e entregar APK — não esquecer nas próximas conversas.**
+
+- **Repositório privado canônico de desenvolvimento:** https://github.com/LucianoToscano/PvPPokeGo — preservar código e histórico privados.
+- **Repositório PÚBLICO já existente para compilação Android:** https://github.com/LucianoToscano/PvPPokeGo-APK-Build — **usar este para GitHub Actions, testes de build e geração de APK**. Apenas criar uma branch em repositório privado não a torna pública.
+- Priorizar um **ramo isolado de QA na cópia pública com a versão exata do código**; não confundir o `main` histórico da cópia pública (0.5.29) com a versão atual. Fazer auditoria antes de transferir arquivos: não expor segredos, chaves, dados pessoais nem recursos sem autorização de publicação.
+- A cópia pública **não sincroniza automaticamente** código do repositório privado nem ZIPs do Drive. Antes de compilar, conferir branch/commit, versão, manifesto/hashes, recursos do app e paridade do código transferido.
+- No GitHub Actions público executar testes e `:app:assembleStandardDebug`; somente declarar APK concluído se o workflow `success` gerar artifact real, validado quanto a pacote, versão, assinatura, integridade e SHA-256. Não renomear APK antigo nem afirmar build realizado só por haver fonte ZIP.
+- Separar APK debug/QA de release assinada permanentemente; não instalar como upgrade sem verificar compatibilidade de assinatura e dados. Atualizar Guia Mestre no GitHub, espelho Drive, branch/commit, run, link de APK, ZIP e pendências do aparelho.
+- **Não dizer que ausência de Gradle ou Android SDK neste ambiente bloqueia o projeto inteiro** sem antes verificar o CI público já disponível.
+- Infraestrutura pública confirmada: build [0.5.40 QA](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38833405832) e [0.5.41 QA](https://github.com/LucianoToscano/PvPPokeGo-APK-Build/actions/runs/38837050271) com `completed/success`. São builds de fontes específicas e **não comprovam** a compilação do pacote distinto `0.5.40 QA-R1` entregue no Drive.
+
+**Registro em 15/10/2026:** política de build definida. Estado da fonte 0.5.40 QA-R1: ainda aguarda compilação própria no CI público e QA físico.
+
+---
+
 ## 15/10/2026 — ENTREGA DE QA IMAGE DB 0.5.37: BUILD FINAL VERIFICADO
 
 **Status:** COMPILAÇÃO, TESTES E ENTREGA DE QA CONCLUÍDOS;
