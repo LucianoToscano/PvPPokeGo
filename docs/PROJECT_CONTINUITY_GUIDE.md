@@ -2039,3 +2039,7 @@ Entregas conferidas na nova pasta oficial Drive, TODOS uploads com metadados/par
     
 **ATENÇÃO: ENTREGUE QA PARCIAL, NÃO RELEASE FINAL DEFINITIVA.** Ainda falta integrar corretamente `OpponentTeamTracker`/`HybridSnapshotStore`/feed 0.5.30 à branch ImageDB, modularizar BattleEngine de forma regressivamente segura e realizar testes físicos Samsung (incluindo OCR/trocas/histórico/HUD) + assinatura release permanente. Nunca declarar essas pendências como resolvidas apenas pelo CI.
     
+
+
+### 2026-10-15 — ARQUIVO MESTRE GERAL preservado no novo Drive
+Criado e testado `PvPPokeGo-ARQUIVO-MESTRE-0.5.38-ImageDB-Hybrid-BACKUPS.zip`, 48.038.660 bytes compactados, 296 arquivos, SHA256 `23ffa2a5b0788c33097c25e874084660cbf6189f9979924bf4cb0e9bedbe5d90`. Drive oficial (upload e metadados conferidos): https://drive.google.com/file/d/1dPFLjGKlJRN1Oror92hWAIGbZ_jIhKxY/view?usp=drivesdk. Contém APK QA 0.5.38, árvore editável ImageDB 0.5.38, árvore editável Hybrid 0.5.30 **SEPARADA**, backup original de ícones 0.5.10, leia-primeiro e SHA256. Código legado NÃO foi misturado ao app atual; a integração funcional desses módulos permanece pendente. Arquivo mestre NÃO implica APK definitivo homologado.
