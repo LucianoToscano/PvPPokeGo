@@ -1148,3 +1148,45 @@ Sempre que o usuário pedir:
 a resposta deve incluir obrigatoriamente o link para este arquivo e instruir o novo chat a lê-lo primeiro.
 
 **Este documento deve crescer junto com o projeto. Não é descartável e não deve ser substituído silenciosamente por um resumo novo.**
+
+### 2026-10-25 — Preparação isolada de APK protegido para amigos (SEM APK VALIDADO)
+
+Versão-fonte: 0.5.29, versionCode 34.
+Branch-fonte: `release/0.5.29`.
+HEAD-fonte confirmado: `952ff14e5f97fb461619946473a42c144cdc2caa`.
+Branch exclusiva: `distribution/pvppokego-0.5.29-friends-20261025`.
+Workflow: `.github/workflows/build-friends-protected.yml`.
+Run de tentativa: https://github.com/LucianoToscano/PvPPokeGo/actions/runs/40240550074
+
+OBJETIVO/PROBLEMA:
+- Preparar um APK Release assinado e ofuscado para compartilhar sem alterar a edicao de desenvolvimento normal.
+- A fonte QA 0.5.40 e o pacote 0.5.41 no Drive nao estao homologados como Release; foi usada a ultima branch release publicada no repositorio, 0.5.29. Isso NAO equivale a chamar 0.5.29 de versao mais recente do projeto.
+
+ALTERACOES:
+- `app/build.gradle.kts`: R8 habilitado, recursos reduzidos, depuracao desligada apenas em Release.
+- `app/proguard-rules.pro`: keep conservador de Activity, Application e service de overlay, conservacao de metadados de bibliotecas sem regra global que elimine ofuscacao.
+- `.github/workflows/build-friends-protected.yml`: montagem de StandardRelease, testes, validacao de R8/assinatura APK v2+, SHA-256, ausencia de fontes/segredos no artefato, publicacao somente do APK e comprovantes.
+- Usar exclusivamente a keystore permanente dos secrets ja padronizados `PVPPKGO_RELEASE_*`; certificado esperado requer `PVPPKGO_RELEASE_CERT_SHA256`.
+- Nao foi imposta expiracao: o pedido para PvPPokeGo nao incluiu prazo e a regra de 15 dias encontrada no Drive se refere especificamente ao PokeSearch, nao a este aplicativo.
+- Nenhum codigo da branch normal e nenhum APK preexistente foram alterados.
+
+TESTES:
+- Inspecao da configuracao original e do Manifest: `android:allowBackup=false` ja presente.
+- GitHub Actions run 40240550074: **FAILURE ANTES DOS PASSOS**; 1 job, 0 steps, `runner_id=0`, nenhuma compilacao ocorreu.
+- Ambiente local: Java disponivel; SDK Android, Gradle/Android dependencies e keystore permanente nao disponiveis. Sem build offline legitimo.
+- Sem a execucao de R8, assinatura, `apksigner`, teste de instalacao e regressao, nao ha APK de producao validado.
+
+RESULTADO:
+- Configuracao e workflow prontos para nova execucao na branch isolada.
+- **NENHUM APK PROTEGIDO FOI PRODUZIDO**. Nao compartilhar APK QA/debug ou ZIP de codigo como se fossem release protegido.
+
+STATUS: BLOQUEADO — runner do GitHub Actions nao inicia e assinatura permanente/fingerprint nao verificaveis nesta sessao.
+
+PENDENCIAS:
+- Liberar o runner do GitHub Actions (incluindo eventual problema de cobranca/limite) e executar workflow com sucesso.
+- Confirmar secrets e fingerprint do certificado permanente; nao inventar nova chave.
+- Validar o APK obtido: Manifest, R8, SHA-256, assinatura v2+, testes automaticos e teste em aparelho.
+- Antes de liberar para amigos, confirmar se a branch 0.5.29 corresponde ao checkpoint normal aprovado escolhido para distribuicao; versoes QA 0.5.40/0.5.41 nao foram promovidas.
+
+PROXIMO PASSO:
+- Reexecutar workflow isolado quando o runner estiver disponivel, verificar todos os comprovantes, entregar link direto do APK real.
