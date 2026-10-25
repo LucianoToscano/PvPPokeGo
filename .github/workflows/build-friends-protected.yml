@@ -1,0 +1,97 @@
+name: PvPPokeGo - APK protegido para amigos
+
+on:
+  push:
+    branches:
+      - distribution/pvppokego-0.5.29-friends-20261025
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protected-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PVPPG_KEYSTORE_PATH: signing/release.jks
+      PVPPG_KEYSTORE_B64: ${{ secrets.PVPPG_KEYSTORE_B64 }}
+      PVPPG_KEYSTORE_PASSWORD: ${{ secrets.PVPPG_KEYSTORE_PASSWORD }}
+      PVPPG_KEY_ALIAS: ${{ secrets.PVPPG_KEY_ALIAS }}
+      PVPPG_KEY_PASSWORD: ${{ secrets.PVPPG_KEY_PASSWORD }}
+      PVPPG_CERT_SHA256: ${{ secrets.PVPPG_CERT_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Confirmar assinatura permanente antes de compilar
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in PVPPG_KEYSTORE_B64 PVPPG_KEYSTORE_PASSWORD PVPPG_KEY_ALIAS PVPPG_KEY_PASSWORD PVPPG_CERT_SHA256; do
+            if [[ -z "${!variable:-}" ]]; then
+              echo "::error::Assinatura permanente nao configurada: $variable"
+              exit 1
+            fi
+          done
+          mkdir -p signing
+          chmod 700 signing
+          (umask 077; printf '%s' "$PVPPG_KEYSTORE_B64" | base64 --decode > "$PVPPG_KEYSTORE_PATH")
+          test -s "$PVPPG_KEYSTORE_PATH"
+          actual="$(keytool -list -v -keystore "$PVPPG_KEYSTORE_PATH" -storepass "$PVPPG_KEYSTORE_PASSWORD" -alias "$PVPPG_KEY_ALIAS" | awk '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          expected="$(printf '%s' "$PVPPG_CERT_SHA256" | tr -d ': ' | tr '[:lower:]' '[:upper:]')"
+          if [[ -z "$actual" || "$actual" != "$expected" ]]; then
+            echo "::error::Certificado diferente da assinatura permanente aprovada"
+            exit 1
+          fi
+
+      - name: Testes Android e build release com R8
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace :app:testStandardReleaseUnitTest :app:assembleStandardRelease
+
+      - name: Validar APK assinado e montar distribuicao
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/standard/release/app-standard-release.apk"
+          test -s "$APK"
+          test -s app/build/outputs/mapping/standardRelease/mapping.txt
+          SDK_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          if [[ ! -x "$SDK_TOOLS/apksigner" ]]; then
+            SDK_TOOLS="$(dirname "$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)")"
+          fi
+          verify="$("$SDK_TOOLS/apksigner" verify --verbose --print-certs "$APK")"
+          printf '%s\n' "$verify" | grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true'
+          cert="$(printf '%s\n' "$verify" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr '[:lower:]' '[:upper:]')"
+          expected="$(printf '%s' "$PVPPG_CERT_SHA256" | tr -d ': ' | tr '[:lower:]' '[:upper:]')"
+          [[ "$cert" == "$expected" ]] || { echo "::error::Assinatura APK incompatível"; exit 1; }
+          if "$SDK_TOOLS/aapt" dump xmltree "$APK" AndroidManifest.xml | grep -q 'android:debuggable.*true'; then
+            echo "::error::APK depurável não pode ser distribuído"
+            exit 1
+          fi
+          if unzip -Z1 "$APK" | grep -E -q '\.(kt|java|jks|keystore|map)$|mapping\.txt$'; then
+            echo "::error::Fontes ou segredos incluídos na distribuição"
+            exit 1
+          fi
+          mkdir -p artifact
+          cp "$APK" artifact/PvPPokeGo-0.5.29-Amigos-protegido.apk
+          (cd artifact && sha256sum PvPPokeGo-0.5.29-Amigos-protegido.apk > SHA256SUMS.txt)
+          printf 'source_branch=%s\nsource_head=%s\nvariant=standardRelease\nR8=true\nshrinkResources=true\nreleaseDebuggable=false\ncertificate_sha256=%s\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$cert" > artifact/BUILD_PROVENANCE.txt
+          "$SDK_TOOLS/aapt" dump badging "$APK" | head -n 3
+
+      - name: Disponibilizar somente APK e comprovantes
+        uses: actions/upload-artifact@v4
+        with:
+          name: PvPPokeGo-0.5.29-Amigos-protegido
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 14
