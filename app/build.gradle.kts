@@ -75,7 +75,10 @@ android {
         // PvPPokeGo on the device and launcher/icon/cache cannot point to an older app.
         debug { }
         release {
-            isMinifyEnabled = false
+            // Distribuição para amigos: R8 e redução de recursos sem afetar o app normal.
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (hasPermanentReleaseSigning) {
                 signingConfig = signingConfigs.getByName("permanentRelease")
