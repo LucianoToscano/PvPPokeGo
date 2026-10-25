@@ -15,11 +15,11 @@ jobs:
     timeout-minutes: 45
     env:
       PVPPG_KEYSTORE_PATH: signing/release.jks
-      PVPPG_KEYSTORE_B64: ${{ secrets.PVPPG_KEYSTORE_B64 }}
-      PVPPG_KEYSTORE_PASSWORD: ${{ secrets.PVPPG_KEYSTORE_PASSWORD }}
-      PVPPG_KEY_ALIAS: ${{ secrets.PVPPG_KEY_ALIAS }}
-      PVPPG_KEY_PASSWORD: ${{ secrets.PVPPG_KEY_PASSWORD }}
-      PVPPG_CERT_SHA256: ${{ secrets.PVPPG_CERT_SHA256 }}
+      PVPPG_KEYSTORE_B64: ${{ secrets.PVPPKGO_RELEASE_KEYSTORE_B64 }}
+      PVPPG_KEYSTORE_PASSWORD: ${{ secrets.PVPPKGO_RELEASE_STORE_PASSWORD }}
+      PVPPG_KEY_ALIAS: ${{ secrets.PVPPKGO_RELEASE_KEY_ALIAS }}
+      PVPPG_KEY_PASSWORD: ${{ secrets.PVPPKGO_RELEASE_KEY_PASSWORD }}
+      PVPPG_CERT_SHA256: ${{ secrets.PVPPKGO_RELEASE_CERT_SHA256 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
