@@ -155,7 +155,76 @@ data class EnemyEnergyHypothesisSnapshot(
 data class EnemyEnergySnapshot(
     val hypotheses: List<EnemyEnergyHypothesisSnapshot> = emptyList(),
     val observedFastEvents: Int = 0,
-    val lastObservedTurn: Int = 0
+    val lastObservedTurn: Int = 0,
+    /** 0..1 health of the mathematical reconstruction; lowered only by contradictory evidence. */
+    val consistencyScore: Float = 1f,
+    val anomalyCount: Int = 0
+)
+
+data class FastMovePhaseSnapshot(
+    val moveId: String,
+    val moveName: String,
+    val moveTurns: Int,
+    /** 1-based current turn inside the next perfectly-tapped Fast Move. */
+    val phaseTurn: Int,
+    /** Turns remaining until damage + energy register at the end of the Fast Move. */
+    val turnsUntilRegistration: Int,
+    val nextRegistrationInMs: Long,
+    val confidence: Float,
+    val observedCompletions: Int
+)
+
+data class AttackRangeEstimate(
+    val minAttack: Double,
+    val likelyAttack: Double,
+    val maxAttack: Double,
+    val sampleCount: Int,
+    /** Absolute CP error of the closest legal IV/level combinations used. Zero means exact CP match. */
+    val cpError: Int
+)
+
+enum class CmpOutcome { WIN, LOSE, UNCERTAIN, UNKNOWN }
+
+data class CmpForecast(
+    val outcome: CmpOutcome,
+    val own: AttackRangeEstimate?,
+    val opponent: AttackRangeEstimate?,
+    /** Worst and best own Attack minus opponent Attack margins. */
+    val marginMin: Double = 0.0,
+    val marginMax: Double = 0.0,
+    val confidence: Float = 0f
+)
+
+enum class ShieldAction { SHIELD, HOLD, OPTIONAL, UNKNOWN }
+
+data class ShieldDecisionForecast(
+    val action: ShieldAction,
+    val moveName: String? = null,
+    val confidence: Float = 0f,
+    val reason: String = "",
+    val baitProbability: Float = 0f
+)
+
+data class OptimalThrowForecast(
+    /** 0 means throw now; positive means use this many own Fast Moves first. */
+    val waitFastMoves: Int,
+    val confidence: Float,
+    val reason: String
+)
+
+data class FarmDownForecast(
+    val safe: Boolean,
+    val hitsToKo: Int,
+    val turnsToKo: Int,
+    val enemyThreatTurns: Int?,
+    val confidence: Float
+)
+
+data class SacSwapForecast(
+    val targetName: String,
+    val targetTeamSlot: Int?,
+    val confidence: Float,
+    val reason: String
 )
 
 enum class PredictionEvidenceClass {
@@ -198,7 +267,11 @@ data class ChargedThreatForecast(
     val shieldPressureScore: Float = 0f,
     val damageForecast: DamageForecast? = null,
     val likelyKo: Boolean = false,
-    val threatScore: Float = 0f
+    val threatScore: Float = 0f,
+    /** Repeated same-Charged Fast counts from the likely residual-energy state, e.g. 5,4,5,4. */
+    val fastCountSequenceLikely: List<Int> = emptyList(),
+    /** Heuristic probability that this cheaper move is the bait among currently affordable options. */
+    val baitProbability: Float = 0f
 )
 
 data class EnemyEnergyForecast(
@@ -210,7 +283,10 @@ data class EnemyEnergyForecast(
     val candidates: List<ChargedThreatForecast>,
     val leadTimeMs: Long,
     val reactionTurns: Int,
-    val confidence: Float
+    val confidence: Float,
+    val consistencyScore: Float = 1f,
+    val anomalyCount: Int = 0,
+    val fastPhase: FastMovePhaseSnapshot? = null
 )
 
 data class ObservedDamageEstimate(
@@ -377,5 +453,12 @@ data class BattleUiState(
     val battleConfidence: Float = 0f,
     /** Compact per-enemy memory for optional history display. */
     val enemyHistory: List<String> = emptyList(),
-    val debugText: String? = null
+    val debugText: String? = null,
+    /** Range-based CMP, honest when hidden IVs overlap. Appended for constructor compatibility. */
+    val cmpForecast: CmpForecast? = null,
+    /** Formal shield decision derived from the same threat/damage ranges shown on HUD. */
+    val shieldDecision: ShieldDecisionForecast? = null,
+    val optimalThrow: OptimalThrowForecast? = null,
+    val farmDown: FarmDownForecast? = null,
+    val sacSwap: SacSwapForecast? = null
 )

@@ -3,10 +3,12 @@ package com.lucianotoscano.pvppokego.engine
 import android.graphics.Color
 import com.lucianotoscano.pvppokego.data.BattleUiState
 import com.lucianotoscano.pvppokego.data.CaptureHealth
+import com.lucianotoscano.pvppokego.data.CmpOutcome
 import com.lucianotoscano.pvppokego.data.EnergyConfidence
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MatchupState
 import com.lucianotoscano.pvppokego.data.MoveKnowledgeConfidence
+import com.lucianotoscano.pvppokego.data.ShieldAction
 
 /** Read-only PvP copilot. It recommends the next action but never sends input to Pokemon GO. */
 object BattleAssistAdvisor {
@@ -45,6 +47,40 @@ object BattleAssistAdvisor {
                 Color.rgb(128, 136, 146),
                 125
             )
+        }
+
+        state.sacSwap?.takeIf { !state.chargedIncoming && it.confidence >= .68f }?.let { sac ->
+            return Advice(
+                "SAC SWAP → " + shortName(sac.targetName),
+                sac.reason + " • " + "%.0f".format(sac.confidence * 100f) + "%",
+                Color.rgb(232, 61, 72),
+                121
+            )
+        }
+
+        if (state.chargedIncoming) {
+            state.shieldDecision?.takeIf { it.confidence >= .70f }?.let { shield ->
+                val bait = shield.baitProbability.takeIf { it >= .20f }
+                    ?.let { " • bait ~" + "%.0f".format(it * 100f) + "%" }
+                    .orEmpty()
+                val detail = listOfNotNull(
+                    shield.moveName?.let(::shortName),
+                    shield.reason.takeIf { it.isNotBlank() }
+                ).joinToString(" • ") + bait
+                when (shield.action) {
+                    ShieldAction.SHIELD -> return Advice(
+                        "ESCUDO", detail, Color.rgb(232, 61, 72), 119
+                    )
+                    ShieldAction.HOLD -> return Advice(
+                        if (state.ownShieldsKnown && state.ownShieldsRemaining <= 0) "SEM ESCUDOS" else "NÃO ESCUDE",
+                        detail, Color.rgb(46, 188, 105), 117
+                    )
+                    ShieldAction.OPTIONAL -> if (shield.confidence >= .76f) return Advice(
+                        "ESCUDO OPCIONAL", detail, Color.rgb(245, 175, 52), 113
+                    )
+                    ShieldAction.UNKNOWN -> Unit
+                }
+            }
         }
 
         // 1) Incoming Charged: compare cheap bait and high-damage nuke possibilities.
@@ -174,7 +210,12 @@ object BattleAssistAdvisor {
                             shortName(threat.move.name),
                             energyRange,
                             damageText,
-                            if (threat.baitPotential) "bait possível" else null,
+                            if (threat.baitProbability >= .20f) {
+                                "bait ~" + "%.0f".format(threat.baitProbability * 100f) + "%"
+                            } else if (threat.baitPotential) "bait possível" else null,
+                            threat.fastCountSequenceLikely.takeIf { it.isNotEmpty() }?.let {
+                                "seq " + it.joinToString("-")
+                            },
                             if (threat.doubleReadyPossible) "pode armazenar 2" else null,
                             if (state.ownShieldsKnown && state.ownShieldsRemaining <= 0) "sem escudos"
                             else if (!state.ownShieldsKnown) "escudos restantes não confirmados"
@@ -211,6 +252,15 @@ object BattleAssistAdvisor {
             }
         }
 
+        state.optimalThrow?.takeIf { it.confidence >= .64f && it.waitFastMoves > 0 }?.let { timing ->
+            return Advice(
+                "TIMING +" + timing.waitFastMoves + " FAST",
+                timing.reason + " • " + "%.0f".format(timing.confidence * 100f) + "%",
+                Color.rgb(110, 170, 235),
+                97
+            )
+        }
+
         // 2) If one of our Charged Moves is ready, prefer actual matchup value rather than slot #1.
         val ownReady = ownCharged.filter { it.ready }
         if (ownReady.isNotEmpty() && enemyTypes.isNotEmpty()) {
@@ -234,11 +284,27 @@ object BattleAssistAdvisor {
                 }
                 return Advice(
                     "USE ${shortName(best.move.name).uppercase()}",
-                    if (eff > 1.01) "SUPEREFICAZ • melhor valor agora" else "Charged pronto • melhor valor agora",
+                    (if (eff > 1.01) "SUPEREFICAZ • melhor valor agora" else "Charged pronto • melhor valor agora") +
+                        when (state.cmpForecast?.outcome) {
+                            CmpOutcome.WIN -> " • CMP favorável"
+                            CmpOutcome.LOSE -> " • CMP desfavorável"
+                            CmpOutcome.UNCERTAIN -> " • CMP incerto"
+                            else -> ""
+                        },
                     if (eff > 1.01) Color.rgb(245, 175, 52) else Color.rgb(110, 170, 235),
                     96
                 )
             }
+        }
+
+        state.farmDown?.takeIf { it.safe && it.confidence >= .70f }?.let { farm ->
+            return Advice(
+                "FARME ATÉ KO",
+                farm.hitsToKo.toString() + " Fast • " + farm.turnsToKo + "T" +
+                    (farm.enemyThreatTurns?.let { turns -> " • ameaça em " + turns + "T" } ?: ""),
+                Color.rgb(46, 188, 105),
+                90
+            )
         }
 
         // 3) One fast away from our next useful Charged.

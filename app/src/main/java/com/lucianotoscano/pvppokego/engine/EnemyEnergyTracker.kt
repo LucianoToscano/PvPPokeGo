@@ -40,6 +40,8 @@ internal class EnemyEnergyTracker(
     private var observedFastEvents: Int = 0
     private var lastObservedTurn: Int = 0
     private var lastFastEventId: Long? = null
+    private var consistencyScore: Float = 1f
+    private var anomalyCount: Int = 0
 
     val isInitialized: Boolean get() = hypotheses.isNotEmpty()
 
@@ -47,6 +49,8 @@ internal class EnemyEnergyTracker(
         observedFastEvents = snapshot?.observedFastEvents ?: 0
         lastObservedTurn = snapshot?.lastObservedTurn ?: 0
         lastFastEventId = null
+        consistencyScore = snapshot?.consistencyScore?.coerceIn(.05f, 1f) ?: 1f
+        anomalyCount = snapshot?.anomalyCount?.coerceAtLeast(0) ?: 0
         hypotheses = restoreCandidates(candidates, snapshot)
         normalizeAndPrune()
     }
@@ -56,6 +60,8 @@ internal class EnemyEnergyTracker(
         observedFastEvents = 0
         lastObservedTurn = 0
         lastFastEventId = null
+        consistencyScore = 1f
+        anomalyCount = 0
     }
 
     fun confirmFastMove(move: MoveDef) {
@@ -92,6 +98,14 @@ internal class EnemyEnergyTracker(
         lastFastEventId = eventId
 
         val boundedConfidence = confidence.coerceIn(0.05f, 1f)
+        observedIntervalMs?.takeIf { it in 150L..12_000L }?.let { observed ->
+            val bestCadence = hypotheses.maxOfOrNull { h ->
+                val expectedMs = (h.fastMove.turns * TURN_MS * count).toLong().coerceAtLeast(1L)
+                val relativeError = abs(observed - expectedMs).toDouble() / expectedMs.toDouble()
+                exp(-2.4 * relativeError).toFloat().coerceIn(0.02f, 1f)
+            } ?: 1f
+            registerEvidence(bestCadence)
+        }
         hypotheses = hypotheses.map { h ->
             val gain = h.fastMove.energyGain.coerceAtLeast(0) * count
             val expectedMs = (h.fastMove.turns * TURN_MS * count).toLong()
@@ -211,6 +225,7 @@ internal class EnemyEnergyTracker(
     fun widenForPossibleMissedFast(maxExtraMoves: Int) {
         val extraMax = maxExtraMoves.coerceIn(0, MAX_GAP_RECOVERY_MOVES)
         if (extraMax <= 0 || hypotheses.isEmpty()) return
+        consistencyScore = (consistencyScore * .97f).coerceAtLeast(.05f)
         hypotheses = hypotheses.flatMap { h ->
             (0..extraMax).map { extra ->
                 val gain = h.fastMove.energyGain.coerceAtLeast(0) * extra
@@ -259,8 +274,10 @@ internal class EnemyEnergyTracker(
             .filter { it.energy >= cost }
             .map { it.copy(energy = it.energy - cost) }
         hypotheses = if (valid.isNotEmpty()) {
+            consistencyScore = (consistencyScore + .012f).coerceAtMost(1f)
             valid
         } else {
+            registerAnomaly(.72f)
             // A real Charged happened, so at least one Fast completion was missed.
             // Reconstruct the minimum missing events needed to make the observation legal,
             // and also keep one-extra-Fast overfarm state so recovery does not assume 0 energy.
@@ -282,6 +299,10 @@ internal class EnemyEnergyTracker(
             .filter { it > 0 }
             .distinct()
         if (costs.isEmpty() || hypotheses.isEmpty()) return false
+
+        val anyAffordable = hypotheses.any { h -> costs.any { it <= h.energy } }
+        if (!anyAffordable) registerAnomaly(.78f)
+        else consistencyScore = (consistencyScore + .008f).coerceAtMost(1f)
 
         val branched = buildList {
             hypotheses.forEach { h ->
@@ -314,7 +335,9 @@ internal class EnemyEnergyTracker(
             )
         },
         observedFastEvents = observedFastEvents,
-        lastObservedTurn = lastObservedTurn
+        lastObservedTurn = lastObservedTurn,
+        consistencyScore = consistencyScore,
+        anomalyCount = anomalyCount
     )
 
     fun hypotheses(): List<Hypothesis> = hypotheses
@@ -323,6 +346,8 @@ internal class EnemyEnergyTracker(
     fun energyMax(): Int = hypotheses.maxOfOrNull { it.energy } ?: 0
     fun energyLikely(): Int = weightedMedianEnergy(hypotheses)
     fun hypothesisCount(): Int = hypotheses.size
+    fun consistencyScore(): Float = consistencyScore
+    fun anomalyCount(): Int = anomalyCount
 
     fun likelyFastTurns(): Int {
         if (hypotheses.isEmpty()) return 2
@@ -347,7 +372,22 @@ internal class EnemyEnergyTracker(
         val top = hypotheses.maxOf { it.weight }
         val spreadPenalty = (1f / hypotheses.size.toFloat().coerceAtLeast(1f)).coerceIn(.18f, 1f)
         val evidence = (observedFastEvents / 5f).coerceIn(.35f, 1f)
-        return (top * .65f + spreadPenalty * .15f + evidence * .20f).coerceIn(0f, 1f)
+        val base = (top * .65f + spreadPenalty * .15f + evidence * .20f).coerceIn(0f, 1f)
+        return (base * (.55f + .45f * consistencyScore)).coerceIn(0f, 1f)
+    }
+
+    private fun registerEvidence(score: Float) {
+        val bounded = score.coerceIn(0f, 1f)
+        if (bounded < .22f) {
+            registerAnomaly(.84f)
+        } else {
+            consistencyScore = (consistencyScore * .94f + bounded * .06f).coerceIn(.05f, 1f)
+        }
+    }
+
+    private fun registerAnomaly(multiplier: Float) {
+        anomalyCount++
+        consistencyScore = (consistencyScore * multiplier.coerceIn(.30f, .98f)).coerceIn(.05f, 1f)
     }
 
     private fun restoreCandidates(

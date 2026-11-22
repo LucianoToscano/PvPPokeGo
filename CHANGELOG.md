@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.26
+
+- Integrada a pesquisa de PvPoke, GoPvPSim e PokéMoves ao motor Kotlin sem adicionar dependência de rede no loop de batalha.
+- Novo `FastMovePhaseTracker`: acompanha a fase do Fast Move inimigo em turnos de 500 ms e diferencia início do movimento do registro de dano/energia no último turno.
+- Novo `EnergySequenceMath`: mantém energia residual após Charged e calcula sequências sucessivas como 5-4-5-4, inclusive back-to-back/overfarm até o teto de 100 E.
+- `EnemyEnergyTracker` ganhou `consistencyScore` e contador de anomalias; evidências contraditórias reduzem confiança sem apagar silenciosamente o estado matemático.
+- `ChargedMovePredictor` passou a expor fase do Fast, consistência, sequência residual provável e probabilidade heurística de bait, preservando classes de evidência.
+- CMP passou a usar faixa de Attack compatível com CP/liga/IV/nível ocultos. O HUD só declara vantagem/desvantagem quando os intervalos não se sobrepõem; caso contrário mostra CMP incerto.
+- Adicionados motores consultivos de escudo, farm-down, optimal throw e Sac Swap. Todos apenas recomendam; nenhum envia toque ou entrada ao Pokémon GO.
+- O assistente usa as novas previsões sem remover os fallbacks anteriores. O overlay mostra fase, consistência, CMP, sequência residual e bait quando a confiança permite.
+- Adicionados testes determinísticos para energia residual, fase do Fast, CMP por faixa, decisão de escudo, farm-down, optimal timing e Sac Swap.
+- Versão avançada para `0.5.26` / `versionCode 31`, preservando Standard e Recorder Compat separados.
+
 ## 0.5.25
 
 - Adicionado modelo matemático híbrido para Fast Moves inimigos: HP drop continua sendo evidência primária, cadência e dano observado reponderam os golpes legais, e períodos curtos com barra de HP oculta usam apenas projeção não-mutante 0..N por tempo/turnos; overfarm do segundo Charged agora tem camada visual escura.

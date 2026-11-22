@@ -37,6 +37,7 @@ class GameDataRepository(private val context: Context) {
     private val weightedFastCache = ConcurrentHashMap<String, List<WeightedMove>>()
     private val weightedChargedCache = ConcurrentHashMap<String, List<WeightedMove>>()
     private val battleStatsCache = ConcurrentHashMap<String, EstimatedBattleStats?>()
+    private val attackRangeCache = ConcurrentHashMap<String, AttackRangeEstimate>()
     @Volatile var currentLeagueCp: Int = 1500
         private set
 
@@ -47,6 +48,7 @@ class GameDataRepository(private val context: Context) {
         weightedFastCache.clear()
         weightedChargedCache.clear()
         battleStatsCache.clear()
+        attackRangeCache.clear()
         val gmText = runCatching {
             context.assets.open("gamemaster.json").bufferedReader().use { it.readText() }
         }.getOrElse {
@@ -339,6 +341,28 @@ class GameDataRepository(private val context: Context) {
             hpIv = hpIv,
             cp = cpAt(cpm)
         ).also { battleStatsCache[cacheKey] = it }
+    }
+
+    /**
+     * Hidden-IV Attack interval for CMP. The visible CP is treated as an exact constraint
+     * when possible; if no exact legal combination exists, only the closest CP shell is used.
+     * Results are cached because the exhaustive scan is intentionally done once per species/CP.
+     */
+    fun attackRangeEstimate(nameOrSpeciesId: String?, observedCp: Int?): AttackRangeEstimate? {
+        val raw = nameOrSpeciesId ?: return null
+        val target = observedCp?.takeIf { it >= 10 } ?: return null
+        val key = normalizeName(raw) + "|" + target + "|" + currentLeagueCp
+        attackRangeCache[key]?.let { return it }
+
+        val def = pokemon(raw) ?: return null
+        val likelyAttack = estimatedBattleStats(raw, target)?.attack
+        return AttackRangeEstimator.estimate(
+            base = def.baseStats,
+            cpMultipliers = cpMultipliers,
+            targetCp = target,
+            leagueCp = currentLeagueCp,
+            likelyAttack = likelyAttack
+        )?.also { attackRangeCache[key] = it }
     }
 
     fun localizedMoveName(move: MoveDef): String = moveNamesPtBr[normalizeId(move.moveId)] ?: move.name

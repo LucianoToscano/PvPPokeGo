@@ -58,6 +58,7 @@ class BattleEngine(private val repo: GameDataRepository) {
 
     private var tracker = EnergyTracker()
     private val predictiveEnergy = EnemyEnergyTracker()
+    private val enemyFastPhase = FastMovePhaseTracker()
     private val reactionWindow = ReactionWindowEstimator()
     private var lastEnemyFastEventAtMs = 0L
     /** Last frame where the player's HP bar was readable; used only for non-mutating time projection. */
@@ -157,6 +158,7 @@ class BattleEngine(private val repo: GameDataRepository) {
         enemyCpTracker.reset()
         tracker.reset()
         predictiveEnergy.clear()
+        enemyFastPhase.reset()
         lastEnemyFastEventAtMs = 0L
         lastPlayerHpVisibleAtMs = 0L
         ownTracker.reset()
@@ -346,7 +348,10 @@ class BattleEngine(private val repo: GameDataRepository) {
             clearReserveCardIdentity()
             ownSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
         }
-        if (enemyChanged) opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
+        if (enemyChanged) {
+            opponentSwitchReadyAtMs = now + SWITCH_COOLDOWN_MS
+            enemyFastPhase.reset(fast)
+        }
         return DetectionChanges(playerChanged, enemyChanged)
     }
 
@@ -627,14 +632,17 @@ class BattleEngine(private val repo: GameDataRepository) {
     fun onReserveCardCps(topCp: Int?, bottomCp: Int?) =
         onReserveCardEvidence(ReserveCardEvidence(topCp), ReserveCardEvidence(bottomCp))
 
-    fun needsReserveCardScan(): Boolean =
-        ReserveScanPolicy.shouldScan(
+    fun needsReserveCardScan(): Boolean {
+        val confirmedCards = resolvedOwnReserves().filter { it.confirmed }.map { it.cardIndex }.toSet()
+        return ReserveScanPolicy.shouldScan(
             hasActivePlayer = !playerName.isNullOrBlank(),
             knownTeamSize = ownTeamSlots.size,
             cardCps = reserveCardCps.toList(),
             cardDexes = reserveCardDexes.toList(),
-            cardSpeciesIds = reserveCardSpeciesIds.toList()
+            cardSpeciesIds = reserveCardSpeciesIds.toList(),
+            cardMappingConfirmed = (0..1).map { it in confirmedCards }
         )
+    }
 
     private fun clearReserveCardIdentity() {
         reserveCardHpRatios.fill(null)
@@ -1063,6 +1071,13 @@ class BattleEngine(private val repo: GameDataRepository) {
         val observedInterval = lastEnemyFastEventAtMs
             .takeIf { it > 0L }
             ?.let { (nowMs - it).coerceAtLeast(0L) }
+        enemyFastPhase.observeCompletion(
+            candidate = f,
+            count = count,
+            nowMs = nowMs,
+            detectorConfidence = confidence,
+            observedIntervalMs = observedInterval
+        )
         if (predictiveEnergy.isInitialized) {
             predictiveEnergy.observeFastCompletion(
                 count = count,
@@ -1083,9 +1098,23 @@ class BattleEngine(private val repo: GameDataRepository) {
                         ((inference.probability >= .72f && inference.margin >= .18f) ||
                             inference.probability >= .88f)
                     if (strongEnough) {
-                        fast = inference.move
-                        activeState?.fastMoveId = inference.move.moveId
-                        lastAutoSource = source + "+cadencia/dano:" + inference.move.moveId
+                        val inferredFast = inference.move
+                        fast = inferredFast
+                        activeState?.fastMoveId = inferredFast.moveId
+                        if (inferredFast.moveId != f.moveId) {
+                            // Re-anchor this same observed completion to the newly identified
+                            // legal Fast Move instead of losing phase until the next event.
+                            enemyFastPhase.observeCompletion(
+                                candidate = inferredFast,
+                                count = count,
+                                nowMs = nowMs,
+                                detectorConfidence = confidence,
+                                observedIntervalMs = observedInterval
+                            )
+                        } else {
+                            enemyFastPhase.confirmMove(inferredFast)
+                        }
+                        lastAutoSource = source + "+cadencia/dano:" + inferredFast.moveId
                     }
                 }
             }
@@ -1766,7 +1795,8 @@ class BattleEngine(private val repo: GameDataRepository) {
                 },
                 attackerAttackStages = enemyStages.attack,
                 defenderDefenseStages = ownStages.defense,
-                unobservedFastWindowMs = unobservedEnemyFastWindowMs()
+                unobservedFastWindowMs = unobservedEnemyFastWindowMs(),
+                fastPhase = enemyFastPhase.snapshot()
             )
         } else null
 
@@ -1793,6 +1823,58 @@ class BattleEngine(private val repo: GameDataRepository) {
                     ?.damageForecast
             }
         } else null
+        val cmpForecast = CmpForecastEngine.evaluate(
+            repo.attackRangeEstimate(playerSpeciesId ?: playerName, playerCp),
+            repo.attackRangeEstimate(enemySpeciesId ?: enemyName, enemyCp)
+        )
+        val shieldDecision = ShieldDecisionEngine.evaluate(
+            forecast = predictiveForecast,
+            hpRatio = lastHpRatio,
+            shieldsKnown = ownShieldsKnown,
+            shieldsRemaining = ownShieldsRemaining
+        )
+        val ownFastDamagePercent = of?.let { ownFastMove ->
+            DamageForecastEngine.forecast(
+                repo = repo,
+                attackerId = playerSpeciesId ?: playerName,
+                attackerCp = playerCp,
+                defenderId = enemySpeciesId ?: enemyName,
+                defenderCp = enemyCp,
+                move = ownFastMove,
+                observed = null,
+                currentHpRatio = lastOpponentHpRatio,
+                attackerAttackStages = ownStages.attack,
+                defenderDefenseStages = enemyStages.defense
+            )?.averagePercent
+        }
+        val farmDownForecast = TacticalForecastEngine.farmDown(
+            ownFastDamagePercent = ownFastDamagePercent,
+            enemyHpRatio = lastOpponentHpRatio,
+            ownFastTurns = of?.turns ?: 1,
+            enemyForecast = predictiveForecast
+        )
+        val timingCharged = listOfNotNull(ownCharged1Prediction, ownCharged2Prediction)
+            .filter { it.ready }
+            .maxByOrNull { prediction ->
+                val eff = if (eTypes.isEmpty()) 1.0 else TypeChart.multiplier(prediction.move.type, eTypes)
+                prediction.move.power.toDouble() * eff / prediction.energyCost.coerceAtLeast(1)
+            }
+        val optimalThrowForecast = if (of != null && timingCharged != null) {
+            TacticalForecastEngine.optimalThrow(
+                phase = predictiveForecast?.fastPhase ?: enemyFastPhase.snapshot(),
+                ownFastTurns = of.turns,
+                ownEnergy = ownTracker.energy,
+                ownFastEnergyGain = of.energyGain,
+                chargedCost = timingCharged.energyCost
+            )
+        } else null
+        val sacSwapForecast = TacticalForecastEngine.sacSwap(
+            forecast = predictiveForecast,
+            currentTypes = pTypes,
+            reserves = reserveStates,
+            switchSeconds = switchSeconds(ownSwitchReadyAtMs)
+        )
+
         val enemyHistory = enemyStates.all()
             .sortedByDescending { it.lastSeenAtMs }
             .take(3)
@@ -1863,6 +1945,11 @@ class BattleEngine(private val repo: GameDataRepository) {
                 }
             } ?: 0f,
             enemyEnergyForecast = predictiveForecast,
+            cmpForecast = cmpForecast,
+            shieldDecision = shieldDecision,
+            optimalThrow = optimalThrowForecast,
+            farmDown = farmDownForecast,
+            sacSwap = sacSwapForecast,
             enemyAttackStages = enemyStages.attack,
             enemyDefenseStages = enemyStages.defense,
             playerAttackStages = ownStages.attack,
@@ -1905,8 +1992,17 @@ class BattleEngine(private val repo: GameDataRepository) {
                     appendLine(
                         "Predict=" + pf.energyMin + "-" + pf.energyMax + "E hyp=" + pf.hypothesisCount +
                             " lead=" + pf.leadTimeMs + "ms/" + pf.reactionTurns + "T next=" +
-                            (next?.move?.name ?: "?") + ":" + (next?.turnsRemainingMin ?: -1) + "T"
+                            (next?.move?.name ?: "?") + ":" + (next?.turnsRemainingMin ?: -1) + "T" +
+                            " consistency=" + "%.2f".format(pf.consistencyScore) +
+                            " anomalies=" + pf.anomalyCount
                     )
+                    pf.fastPhase?.let { phase ->
+                        appendLine(
+                            "FastPhase=" + phase.phaseTurn + "/" + phase.moveTurns +
+                                " reg=" + phase.turnsUntilRegistration + "T conf=" +
+                                "%.2f".format(phase.confidence)
+                        )
+                    }
                 }
                 appendLine(
                     "Stages E atk=" + enemyStages.attack.min + ".." + enemyStages.attack.max +
@@ -2044,7 +2140,7 @@ class BattleEngine(private val repo: GameDataRepository) {
             MatchupState.UNFAVORABLE -> -.35
             else -> 0.0
         }
-        val hpAdjustment = hpRatio?.let { (it.coerceIn(0f, 1f) - .5f) * .34 } ?: 0f
+        val hpAdjustment: Double = hpRatio?.let { (it.coerceIn(0f, 1f).toDouble() - 0.5) * 0.34 } ?: 0.0
         val cheapestCharge = listOfNotNull(resolvedC1, resolvedC2)
             .map { it.chargedCost }
             .filter { it > 0 }
@@ -2265,3 +2361,4 @@ class BattleEngine(private val repo: GameDataRepository) {
         private val ACTION_VERBS = listOf("usou", "used", "utilizou")
     }
 }
+

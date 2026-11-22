@@ -3,6 +3,7 @@ package com.lucianotoscano.pvppokego.engine
 import com.lucianotoscano.pvppokego.data.ChargedThreatForecast
 import com.lucianotoscano.pvppokego.data.DamageForecast
 import com.lucianotoscano.pvppokego.data.EnemyEnergyForecast
+import com.lucianotoscano.pvppokego.data.FastMovePhaseSnapshot
 import com.lucianotoscano.pvppokego.data.GameDataRepository
 import com.lucianotoscano.pvppokego.data.MoveDef
 import com.lucianotoscano.pvppokego.data.ObservedDamageEstimate
@@ -76,7 +77,8 @@ internal object ChargedMovePredictor {
         attackerAttackStages: StatStageRange = StatStageRange(),
         defenderDefenseStages: StatStageRange = StatStageRange(),
         /** Time since the player HP bar was last readable. Projection is non-mutating. */
-        unobservedFastWindowMs: Long = 0L
+        unobservedFastWindowMs: Long = 0L,
+        fastPhase: FastMovePhaseSnapshot? = null
     ): EnemyEnergyForecast? {
         val hypotheses = energyTracker.projectedHypotheses(unobservedFastWindowMs)
         if (hypotheses.isEmpty() || chargedMoves.isEmpty()) return null
@@ -90,7 +92,9 @@ internal object ChargedMovePredictor {
             unobservedFastWindowMs < 3_000L -> .78f
             else -> .68f
         }
+        val consistencyScore = energyTracker.consistencyScore()
         val mathematicalConfidence = (energyTracker.confidence() * projectionPenalty).coerceIn(0f, 1f)
+        val likelyHypothesis = hypotheses.maxByOrNull { it.weight }
 
         val reactionTurns = reaction.reactionTurns()
         val leadTimeMs = reaction.leadTimeMs()
@@ -160,12 +164,31 @@ internal object ChargedMovePredictor {
                 damage.averagePercent >= currentHpPercent - 1f
             val mayKoBeforeCharged = currentHpPercent != null &&
                 (fastDamageUntilReady.maxOrNull() ?: 0f) >= currentHpPercent
-            val baitPotential = chargedMoves.any { other ->
+            val strongerAlternatives = chargedMoves.filter { other ->
                 val otherCost = other.move.chargedCost
                 other.move.moveId != move.moveId &&
-                    otherCost >= cost + 10 &&
-                    other.move.power >= move.power * 1.20
+                    otherCost >= cost + 5 &&
+                    other.move.power >= move.power * 1.18
             }
+            val baitPotential = strongerAlternatives.any { other ->
+                projectedEnergyMax >= other.move.chargedCost
+            }
+            val affordableWeight = chargedMoves
+                .filter { it.move.chargedCost in 1..projectedEnergyMax }
+                .sumOf { it.weight.toDouble() }
+                .toFloat()
+                .takeIf { it > 0f } ?: 1f
+            val baitProbability = if (baitPotential) {
+                (weightedMove.weight / affordableWeight).coerceIn(0f, .95f)
+            } else 0f
+            val fastCountSequence = likelyHypothesis?.let { h ->
+                EnergySequenceMath.repeatedChargedCounts(
+                    currentEnergy = h.energy,
+                    fastEnergyGain = h.fastMove.energyGain,
+                    chargedCost = cost,
+                    steps = 4
+                )
+            }.orEmpty()
 
             val prior = weightedMove.weight.coerceIn(.01f, 1f)
             val urgency = when {
@@ -214,6 +237,8 @@ internal object ChargedMovePredictor {
                 readyPossible = readyPossible,
                 readyCertain = readyCertain,
                 doubleReadyPossible = doubleReadyPossible,
+                fastCountSequenceLikely = fastCountSequence,
+                baitProbability = baitProbability,
                 confidence = (mathematicalConfidence * .78f + prior * .22f).coerceIn(0f, 1f),
                 evidenceClass = evidenceClass,
                 eptMin = eptValues.minOrNull() ?: 0f,
@@ -252,7 +277,10 @@ internal object ChargedMovePredictor {
             candidates = candidates,
             leadTimeMs = leadTimeMs,
             reactionTurns = reactionTurns,
-            confidence = mathematicalConfidence
+            confidence = mathematicalConfidence,
+            consistencyScore = consistencyScore,
+            anomalyCount = energyTracker.anomalyCount(),
+            fastPhase = fastPhase
         )
     }
 
