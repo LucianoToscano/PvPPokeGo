@@ -1090,3 +1090,50 @@ A experiência do kit de observações reforça o contrato de **evento com prove
 Referências: [Golbat](https://github.com/UnownHash/Golbat), [PoracleNG](https://github.com/jfberry/PoracleNG), [ReactMap](https://github.com/WatWowMap/ReactMap), [PokéAPI](https://pokeapi.co/docs/v2), [RealDeviceMap](https://github.com/RealDeviceMap/RealDeviceMap), [RocketMap](https://github.com/RocketMap/RocketMap), [Appium UiAutomator2](https://github.com/appium/appium-uiautomator2-driver). O Appium é útil exclusivamente para testar UI própria/autorizada.
 
 **Pendências:** manter trabalho separado das PRs de estado de batalha e escudos; testar overlay em aparelho; não anunciar ataque automático, captura, injeção no jogo, radar de spawns ou integração live; não inserir código geográfico no core PvP sem mudança de escopo deliberada. Nenhum APK foi compilado nesta atualização documental.
+
+
+---
+
+<!-- CHAT_PGSHARP_PVP_PVPPKGO_20261122 -->
+## 22/11/2026 — Continuidade: pesquisa PGSharp 1.33/1.50/1.278 e integração experimental PvP no PGBR LT035
+
+**Origem:** conversa com solicitação de investigar funções *exatas* do assistente de batalha PGSharp, comparar três APKs, interpretar vídeos 13/14, portar para PGBR, testar, gerar APK e atualizar mestres. Registro documental do PvPPokeGo, **não** integração de código nativo de terceiros, build PvPPokeGo ou homologação em aparelho. O núcleo de PvPPokeGo continua um componente testável/desacoplado e seus próprios fluxos de desenvolvimento não devem ser confundidos com releases PGBR.
+
+### 1. Fontes e graus de comprovação
+
+| Referência | Achado | Limite |
+| --- | --- | --- |
+| [PGSharp 1.33.0](https://drive.google.com/file/d/1qvz4iYBRGfZZycazYagpxLaXMQqx2d48/view) + [romainthomas/pgsharp](https://github.com/romainthomas/pgsharp) | Pesquisa histórica independente com scripts/símbolos de hooks; não achado textual conclusivo de Auto PvP | Não é fonte completa oficial, nem prova de ausência binária. |
+| [PGSharp 1.50.3](https://drive.google.com/file/d/1GuH3JkL77DYC7FfZujcEFxfy4rrafM32/view) | Introdução da família **Raid & Gym Battle Assistant** | Automação PvE não equivale a ações automáticas na Liga GO. |
+| [PGSharp 1.278.0/PoGO 0.437.0](https://drive.google.com/file/d/13wvFdgVpnVHXsRUftJYjWiyQCzmJDsiU/view) | Identificadores `BATTLEASSIST`, `BREAD_BATTLEASSIST`, `rocketFlowIncident`, `battleAssistant`, `breadBattleFast`, `breadBattleCharge1`, `CombatVNextBattleStateShim`, `GymBattleState`, `RaidBattleState`, `pvpCombatStats` e `PVPIV` | `PVPIV`/estatística ≠ executor PvP; strings/menus não demonstram timing ou chamadas reais de ataques e escudos. |
+| [Vídeo 13 (~44,2 s)](https://drive.google.com/file/d/1O6OyTOvJcFcKps5Qn9tHgJoqsfU3tTXM/view) / [Vídeo 14 (~76,6 s)](https://drive.google.com/file/d/1CuMTP0q8X2NSV_8wHmogbeGwTIMimz7n/view) | Auditoria visual anterior documentou HUD flutuante de ataque ágil, carregado e escudo durante PvP, trocas/animações | Vídeos não reproduzidos novamente nesta sessão e HUD ≠ prova de controle autônomo de jogo. |
+
+O responsável declarou possuir autorização de uso, mas **não ocorreu extração binária de métodos/diff de APKs** no runtime disponível e **nenhuma função executável do PGSharp foi copiada** no PGBR/PvPPokeGo. A extensão dos direitos de terceiros não foi auditada.
+
+### 2. O que o PGBR realmente implementou
+
+Arquivos do projeto irmão: `pgrazor/native/cutscene_skip.cpp` (bootstrap IL2CPP tardio sem falha definitiva, observador validado de `GuiController.Open` útil mesmo sem hook de animação); `pgrazor/native/pvp_scene.h` e `combat_host.cpp` (Hub → Preparação → CombatVNext, exclusão de NPC/results, renovação de sessão apenas por atualizações VNext, timeout por inatividade e teto de 20 minutos); `pgrazor/native/pvp_scene_test.cpp` e `pgrazor/test/test_pvp_trace_bootstrap.py` (regressões). Os comandos nativos se relacionam a `rocket_combat.cpp` e `rocket_actions.cpp`; integrações e permissão Rocket/PvP ainda precisam de separação/validação de estados.
+
+Rastreabilidade:
+- [PGBR PR #76](https://github.com/LucianoToscano/PGBR/pull/76): primeiro patch, fechado sem merge quando substituído; [#78](https://github.com/LucianoToscano/PGBR/pull/78) tentativa intermediária também fechada sem merge.
+- [PGBR PR #79](https://github.com/LucianoToscano/PGBR/pull/79): integração real, cinco checks CI aprovados, merge `e91b881f000fe7da9f57aed2cafabb1b4a9a1899`.
+- [PR #80](https://github.com/LucianoToscano/PGBR/pull/80): Mestre pós-merge, merge `13a7c91d329fc179bbedbe4e514b303958a7d389`; [#81](https://github.com/LucianoToscano/PGBR/pull/81): Mestre/README/hash do release, merge `01111cad8f0ddf0e6f3cd16a63752334956777da`.
+- [Build LT035](https://github.com/LucianoToscano/PGBR/actions/runs/45018980405) **success**, [pré-release PGBR v0.00.35-LT](https://github.com/LucianoToscano/PGBR/releases/tag/v0.00.35-LT) publicada com [APK não Root](https://github.com/LucianoToscano/PGBR/releases/download/v0.00.35-LT/PGBR-v0.00.35-LT.apk), SHA-256 `31f361c2b3284a329a6a82e1bf194d6d2dd8a9dd03e6485bccfe94ce6db5d3aa`; [Root](https://github.com/LucianoToscano/PGBR/releases/download/v0.00.35-LT/PGBR-v0.00.35-LT-Root.apk), SHA-256 `031e4dd2113027520df37fe97f172f7838c6defbf524d2b15b511cdf11645597`; [Zygisk](https://github.com/LucianoToscano/PGBR/releases/download/v0.00.35-LT/PGBR-v0.00.35-LT-Root-module.zip), SHA-256 `0d972a46dc128b93c8dfab9b00b80676c3cb1adeb59d789a6d4c222a1918ff6e`.
+- O release é **QA experimental, `device_tested=false`**. Testes automáticos e builds assinados **não provam** toque ágil/carregado/escudo aceito em GBL/desafio real, nem escolha do carregado 2 supereficaz.
+
+### 3. Contrato de interoperabilidade proposto para PvPPokeGo (NÃO implementado nesta tarefa)
+
+A arquitetura já documentada em [SMART_BATTLE_AUTOMATION.md](SMART_BATTLE_AUTOMATION.md) e no core `BattleAutomationController` diferencia políticas independentes de `autoFastAttack`/`autoChargedAttack`/`autoShield`, escolha `FIRST_READY`/`TYPE_PRIORITY`/`SMART`, ameaça, STAB, energia e `TapChargedAttack(buttonIndex)`. O PGBR já possui `PvpBattleController.java` e `PvpChargedPreference.java` de decisão, mas o segundo carregado super eficaz **não está conectado/validado no executor nativo**.
+
+**Interoperabilidade futura segura:** observador (PvPPokeGo) produz eventos tipados com `mode=PVP`, ID estável de batalha, tempo, origem, confidence/evidence, energia, tipos/moves e estado dos prompts; core avalia e retorna **intenção**, sem prometer que será executada. Adaptador PGBR, em tarefa/PR própria, confirma escopo GBL, flags de permissão e UI thread, aplica deduplicação/janela de validade, escolhe carregado 1/2 e observa resultado. Rejeitar estados Rocket, raid/gym, Max, NPC, amostra antiga, frame incerto e ausência de energia. Separar sem misturar licença, dependências, namespaces, build e configuração de segurança dos dois apps. Não fazer esse acoplamento por cópia de offset/binário histórico.
+
+**Critérios pendentes:** capturas instrumentadas e testes Android reais de GBL/desafio, fast attack, charged 1/2, escudos, troca, charged minigame, encerramento, reconexão, cooldown/latência e alternância de modo; teste de hipótese no gameplay não pode ser inferido de texto OCR ou de booleano `invoked=true`. Preferências Rocket e PvP compartilhadas exigem decisão explícita de migração antes de separação definitiva.
+
+### 4. Relação com outros mestres
+
+- [Mestre PGBR](https://github.com/LucianoToscano/PGBR/blob/main/PGBR_ARQUIVO_MESTRE_UNICO.md): autoridade sobre commits, binários, APKs e flags nativas.
+- [Guia Mestre PokeSearch](https://github.com/LucianoToscano/PokeSearch/blob/main/docs/GUIA_MESTRE.md): catálogo/rank PvP, tipos, sprites; **não** é executor de batalha; nenhuma mudança de P1/P2 ou release LT409 neste chat.
+- [PGSharp próprio](https://github.com/LucianoToscano/PGSharp): fonte experimental e inventário do usuário; não confundir com código fechado do fornecedor ou repositório acadêmico.
+- Este `CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md` continua o **mestre canônico do PvPPokeGo**; preservar todos os 09/2026 e atualizações prévias, sem criar outro mestre concorrente.
+
+**Resultado deste registro:** documentação cross-project; **nenhuma implementação/compilação/release de PvPPokeGo** e nenhuma função literal do PGSharp importada. Protocolo Global de branches isoladas e PRs sem perda continua obrigatório.
