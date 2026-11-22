@@ -26,32 +26,40 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Usar SDK Android preinstalado no runner
+        run: |
+          test -d "$ANDROID_HOME/cmdline-tools"
+          find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -1
 
       - name: Android platform and build tools
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
 
-      - name: Build Debug APK
-        run: gradle --no-daemon :app:assembleDebug
+      - name: Empacotar dados PvP e ícones do espelho
+        run: |
+          python3 tools/package_offline_pvpoke_assets.py
+          python3 -m pip install --disable-pip-version-check pillow
+          python3 tools/package_visual_fingerprints.py
+
+      - name: Testar e compilar APK Standard
+        run: gradle --no-daemon :app:testStandardDebugUnitTest :app:assembleStandardDebug
 
       - name: Package APK and SHA-256
         shell: bash
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/PvPPokeGo-0.5.10-original-icons-restored.apk
-          sha256sum dist/PvPPokeGo-0.5.10-original-icons-restored.apk | tee dist/SHA256.txt
+          cp app/build/outputs/apk/standard/debug/app-standard-debug.apk dist/PvPPokeGo-consolidacao-standard-debug.apk
+          sha256sum dist/PvPPokeGo-consolidacao-standard-debug.apk | tee dist/SHA256.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PvPPokeGo-0.5.10-original-icons-restored
+          name: PvPPokeGo-consolidacao-standard-debug
           path: dist/*
           if-no-files-found: error
