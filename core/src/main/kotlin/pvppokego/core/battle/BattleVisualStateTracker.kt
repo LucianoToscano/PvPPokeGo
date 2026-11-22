@@ -73,9 +73,16 @@ class BattleVisualStateTracker(
         lastTimestampMs = frame.timestampMs
 
         if (frame.confidence < minConfidence) {
-            state = VisualBattleState.OBSERVATION_UNCERTAIN
+            // Once a match has ended, uncertain frames cannot revive it.
+            // A new session requires a high-confidence preparation frame or reset().
+            state = if (previous == VisualBattleState.ENDED) {
+                VisualBattleState.ENDED
+            } else {
+                VisualBattleState.OBSERVATION_UNCERTAIN
+            }
             clearCombatWatchdog()
-            return VisualBattleTransition(previous, state, true, "low_confidence")
+            val reason = if (state == VisualBattleState.ENDED) "battle_ended" else "low_confidence"
+            return VisualBattleTransition(previous, state, true, reason)
         }
 
         // Explicit dialogs outrank a generic combat indicator. A finished match
