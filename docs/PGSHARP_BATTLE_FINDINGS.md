@@ -127,3 +127,8 @@ Portanto o próximo trabalho útil não é refazer o motor de decisão, e sim im
 ## Regra de implementação
 
 Não copiar `libmain.so` nem depender de símbolos/offsets do APK analisado. O binário serve somente como referência de conceitos/estados. Toda lógica do PvPPokeGo deve permanecer própria, testável e organizada em módulos independentes.
+
+
+## 22/11/2026 — Atualização cruzada sobre Auto PvP (documentação)
+
+Estudo adicional dos APKs [1.33.0](https://drive.google.com/file/d/1qvz4iYBRGfZZycazYagpxLaXMQqx2d48/view), [1.50.3](https://drive.google.com/file/d/1GuH3JkL77DYC7FfZujcEFxfy4rrafM32/view) e [1.278.0](https://drive.google.com/file/d/13wvFdgVpnVHXsRUftJYjWiyQCzmJDsiU/view), com vídeos de HUD PvP [13](https://drive.google.com/file/d/1O6OyTOvJcFcKps5Qn9tHgJoqsfU3tTXM/view) e [14](https://drive.google.com/file/d/1CuMTP0q8X2NSV_8wHmogbeGwTIMimz7n/view). **Não** houve extração executável/diff confirmado ou transplante literal PGSharp. A linha 1.50 descreve Raid & Gym Assistant e não comprova GBL automático. O PGBR integrou sua própria correção de observação/sessão no [PR #79](https://github.com/LucianoToscano/PGBR/pull/79), publicou a [pré-release QA LT035](https://github.com/LucianoToscano/PGBR/releases/tag/v0.00.35-LT) com workflow aprovado, mas permanece `device_tested=false`; escudos, charged 2 e Auto PvP real carecem de homologação. O documento canônico [CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md](CONSOLIDATED_PROJECT_CONTEXT_2026-09-26.md) contém a matriz detalhada. Nenhum código PvPPokeGo foi alterado por este adendo.
