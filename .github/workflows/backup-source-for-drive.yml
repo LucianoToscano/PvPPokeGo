@@ -19,7 +19,9 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           git archive --format=zip --output=dist/PvPPokeGo-FONTE-COMPLETA.zip HEAD
-          sha256sum dist/PvPPokeGo-FONTE-COMPLETA.zip > dist/SHA256SUMS.txt
+          git bundle create dist/PvPPokeGo-HISTORICO.bundle --all
+          git bundle verify dist/PvPPokeGo-HISTORICO.bundle
+          sha256sum dist/PvPPokeGo-FONTE-COMPLETA.zip dist/PvPPokeGo-HISTORICO.bundle > dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: PvPPokeGo-FONTE-COMPLETA-PARA-DRIVE
