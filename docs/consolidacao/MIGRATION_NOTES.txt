@@ -1,0 +1,3 @@
+Fonte importada de LucianoToscano/PvPPokeGo-APK-Build.
+Core e documentos existentes mantidos.
+Executar validacao antes de integrar na main.
