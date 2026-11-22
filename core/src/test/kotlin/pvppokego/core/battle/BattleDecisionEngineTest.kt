@@ -119,4 +119,56 @@ class BattleDecisionEngineTest {
         )
         assertFalse(decision.useShield)
     }
+    @Test
+    fun shieldPromptWithAutoShieldOffNeverEmitsOffensiveActions() {
+        val controller = BattleAutomationController(engine)
+        val plan = controller.plan(
+            frame = BattleAutomationFrame(
+                mySpeciesId = "feraligatr",
+                myChargedMoveIds = listOf("HYDRO_CANNON", "ICE_BEAM"),
+                myEnergy = 100,
+                myHpFraction = 0.7,
+                myShieldsRemaining = 2,
+                enemySpeciesId = "altaria",
+                enemyHpFraction = 0.6,
+                enemyShieldsRemaining = 0,
+                shieldPromptVisible = true
+            ),
+            settings = BattleAutomationSettings(
+                enabled = true,
+                autoFastAttack = true,
+                autoChargedAttack = true,
+                autoShield = false
+            )
+        )
+        assertTrue(plan.actions.isEmpty())
+    }
+
+    @Test
+    fun shieldPromptWithUnknownThreatNeverEmitsOffensiveActions() {
+        val controller = BattleAutomationController(engine)
+        val plan = controller.plan(
+            frame = BattleAutomationFrame(
+                mySpeciesId = "feraligatr",
+                myChargedMoveIds = listOf("HYDRO_CANNON", "ICE_BEAM"),
+                myEnergy = 100,
+                myHpFraction = 0.5,
+                myShieldsRemaining = 2,
+                enemySpeciesId = "altaria",
+                enemyChargedMoveIdsCurrentlyPlausible = emptyList(),
+                enemyHpFraction = 0.6,
+                enemyShieldsRemaining = 0,
+                shieldPromptVisible = true
+            ),
+            settings = BattleAutomationSettings(
+                enabled = true,
+                autoFastAttack = true,
+                autoChargedAttack = true,
+                autoShield = true
+            )
+        )
+        assertTrue(plan.actions.isEmpty())
+        assertEquals("no_known_charged_move", plan.shieldDecision?.reason)
+    }
+
 }

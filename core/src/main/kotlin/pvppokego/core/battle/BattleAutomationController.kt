@@ -90,6 +90,16 @@ class BattleAutomationController(
             }
         }
 
+        // A shield prompt is a modal interaction. Even when no shield is chosen
+        // (or autoShield is disabled), fast/charged taps must not leak through it.
+        // Let the prompt resolve before considering offensive actions.
+        if (frame.shieldPromptVisible) {
+            return BattleAutomationPlan(
+                actions = emptyList(),
+                shieldDecision = shieldDecision
+            )
+        }
+
         var chargedDecision: ChargedMoveDecision? = null
         if (settings.autoChargedAttack) {
             chargedDecision = decisionEngine.chooseChargedMove(
