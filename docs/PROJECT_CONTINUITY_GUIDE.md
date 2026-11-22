@@ -950,6 +950,30 @@ Ambos devem persistir, exportar/importar e atualizar imediatamente o menu rápid
 **STATUS:** este inventário/contrato visual está **REGISTRADO NO GUIA**, mas a auditoria dos toggles, sincronização, testes de Android e APK com novas correções **NÃO FOI FEITA NESTA ETAPA**. Este commit é SOMENTE de documentação; não é build/release nova. Toda mudança futura nos menus deve gerar novo registro cronológico no guia da branch ativa e (quando relevante) no espelho histórico solicitado, incluindo branch/HEAD real, arquivos alterados, teste, pendências e links de artefatos verificados.
 
 
+
+## 22/11/2026 — Complemento transversal: PGSharp PvP, engenharia reversa, Sniper e referências PGBR LT034/LT035
+
+**Status:** `REGISTRADO` — referência técnica e visual; **nenhum recurso PvPPokeGo foi implementado, corrigido ou homologado por este complemento**, nenhum APK PvPPokeGo foi gerado. Base deste registro: `release/0.5.26` @ `4852e1307cd0aedc1602e3fed6d6fd47dee92fbb` antes da mudança documental; preservar o conteúdo histórico, as melhorias posteriores de HUD documentadas e a separação dos elementos de cada aplicativo.
+
+### Evidência visual exata e proveniência
+- [Pasta PGSharp](https://drive.google.com/drive/folders/1WAEmEpZmvUw9dDiapNcygtmZQq6XIB_j), [dossiê da auditoria de 16 imagens e 20 vídeos](https://drive.google.com/file/d/11_OSo_6hPaXeRB5GW-HLXbVSr5HyugyO/view) e [inventário CSV com IDs](https://drive.google.com/file/d/1pvXnzt41spOD82q1u1_i5ta4Xnm0a2SO/view). As imagens foram inspecionadas, e os vídeos examinados por **amostras de quadros**, sem comprovação de mecanismo de controle.
+- Vídeos **13 e 14** do PGSharp mostram barra flutuante com **três botões independentes: “Ataques ágeis”, “Ataques carregados”, “Shield”**; há batalha, golpear, escudar e trocar na gravação. **São elementos do PGSharp, não controles nativos Pokémon GO e não são ícones/funções próprios do PvPPokeGo**. Essa distinção já consta no inventário deste Guia (seção do HUD). A imagem/vídeo **não prova** que o sistema acionou o botão, escolheu automaticamente o segundo ataque supereficaz ou tomou decisão de escudo.
+- Vídeo 12: Quick Sniper I e II configuráveis vertical/horizontal e independentes; vídeo 11: Radar Próximos separado. Eles são **fora do escopo PvPPokeGo**, salvo referência visual de overlays compactos; não integrar feed/teleporte a este projeto por efeito colateral.
+- [Auditoria de sprites/joystick/efeitos](https://drive.google.com/file/d/1PjXJr87jK2F801_lz7A7x9OK0_Bhmyy9/view) e [menus XML/código/licenças](https://drive.google.com/file/d/1aKp7Is0q6yFenLdBsiG2D582T6D_ha5u/view): no plugin 1.278.0 há 1.973 PNG e menus Android vetoriais; os ícones de PGSharp não estão todos em PNG. Materiais do jogo/cliente de terceiros não podem ser tratados como recursos próprios ou licenciados apenas por estarem no acervo.
+
+### Cadeia de código investigada e limites
+O estudo histórico de [Romain Thomas](https://github.com/romainthomas/pgsharp) trata da VM Lua, ponte JNI/Unity/IL2CPP do PGSharp 1.33.0. No plugin 1.278.0 aparecem classes nativas `PL.NRL/NSMTC/PUL` e strings `pvpCombatStats`, `battleAssistant`, `rocket.shield`, sem demonstração de cadeia funcional da automação PvP nem equivalência de offsets antigos/novos. **Strings, modos visíveis e DEX extraído não bastam para reproduzir ou homologar autoescudo/ataque carregado.** Investigar, em teste autorizado, o caminho do evento e distinguir ações de PvP, Rocket, Ginásio e Reide. Não confundir troca de configuração compartilhada na UI com prova de que o backend implementa os quatro modos.
+
+### Aplicação no desenvolvimento PvPPokeGo (ainda pendente)
+- Preservar filosofia própria: OCR/observação da tela, confiança explícita e HUD de aconselhamento, sem tocar no jogo no modo assistido. Implementações automáticas devem ter autorização, escopo e teste separados; não converter a existência dos botões PGSharp em executor PvPPokeGo.
+- O requisito de priorizar **golpe carregado supereficaz antes do primeiro golpe já carregado** continua candidato, não implementado por esta nota. Modelar custo de energia, efetividade por tipo duplo, disponibilidade de dois golpes, shields próprios/inimigos, fase de turno, cooldown de troca, risco de timing e decisão reversível; deduzir de eventos confirmados, não apenas animações.
+- Validar **todas as dimensões de batalha**: ágil, carregado, pergunta/uso de escudo, câmera, texto “X usou Y”, dano/buffs, HP, energia e troca forçada, evitando perda dupla de energia/ações. Testar UI com PGSharp presente e sem PGSharp, sem conflito ou sobreposição de botões, e em aparelho Samsung físico. Conservar matrizes de estado e checklists já descritos neste Mestre.
+- A [PGBR PR #72](https://github.com/LucianoToscano/PGBR/pull/72) introduziu apenas um Sniper 100% IV do feed próprio do PGBR; [PR #73](https://github.com/LucianoToscano/PGBR/pull/73) um painel PGSharp Free/Standard e key local ainda não autenticada. [LT034 QA](https://github.com/LucianoToscano/PGBR/releases/tag/v0.00.34-LT) publicou APKs; [LT035 QA](https://github.com/LucianoToscano/PGBR/releases/tag/v0.00.35-LT) adicionou observação/ciclo de vida PvP na linha PGBR. **Nenhuma dessas publicações atualiza automaticamente o PvPPokeGo** nem prova ataques rápidos/carregados, shields ou priorização de supereficaz em GBL. `device_tested=false` para os testes físicos referidos.
+- O proprietário já declarou autorização relevante para APKs/APIs no Guia Mestre PokeSearch LT364/LT365; não repetir a mesma solicitação. Em qualquer integração efetiva, verificar fronteiras reais do serviço, dados/protocolos e direitos dos assets. [PGRazor](https://github.com/jpitty03/PGRazor) oferece código MIT, mas não licença geral para toda arte de terceiros.
+
+**Próxima etapa:** se houver trabalho de implementação PvP, abrir branch própria a partir da HEAD correta e anexar provas de compilação, vídeo de teste, versão, espécie/moves, resultado do escudo e logs anonimizados. Este adendo preserva o histórico, não altera Maven/Gradle, dataset, serviços, APKs nem menus.
+
+
 ## 12. Regra final
 
 Sempre que o usuário pedir:
