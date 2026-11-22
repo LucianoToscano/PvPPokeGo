@@ -33,7 +33,6 @@ jobs:
           mkdir -p docs/consolidacao .github/workflows tools
           cp "$SOURCE/README.md" docs/consolidacao/APK_BUILD_MIRROR_README.md
           cp "$SOURCE/THIRD_PARTY_NOTICES.md" docs/consolidacao/APK_BUILD_THIRD_PARTY_NOTICES.md
-          cp "$SOURCE/.github/workflows/build-standard-apk.yml" .github/workflows/build-standard-apk.yml
           for file in "$SOURCE"/tools/*; do
             [ -f "$file" ] || continue
             name="$(basename "$file")"
@@ -44,6 +43,6 @@ jobs:
             fi
           done
           printf 'Fonte importada de LucianoToscano/PvPPokeGo-APK-Build.\nCore e documentos existentes mantidos.\nExecutar validacao antes de integrar na main.\n' > docs/consolidacao/MIGRATION_NOTES.txt
-          git add app settings.gradle.kts build.gradle.kts gradle.properties docs/consolidacao .github/workflows/build-standard-apk.yml tools
+          git add app settings.gradle.kts build.gradle.kts gradle.properties docs/consolidacao tools
           git commit -m 'feat: consolidar fonte Android do mirror de APK preservando core PvP'
           git push origin HEAD:refs/heads/consolidacao/pvppokego-apk-build-2026-11-21
