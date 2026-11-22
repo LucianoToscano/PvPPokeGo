@@ -102,3 +102,9 @@ Conceitos implementados:
 ## Regra de qualidade
 
 Não considerar recurso pronto apenas porque existe em documentação. Para porcentagem do projeto, contar código implementado, integrado, compilado/testado e utilizável no APK.
+
+
+<!-- PVPPG-CHAT-VISUAL-20261122 -->
+## Consolidação de dados e referências visuais — 22/11/2026
+
+Fontes públicas, pacotes ZIP, modelos, GIFs, auditorias, testes offline e proposta de Biblioteca Visual estão registrados em [CONSOLIDACAO_CHAT_BIBLIOTECA_VISUAL_DADOS_20261122.md](CONSOLIDACAO_CHAT_BIBLIOTECA_VISUAL_DADOS_20261122.md). No `pogo_pkm.json` fornecido, dos 1.755 registros há 1.451 pares `(id, form)`, **24 grupos divergentes** e 1.427 chaves sem conflito. Não usar variantes divergentes em cálculos PvP sem revisão de proveniência; `latest.json` tem 18.812 templates, mas snapshot datado de 28/08/2026. Separar dados de espécies/ataques de assets visuais e dados pessoais; testar regressão de Battle Engine, IVs e matchups antes da integração. O reconciliador offline só foi testado fora do repositório; não houve build, homologação em aparelho ou release PvPPokeGo.
