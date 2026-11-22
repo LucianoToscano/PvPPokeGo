@@ -66,6 +66,10 @@ class BattleVisualStateTrackerTest {
         assertFalse(ended.canRecommendCombatAction)
         assertEquals(
             VisualBattleState.ENDED,
+            tracker.onFrame(frame(250L, "uncertain", confidence = 0.2, combat = true)).to
+        )
+        assertEquals(
+            VisualBattleState.ENDED,
             tracker.onFrame(frame(300L, "replay", combat = true)).to
         )
         assertEquals(
