@@ -1070,3 +1070,23 @@ Sempre continuar levando em conta:
 - histórico de correções/erros que motivaram a reescrita.
 
 Este arquivo é o ponto central para essa continuidade.
+
+---
+## Adendo de 22/11/2026 — pesquisa de feeds/scanners (dependência cruzada, fora do núcleo PvP)
+
+**Estado:** incorporação documental do estudo realizado para PGBR, PokeSearch, PvPPokeGo e PGSharp. **Não altera o core, visão/OCR, modelo PvPoke, HUD, versão, APK nem as PRs em andamento.** O PvPPokeGo continua sendo um **assistente externo de batalha**, e seus documentos `START_HERE_PVPPokeGo.md` e `SINGLE_THREAD_MASTER_CONTEXT_2026-09-26.md` mantêm a fronteira explícita: **scanner geográfico, mapa, spoofing, teleporte, captura, rotas/GPX e VGP pertencem a outros projetos** e não devem migrar para o PvPPokeGo.
+
+### Registro da pesquisa transversal
+
+- **Origens de dados diferentes:** PokéAPI e masterfiles fornecem informações de catálogo; não fornecem posição/IV/CP de encontros ao vivo. Foi **não verificada** qualquer API pública, autorizada e operacional de spawns Pokémon GO em 22/11/2026. Eventos de batalha do PvPPokeGo vêm de captura visual/OCR/observações locais e dados offline PvPoke; **não** devem depender do Golbat, PoracleNG ou de um feed geográfico.
+- **Arquiteturas estudadas:** scan ativo histórico (spawnScan, Monocle, RocketMap, RealDeviceMap, MAD); agregação/scraping (PKMSpawn, ScanGO, Pogo-Scanner-Android); feeder JSON/HTTP (PSSnipeFeeder, PogoLocationFeeder); processamento de webhooks, geofences e mapa (Golbat, PoracleNG, ReactMap, Koji). São referências para **separação de produtores/consumidores, validação de eventos, cache, filtragem e alertas**, não fontes diretas de detecção de combate.
+- **Situação pública verificada:** Golbat se descreve processador experimental; PoracleNG consome webhooks e entrega alertas, não detecta spawns sozinho; ReactMap é frontend com filtros, release v1.59.0 em 19/11/2026; RealDeviceMap arquivado em 03/11/2025; RocketMap e POGOProtos são legados. Código presente não equivale a recurso operacional ou permissão de acesso ao jogo.
+- **Artefatos de conversa:** `SpawnFeedKit.kt`, HTML de pesquisa, `pesquisa-pokemon-go-android-arquitetura.zip`, `pesquisa-pokemon-go-android-validada.zip`, `pesquisa_pokemon_go_scanners.zip` (somente relatório) e `PokeSearch_Observacoes_v2_2026-11-22.zip` (modelo de observações, normalizador, testes). Foram aprovados **37 testes Kotlin/JVM** do núcleo de observações em 22/11/2026 no ambiente da conversa; isso **não** é build Android nem validação de qualquer comportamento PvP/PvPPokeGo. Nada do kit foi importado neste adendo.
+
+### Padrões potencialmente úteis, sem confundir domínios
+
+A experiência do kit de observações reforça o contrato de **evento com proveniência, timestamp, confiança e distinção clara entre confirmado, estimado e simulado**, aplicável conceitualmente a `BattleFrameObservation`, `StableObservationReducer`, reconhecimento de banners e `EvidenceLevel`. Não reutilizar `LIVE` de spawn como `CONFIRMED` de golpe: são domínios distintos. Não inventar leituras de tela, energia, escudos ou ataque usado quando o OCR estiver inconclusivo. Mesclar observações repetidas de frames contíguos sem perder mudanças reais; reavaliar previsão após evidência confirmada. Alertas podem seguir arquitetura de produtor de eventos → regras → overlay/vibração/voz, **sem** acionamento de cliques no Pokémon GO.
+
+Referências: [Golbat](https://github.com/UnownHash/Golbat), [PoracleNG](https://github.com/jfberry/PoracleNG), [ReactMap](https://github.com/WatWowMap/ReactMap), [PokéAPI](https://pokeapi.co/docs/v2), [RealDeviceMap](https://github.com/RealDeviceMap/RealDeviceMap), [RocketMap](https://github.com/RocketMap/RocketMap), [Appium UiAutomator2](https://github.com/appium/appium-uiautomator2-driver). O Appium é útil exclusivamente para testar UI própria/autorizada.
+
+**Pendências:** manter trabalho separado das PRs de estado de batalha e escudos; testar overlay em aparelho; não anunciar ataque automático, captura, injeção no jogo, radar de spawns ou integração live; não inserir código geográfico no core PvP sem mudança de escopo deliberada. Nenhum APK foi compilado nesta atualização documental.
