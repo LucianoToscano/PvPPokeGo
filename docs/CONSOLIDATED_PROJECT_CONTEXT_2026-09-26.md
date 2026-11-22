@@ -1180,3 +1180,16 @@ A candidata PGBR [PR #98](https://github.com/LucianoToscano/PGBR/pull/98) foi **
 - [SHA256SUMS](https://github.com/LucianoToscano/PGBR/releases/download/v0.00.38-LT/SHA256SUMS.txt).
 
 **Limitação:** menu Ataque Inteligente e temporizadores presentes; escolha nativa por eficácia em todas batalhas e a correção da tela branca **não foram implementadas na LT038**. `device_tested=false` para essa versão. Este registro é apenas documentação cruzada, não atualização do código-fonte nem APK deste projeto.
+
+<!-- PVPPOKEGO_SPAWN_FEED_SCOPE_20261122 -->
+## 22/11/2026 — Governança cruzada de fontes de coordenadas e PvP (sem alterações no motor)
+
+**Base:** PvPPokeGo `main` `f58154df441303e66bb468550edc945db97f04c5`, branch isolada `docs/spawn-source-provenance-20261122`. O pedido de pesquisa abrangeu webhooks, radar, Sniper, scanners históricos, a palestra de PGSharp 1.33.0 (Ekoparty 2021), PoracleNG, RocketMap, ReactMap e GoBattleSim.
+
+**Fronteira obrigatória:** PvPPokeGo é assistente de combate visual/OCR, não cliente de scanner nem serviço de GPS, webhook ou teleporte. Espécies, golpes e IV/rank PvP exigem dados de Game Master/PvPoke; IV 100% não equivale a Rank 1 de Grande/Ultra. Observações de mapa com coordenadas e despawn não podem ser usadas como prova de ações do adversário em PvP.
+
+**Integração apenas futura:** a branch independente `feat/authorized-spawn-webhook-normalizer-20261122` do repositório PokeSearch implementou um conversor OFFLINE e opt-in de eventos para o esquema RocketMap usado pelo PGBR, sem acesso a servidores privados. Esta entrega PvPPokeGo apenas documenta limites e ponte possível; código de combate, OCR, overlay, Firebase, APK, certificados e releases permanecem intocados.
+
+**Arquivo de documentação desta branch:** `docs/POKESEARCH_WEBHOOK_PVP_SCOPE_20261122.md`. [Catálogo central](https://docs.google.com/document/d/12-I-rUfnQR0YL_mDExTJfx2zXgfxgB8-Bkp2tyuVPfI/edit) e [PDF histórico](https://drive.google.com/file/d/1nEf72fUU4hXS2V8alnuc4pv3unUdINV3/view). O PDF não demonstra integração global ao servidor oficial nem um Auto PvP executável atual.
+
+**Status:** mudança documental em PR pendente de revisão/merge; sem APK, sem teste físico ou alteração de runtime. Preservar PRs paralelas #42/#43 e todas as demais.
