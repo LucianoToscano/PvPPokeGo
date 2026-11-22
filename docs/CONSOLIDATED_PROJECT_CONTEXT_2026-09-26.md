@@ -1193,3 +1193,8 @@ A candidata PGBR [PR #98](https://github.com/LucianoToscano/PGBR/pull/98) foi **
 **Arquivo de documentação desta branch:** `docs/POKESEARCH_WEBHOOK_PVP_SCOPE_20261122.md`. [Catálogo central](https://docs.google.com/document/d/12-I-rUfnQR0YL_mDExTJfx2zXgfxgB8-Bkp2tyuVPfI/edit) e [PDF histórico](https://drive.google.com/file/d/1nEf72fUU4hXS2V8alnuc4pv3unUdINV3/view). O PDF não demonstra integração global ao servidor oficial nem um Auto PvP executável atual.
 
 **Status:** mudança documental em PR pendente de revisão/merge; sem APK, sem teste físico ou alteração de runtime. Preservar PRs paralelas #42/#43 e todas as demais.
+
+
+<!-- PVPPOKEGO_WEBHOOK_PR_RECEIPT_20261122 -->
+### Registro da PR documental #55
+[PR #55](https://github.com/LucianoToscano/PvPPokeGo/pull/55) aberta em branch separada; não contém alterações no núcleo de batalha nem APK. O workflow de validação Android [#45049067639](https://github.com/LucianoToscano/PvPPokeGo/actions/runs/45049067639) estava **in_progress** no momento da consulta, não devendo ser rotulado aprovado até conclusão verificável. Mantidos os limites de escopo para mapa/teleporte, que continuam fora do motor PvPPokeGo.
